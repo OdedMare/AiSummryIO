@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, ZoomControl, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import "leaflet-draw/dist/leaflet.draw.css";
+// Leaflet's stylesheets are imported in `app/layout.tsx` so they load before
+// `globals.css`; importing them here would put them after it again.
 import MapGeoms from "./MapGeoms";
 import { DEFAULT_CENTER, DEFAULT_ZOOM, LAYERS } from "./consts";
 import type { BBox, GeographyMode, GeoJSONPolygon } from "@/types/geo";

@@ -975,6 +975,13 @@ button:disabled {
   border-radius: var(--radius-sm);
 }
 
+/* Leaflet's panes and controls are absolutely positioned against the map
+   container. `contain` makes this box their containing block and clips them,
+   so tiles and the layer switch cannot spill across the viewport. */
+.map-picker-canvas {
+  contain: layout paint;
+}
+
 .picker-leaflet-map,
 .picker-map-loading {
   width: 100%;
