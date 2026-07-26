@@ -38,10 +38,28 @@ class FlunksMapper:
             raise ProviderError(
                 "flunks החזיר %s במקום DataFrame" % type(result).__name__
             )
+        self._reject_duplicate_columns(result)
         return [
             {str(key): self._value(value) for key, value in row.items()}
             for row in result.to_dict("records")
         ]
+
+    @staticmethod
+    def _reject_duplicate_columns(result: Any) -> None:
+        """``to_dict('records')`` keeps only the last of each duplicate name.
+
+        flunks joins cubes, so two cubes contributing the same column name is
+        reachable. Dropping one silently would make the summary incomplete
+        with no warning, so this fails loudly instead.
+        """
+        columns = [str(column) for column in result.columns]
+        duplicates = sorted({
+            column for column in columns if columns.count(column) > 1
+        })
+        if duplicates:
+            raise ProviderError(
+                "flunks החזיר עמודות כפולות: %s" % ", ".join(duplicates)
+            )
 
     @staticmethod
     def _value(value: Any) -> Any:
@@ -54,6 +72,12 @@ class FlunksMapper:
             pass
         if hasattr(value, "wkt"):
             return value.wkt
+        # Temporal values must be checked before ``.item()``: pd.Timestamp
+        # exposes ``item()`` but it returns another Timestamp, which psycopg's
+        # Jsonb cannot serialize — the evidence write for the whole step would
+        # fail, not just this cell.
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
         if hasattr(value, "item"):
             return value.item()
         return value

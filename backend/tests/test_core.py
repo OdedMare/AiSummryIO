@@ -80,20 +80,23 @@ def test_normalized_records_are_json_serializable(monkeypatch):
     assert records[1]["eventTime"] is None
 
 
-def test_normalize_keeps_numeric_identifier_columns_as_strings(monkeypatch):
+def test_normalize_does_not_coerce_identifier_strings_to_numbers(monkeypatch):
     """A locked decision: numeric-looking identifiers stay strings.
 
-    pandas types a column of digits as int64, so ``00123`` arrives as the int
-    ``123``. Stringifying only at fan-out is too late - the evidence row and
-    the Hebrew prompt would already have lost the leading zeros.
+    pandas keeps a column of digit strings as ``object``, so ``00123`` survives
+    on its own. What must never be added is a "looks numeric, cast it" step -
+    this pins that, and pins that a genuine int64 cell stays an int rather than
+    being stringified into a fake identifier.
     """
     _install_fake_flunks(monkeypatch)
 
-    records = FlunksMapper().normalize(
-        pd.DataFrame({"id": pd.Series(["00123", "456"], dtype="string")})
-    )
+    records = FlunksMapper().normalize(pd.DataFrame([
+        {"id": "00123", "count": 7},
+        {"id": "456", "count": 8},
+    ]))
 
     assert [record["id"] for record in records] == ["00123", "456"]
+    assert [record["count"] for record in records] == [7, 8]
 
 
 def test_normalize_rejects_duplicate_columns_instead_of_dropping_them(
@@ -623,3 +626,38 @@ def test_follow_up_can_select_an_approved_tool_without_a_workflow():
     assert captured["workflow"]["id"] == "tool:tool-v1"
     assert captured["workflow"]["steps"][0]["package_version_id"] == "tool-v1"
     assert captured["workflow"]["system_prompt"] == "סכם בעלים בלבד."
+
+
+def test_fetch_one_id_infers_the_tool_output_schema():
+    class FakeProvider:
+        calls = []
+
+        def run(self, _package, identifiers):
+            self.calls.append(identifiers)
+            return [
+                {
+                    "owner_id": "001",
+                    "score": 1,
+                    "active": True,
+                    "_package_query": "internal",
+                },
+                {"owner_id": "002", "score": 1.5, "note": None},
+            ]
+
+    provider = FakeProvider()
+    service = SummaryService(None, provider, None, None)
+    result = service.inspect_tool({
+        "name": "בעלות",
+        "input_mode": "single",
+    }, "001")
+
+    assert provider.calls == [["001"]]
+    assert result["row_count"] == 2
+    assert result["truncated"] is False
+    schema = result["output_schema"]
+    assert schema["properties"]["owner_id"]["type"] == "string"
+    assert schema["properties"]["score"]["type"] == "number"
+    assert schema["properties"]["active"]["type"] == "boolean"
+    assert schema["properties"]["note"]["type"] == "null"
+    assert "_package_query" not in schema["properties"]
+    assert schema["required"] == ["owner_id", "score"]
