@@ -565,8 +565,7 @@ class SummaryService:
             ensure_ascii=False,
         )
         results: Dict[str, dict] = {}
-        workers = min(self._store.get().max_parallel_workflows, len(skills))
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        with ThreadPoolExecutor(max_workers=self._skill_workers(skills)) as pool:
             futures = {
                 pool.submit(self._run_skill, skill, payload, source_names):
                     skill
@@ -584,6 +583,15 @@ class SummaryService:
             for skill in skills
             if skill["content_key"] in results
         ]
+
+    def _skill_workers(self, skills: List[dict]) -> int:
+        """At most three Skills can be selected, so this stays small. Falls
+        back to serial execution when no settings store is injected."""
+        try:
+            limit = self._store.get().max_parallel_workflows
+        except AttributeError:
+            limit = 1
+        return max(1, min(limit, len(skills)))
 
     def _run_skill(self, skill: dict, payload: str, source_names) -> dict:
         system = (

@@ -518,58 +518,60 @@ def test_custom_output_schema_fields_are_captured_separately():
     assert generated["fields"] == {"owner_name": "דנה"}
 
 
-def test_selected_summary_skill_is_executed_and_unknown_results_are_dropped():
-    class FakeRepository:
-        @staticmethod
-        def published_content(_key, fallback):
-            return fallback
+_OWNERSHIP_SECTION = {
+    "workflow_key": "ownership",
+    "name": "בעלות",
+    "status": "completed",
+    "summary": "נמצאה בעלות",
+    "facts": ["דנה היא הבעלים"],
+    "warnings": [],
+}
 
+
+class _SkillRepository:
+    @staticmethod
+    def published_content(_key, fallback):
+        return fallback
+
+
+def test_each_selected_skill_runs_in_its_own_call_with_its_full_instructions():
+    """A Skill's own guidance must reach the model as the system prompt of a
+    dedicated call, not share one call with the other Skills."""
     class FakeLlm:
-        received = None
+        def __init__(self):
+            self.systems = []
 
-        def complete_json(self, _system, user, _schema):
-            self.received = json.loads(user)
+        def complete_json(self, system, _user, schema):
+            self.systems.append(system)
+            if "skill_results" in schema["properties"]:
+                return {
+                    "summary": "סיכום",
+                    "key_findings": ["עובדה"],
+                    "risks": [],
+                    "missing_data": [],
+                    "suggested_questions": [],
+                    "skill_results": [],
+                }
             return {
-                "summary": "סיכום",
-                "key_findings": ["עובדה"],
-                "risks": [],
-                "missing_data": [],
-                "suggested_questions": [],
-                "skill_results": [{
-                    "skill_key": "summary-actions",
-                    "name": "שם שהמודל לא קובע",
-                    "summary": "מה עושים עכשיו",
-                    "items": ["בדקו את הרשומה"],
-                    "sources": ["בעלות", "מקור מומצא"],
-                }, {
-                    "skill_key": "invented",
-                    "name": "לא קיים",
-                    "summary": "לא יוצג",
-                    "items": [],
-                    "sources": [],
-                }],
+                "summary": "מה עושים עכשיו",
+                "items": ["בדקו את הרשומה"],
+                "sources": ["בעלות", "מקור מומצא"],
             }
 
     llm = FakeLlm()
-    service = SummaryService(FakeRepository(), None, llm, None)
+    service = SummaryService(_SkillRepository(), None, llm, None)
     skills = [{
         "content_key": "summary-actions",
         "name": "צעדים מומלצים",
         "description": "פעולות ברורות",
         "content": "הצע רק פעולות המבוססות על עובדות.",
     }]
-    result = service._final_summary("", "", [{
-        "workflow_key": "ownership",
-        "name": "בעלות",
-        "status": "completed",
-        "summary": "נמצאה בעלות",
-        "facts": ["דנה היא הבעלים"],
-        "warnings": [],
-    }], skills)
+    result = service._final_summary("", "", [_OWNERSHIP_SECTION], skills)
 
-    assert llm.received["selected_skills"][0]["instructions"].startswith(
-        "הצע רק"
-    )
+    # One shared synthesis call plus one dedicated call for the Skill.
+    assert len(llm.systems) == 2
+    assert llm.systems[1].startswith("הצע רק פעולות המבוססות על עובדות.")
+    # The invented source is dropped; the real section name survives.
     assert result["skill_results"] == [{
         "skill_key": "summary-actions",
         "name": "צעדים מומלצים",
@@ -577,6 +579,45 @@ def test_selected_summary_skill_is_executed_and_unknown_results_are_dropped():
         "items": ["בדקו את הרשומה"],
         "sources": ["בעלות"],
     }]
+
+
+def test_one_failing_skill_does_not_discard_another_skills_result():
+    class FakeLlm:
+        def complete_json(self, system, _user, schema):
+            if "skill_results" in schema["properties"]:
+                return {
+                    "summary": "סיכום",
+                    "key_findings": [],
+                    "risks": [],
+                    "missing_data": [],
+                    "suggested_questions": [],
+                    "skill_results": [],
+                }
+            if system.startswith("נפילה"):
+                raise AgentError("המודל לא זמין")
+            return {"summary": "עבד", "items": [], "sources": []}
+
+    service = SummaryService(_SkillRepository(), None, FakeLlm(), None)
+    skills = [
+        {
+            "content_key": "broken",
+            "name": "סקיל נופל",
+            "content": "נפילה מכוונת.",
+        },
+        {
+            "content_key": "working",
+            "name": "סקיל עובד",
+            "content": "עבודה רגילה.",
+        },
+    ]
+    result = service._final_summary("", "", [_OWNERSHIP_SECTION], skills)
+
+    # Order follows the user's selection, not completion order.
+    assert [item["skill_key"] for item in result["skill_results"]] == [
+        "broken", "working",
+    ]
+    assert "המודל לא זמין" in result["skill_results"][0]["summary"]
+    assert result["skill_results"][1]["summary"] == "עבד"
 
 
 def test_summary_request_limits_and_deduplicates_skills():
