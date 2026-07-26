@@ -60,6 +60,65 @@ def test_flunks_mapper_preserves_string_identifiers_and_generic_rows(monkeypatch
     ]
 
 
+def test_normalized_records_are_json_serializable(monkeypatch):
+    """flunks returns a DataFrame, so pandas types reach ``save_evidence``.
+
+    ``Repository.save_evidence`` hands records straight to ``Jsonb``. A
+    ``Timestamp`` or ``NaT`` in a FLAPI time cube is not JSON serializable, so
+    an unconverted cell aborts the whole evidence write - the run loses every
+    row of that step, not just the one column.
+    """
+    _install_fake_flunks(monkeypatch)
+
+    records = FlunksMapper().normalize(pd.DataFrame([
+        {"id": "001", "eventTime": pd.Timestamp("2026-07-24T10:00:00Z")},
+        {"id": "002", "eventTime": pd.NaT},
+    ]))
+
+    assert json.dumps(records)
+    assert records[0]["eventTime"] == "2026-07-24T10:00:00+00:00"
+    assert records[1]["eventTime"] is None
+
+
+def test_normalize_keeps_numeric_identifier_columns_as_strings(monkeypatch):
+    """A locked decision: numeric-looking identifiers stay strings.
+
+    pandas types a column of digits as int64, so ``00123`` arrives as the int
+    ``123``. Stringifying only at fan-out is too late - the evidence row and
+    the Hebrew prompt would already have lost the leading zeros.
+    """
+    _install_fake_flunks(monkeypatch)
+
+    records = FlunksMapper().normalize(
+        pd.DataFrame({"id": pd.Series(["00123", "456"], dtype="string")})
+    )
+
+    assert [record["id"] for record in records] == ["00123", "456"]
+
+
+def test_normalize_rejects_duplicate_columns_instead_of_dropping_them(
+    monkeypatch
+):
+    """flunks joins cubes, so duplicate column names are reachable.
+
+    ``DataFrame.to_dict('records')`` silently keeps only the last of each
+    duplicate name and warns. Losing a column of evidence without an error
+    would make the summary quietly incomplete.
+    """
+    _install_fake_flunks(monkeypatch)
+    frame = pd.DataFrame([["x", "y"]], columns=["id", "id"])
+
+    with pytest.raises(ProviderError, match="עמודות כפולות"):
+        FlunksMapper().normalize(frame)
+
+
+def test_normalize_accepts_an_empty_dataframe(monkeypatch):
+    """A package that legitimately matched nothing must not look like a failure."""
+    _install_fake_flunks(monkeypatch)
+
+    assert FlunksMapper().normalize(pd.DataFrame(columns=["id"])) == []
+
+
 def test_password_is_hashed_and_verified():
     encoded = hash_password("private value", salt=b"0123456789abcdef")
 

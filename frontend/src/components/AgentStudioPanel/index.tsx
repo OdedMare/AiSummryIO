@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
-  AgentContent, PackageVersion, WorkflowPlan, WorkflowStep, WorkflowVersion,
+  AgentContent, PackageInspection, PackageVersion, WorkflowPlan,
+  WorkflowStep, WorkflowVersion,
 } from "@/types";
 
 type Tab = "packages" | "workflows" | "content" | "review";
@@ -25,6 +26,7 @@ const emptyPackage = {
   query_name: "",
   agent_enabled: true,
   agent_instructions: "",
+  output_schema: "{}",
   example_input: "[]",
   example_output: "[]",
 };
@@ -98,6 +100,9 @@ function PackageCatalog({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [inspectId, setInspectId] = useState("");
+  const [inspection, setInspection] = useState<PackageInspection | null>(null);
+  const [inspecting, setInspecting] = useState(false);
 
   const update = <Key extends keyof typeof emptyPackage>(
     key: Key,
@@ -117,6 +122,7 @@ function PackageCatalog({
     query_name: item.query_name,
     agent_enabled: item.agent_enabled,
     agent_instructions: item.agent_instructions,
+    output_schema: JSON.stringify(item.output_schema || {}, null, 2),
     example_input: JSON.stringify(item.example_input, null, 2),
     example_output: JSON.stringify(item.example_output, null, 2),
   });
@@ -130,6 +136,7 @@ function PackageCatalog({
       await api.createPackage({
         ...form,
         package_key: form.package_key || undefined,
+        output_schema: parseJson<Record<string, unknown>>(form.output_schema, {}),
         example_input: parseJson<string[]>(form.example_input, []),
         example_output: parseJson<Array<Record<string, unknown>>>(
           form.example_output, [],
@@ -142,6 +149,39 @@ function PackageCatalog({
       setError(reason instanceof Error ? reason.message : "השמירה נכשלה");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const inspect = async () => {
+    if (!inspectId.trim()) {
+      setError("יש להזין מזהה בדיקה בטוח");
+      return;
+    }
+    setInspecting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await api.inspectPackage({
+        ...form,
+        package_key: form.package_key || undefined,
+        root_id: inspectId.trim(),
+        output_schema: parseJson<Record<string, unknown>>(form.output_schema, {}),
+        example_input: parseJson<string[]>(form.example_input, []),
+        example_output: parseJson<Array<Record<string, unknown>>>(
+          form.example_output, [],
+        ),
+      });
+      setInspection(result);
+      setForm((current) => ({
+        ...current,
+        output_schema: JSON.stringify(result.output_schema, null, 2),
+      }));
+      setMessage("ה-schema הוסק מההרצה ונטען לטופס. יש לבדוק לפני שמירה.");
+    } catch (reason) {
+      setInspection(null);
+      setError(reason instanceof Error ? reason.message : "בדיקת הטול נכשלה");
+    } finally {
+      setInspecting(false);
     }
   };
 
@@ -201,8 +241,43 @@ function PackageCatalog({
           </span>
         </label>
         <label><span>Query name (לא חובה)</span><input dir="ltr" value={form.query_name} onChange={(e) => update("query_name", e.target.value)} /></label>
+        <section className="tool-inspector" aria-labelledby="tool-inspector-title">
+          <header>
+            <div>
+              <h4 id="tool-inspector-title">Fetch 1 ID</h4>
+              <p>מריץ מזהה אחד, מציג preview מוגבל ומסיק את ה-output schema.</p>
+            </div>
+          </header>
+          <label>
+            <span>מזהה בדיקה בטוח</span>
+            <input dir="ltr" value={inspectId} onChange={(e) => setInspectId(e.target.value)} />
+          </label>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void inspect()}
+            disabled={
+              inspecting || !inspectId.trim() || !form.name.trim()
+              || !form.package_id.trim() || !form.input_cube_name.trim()
+              || !form.input_cube_parameter.trim() || !form.output_cube_name.trim()
+            }
+          >
+            {inspecting ? <LoaderCircle className="spin" size={17} /> : <Beaker size={17} />}
+            {inspecting ? "מביא פלט…" : "Fetch 1 ID"}
+          </button>
+          {inspection && (
+            <div className="inspection-result" aria-live="polite">
+              <strong>
+                התקבלו {inspection.row_count} רשומות
+                {inspection.truncated ? " · מוצגות 20 ראשונות" : ""}
+              </strong>
+              <pre dir="ltr">{JSON.stringify(inspection.records, null, 2)}</pre>
+            </div>
+          )}
+        </section>
         <details className="advanced-block">
-          <summary><Beaker size={16} /> דוגמאות קלט ופלט</summary>
+          <summary><Beaker size={16} /> Schema ודוגמאות קלט ופלט</summary>
+          <label><span>Output schema</span><textarea dir="ltr" value={form.output_schema} onChange={(e) => update("output_schema", e.target.value)} rows={7} /></label>
           <label><span>מזהי דוגמה (JSON)</span><textarea dir="ltr" value={form.example_input} onChange={(e) => update("example_input", e.target.value)} rows={3} /></label>
           <label><span>פלט חבילה לדוגמה (JSON)</span><textarea dir="ltr" value={form.example_output} onChange={(e) => update("example_output", e.target.value)} rows={6} /></label>
         </details>

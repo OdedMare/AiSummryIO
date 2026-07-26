@@ -1,5 +1,5 @@
 import type {
-  AgentContent, Conversation, Evidence, PackageVersion,
+  AgentContent, Conversation, Evidence, PackageInspection, PackageVersion,
   SummaryRun, WorkflowPlan, WorkflowVersion,
 } from "@/types";
 
@@ -60,6 +60,11 @@ export const api = {
   packages: () => request<PackageVersion[]>("/api/packages"),
   createPackage: (data: Record<string, unknown>) =>
     request<PackageVersion>("/api/packages", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  inspectPackage: (data: Record<string, unknown>) =>
+    request<PackageInspection>("/api/packages/inspect", {
       method: "POST",
       body: JSON.stringify(data),
     }),

@@ -65,8 +65,16 @@ export interface PackageVersion {
   timeout_seconds?: number | null;
   agent_enabled: boolean;
   agent_instructions: string;
+  output_schema: Record<string, unknown>;
   example_input: string[];
   example_output: Array<Record<string, unknown>>;
+}
+
+export interface PackageInspection {
+  row_count: number;
+  records: Array<Record<string, unknown>>;
+  truncated: boolean;
+  output_schema: Record<string, unknown>;
 }
 
 export interface WorkflowStep {
