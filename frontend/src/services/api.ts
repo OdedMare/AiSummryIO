@@ -2,6 +2,7 @@ import type {
   AgentContent, Conversation, Evidence, PackageInspection, PackageVersion,
   SummaryRun, SummarySkill, WorkflowPlan, WorkflowVersion,
 } from "@/types";
+import type { GeoJSONMultiPolygon } from "@/types/geo";
 
 export async function request<T>(
   path: string,
@@ -27,13 +28,19 @@ export const api = {
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
-  start: (rootId: string, question: string, skillKeys: string[]) =>
+  start: (
+    rootId: string,
+    question: string,
+    skillKeys: string[],
+    boundaries: GeoJSONMultiPolygon | null = null,
+  ) =>
     request<{ conversation: Conversation; run: SummaryRun }>("/api/summaries", {
       method: "POST",
       body: JSON.stringify({
         root_id: rootId,
         question,
         skill_keys: skillKeys,
+        boundaries,
       }),
     }),
   followUp: (

@@ -6,10 +6,13 @@ import {
   Settings, ShieldCheck, Sparkles, Sun, Workflow,
 } from "lucide-react";
 import AgentStudioPanel from "@/components/AgentStudioPanel";
+import MapWorkspace from "@/components/MapWorkspace";
 import SettingsPanel from "@/components/SettingsPanel";
 import SummaryWorkspace from "@/components/SummaryWorkspace";
 import { api } from "@/services/api";
 import type { Conversation, SummaryRun, SummarySkill } from "@/types";
+import { toMultiPolygon } from "@/types/geo";
+import type { GeographyMode, GeoJSONPolygon } from "@/types/geo";
 
 const isActive = (run: SummaryRun | null) =>
   run?.status === "queued" || run?.status === "running";
@@ -17,6 +20,8 @@ const isActive = (run: SummaryRun | null) =>
 export default function AppShell() {
   const [rootId, setRootId] = useState("");
   const [message, setMessage] = useState("");
+  const [geoMode, setGeoMode] = useState<GeographyMode>("none");
+  const [geometry, setGeometry] = useState<GeoJSONPolygon | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [skills, setSkills] = useState<SummarySkill[]>([]);
   const [selectedSkillKeys, setSelectedSkillKeys] = useState<string[]>([]);
@@ -68,6 +73,8 @@ export default function AppShell() {
     setError("");
     setNotice("");
     setSelectedSkillKeys([]);
+    setGeoMode("none");
+    setGeometry(null);
     setSidebarOpen(false);
   };
 
@@ -107,6 +114,7 @@ export default function AppShell() {
           rootId.trim(),
           message.trim(),
           selectedSkillKeys,
+          geometry ? toMultiPolygon(geometry) : null,
         );
         setConversation(created.conversation);
         setRun(created.run);
@@ -235,6 +243,25 @@ export default function AppShell() {
                 disabled={submitting}
               />
             </label>
+          )}
+          {!conversation && (
+            <div className="map-field">
+              <span className="map-field-label">אזור על המפה (לא חובה)</span>
+              <MapWorkspace
+                mode={geoMode}
+                geometry={geometry}
+                onModeChange={setGeoMode}
+                onGeometryDrawn={(drawn) => {
+                  setGeometry(drawn);
+                  setGeoMode("none");
+                }}
+                onClear={() => {
+                  setGeometry(null);
+                  setGeoMode("none");
+                }}
+                disabled={submitting}
+              />
+            </div>
           )}
           {conversation ? (
             <label className="message-field">
