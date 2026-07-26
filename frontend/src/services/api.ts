@@ -1,6 +1,6 @@
 import type {
   AgentContent, Conversation, Evidence, PackageInspection, PackageVersion,
-  SummaryRun, SummarySkill, WorkflowPlan, WorkflowVersion,
+  SkillPreviewResult, SummaryRun, SummarySkill, WorkflowPlan, WorkflowVersion,
 } from "@/types";
 import type { GeoJSONMultiPolygon } from "@/types/geo";
 
@@ -110,5 +110,10 @@ export const api = {
     }),
   publishContent: (id: string) =>
     request<AgentContent>(`/api/agent-content/${id}/publish`, { method: "POST" }),
+  previewSkill: (data: Record<string, unknown>) =>
+    request<SkillPreviewResult>("/api/agent-content/preview-skill", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   reviewQueue: () => request<Array<Record<string, unknown>>>("/api/review-queue"),
 };

@@ -8,8 +8,8 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
-  AgentContent, PackageInspection, PackageVersion, WorkflowPlan,
-  WorkflowStep, WorkflowVersion,
+  AgentContent, PackageInspection, PackageVersion, SkillPreviewResult,
+  WorkflowPlan, WorkflowStep, WorkflowVersion,
 } from "@/types";
 
 type Tab = "packages" | "workflows" | "content" | "review";
@@ -611,6 +611,119 @@ function WorkflowEditor({
   );
 }
 
+/** Sample sections a Skill draft is tested against, mirroring a real run. */
+const SAMPLE_SECTIONS = `בעלות | נמצאה בעלות רשומה | דנה כהן רשומה כבעלים משנת 2019
+שעבודים | נמצא שעבוד פעיל | שעבוד לטובת בנק המזרחי נרשם ב-2021
+היתרים | נמצאה בקשה שסורבה | בקשת היתר מ-2023 סורבה`;
+
+/**
+ * Try Skill instructions against sample sections before saving a version.
+ *
+ * Judging a Skill through a full summary mixes package failures into what is
+ * really a wording question. This runs only the Skill, so an FDE can iterate
+ * on instructions in seconds, and shows which sources were rejected — the
+ * evidence rule that silently empties `sources` in a real run.
+ */
+function SkillTester({ name, content }: { name: string; content: string }) {
+  const [question, setQuestion] = useState("מה חשוב לדעת על המזהה?");
+  const [sections, setSections] = useState(SAMPLE_SECTIONS);
+  const [result, setResult] = useState<SkillPreviewResult | null>(null);
+  const [error, setError] = useState("");
+  const [running, setRunning] = useState(false);
+
+  const run = async () => {
+    setRunning(true);
+    setError("");
+    setResult(null);
+    try {
+      const parsed = sections
+        .split("\n")
+        .map((line) => line.split("|").map((part) => part.trim()))
+        .filter((parts) => parts[0])
+        .map((parts, index) => ({
+          workflow_key: `sample-${index + 1}`,
+          name: parts[0],
+          status: "completed",
+          summary: parts[1] ?? "",
+          facts: parts.slice(2).filter(Boolean),
+          warnings: [],
+        }));
+      setResult(await api.previewSkill({
+        name: name || "טיוטת Skill",
+        content,
+        question,
+        sections: parsed,
+      }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "הבדיקה נכשלה");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <section className="skill-tester">
+      <header>
+        <span><Beaker size={17} /></span>
+        <div>
+          <h4>בדיקת ה־Skill</h4>
+          <p>מריץ רק את ה־Skill על חלקי סיכום לדוגמה. שום דבר לא נשמר.</p>
+        </div>
+      </header>
+      <label>
+        <span>שאלת המשתמש</span>
+        <input
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+        />
+      </label>
+      <label>
+        <span>חלקי סיכום לדוגמה</span>
+        <textarea
+          value={sections}
+          onChange={(event) => setSections(event.target.value)}
+          rows={4}
+        />
+        <small>שורה לכל חלק: שם | סיכום | עובדה | עובדה…</small>
+      </label>
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => void run()}
+        disabled={running || !content.trim() || !sections.trim()}
+      >
+        {running ? <LoaderCircle className="spin" size={16} /> : <Beaker size={16} />}
+        {running ? " מריץ…" : " הרצת בדיקה"}
+      </button>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {result && (
+        <article className="skill-tester-result">
+          <h5>{result.result.name}</h5>
+          <p>{result.result.summary}</p>
+          {result.result.items.length > 0 && (
+            <ul>
+              {result.result.items.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          )}
+          <p className="skill-tester-sources">
+            מקורות שאושרו:{" "}
+            {result.result.sources.length > 0
+              ? result.result.sources.join(", ")
+              : "אין"}
+          </p>
+          {result.dropped_sources.length > 0 && (
+            <p className="form-error" role="alert">
+              מקורות שנדחו כי אינם קיימים בחלקי הסיכום:{" "}
+              {result.dropped_sources.join(", ")}. יש לחדד ב־Skill שיצטט רק
+              שמות של חלקים שסופקו.
+            </p>
+          )}
+        </article>
+      )}
+    </section>
+  );
+}
+
 function ContentStudio({
   items,
   onRefresh,
@@ -703,6 +816,9 @@ function ContentStudio({
           </label>
         )}
         <label><span>הוראות הפעלה אמיתיות</span><textarea className="content-editor" value={form.content} onChange={(e) => setForm((current) => ({ ...current, content: e.target.value }))} rows={18} /></label>
+        {form.kind === "skill" && form.content.trim() && (
+          <SkillTester name={form.name} content={form.content} />
+        )}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="form-actions">
           {form.content_key && <button type="button" className="secondary-button" onClick={() => setForm({ content_key: "", kind: "skill", name: "", description: "", content: "", user_selectable: true })}>ביטול</button>}

@@ -57,6 +57,13 @@ export interface SkillResult {
   sources: string[];
 }
 
+/** Result of testing unsaved Skill instructions against sample sections. */
+export interface SkillPreviewResult {
+  result: SkillResult;
+  /** Sections the Skill cited that do not exist — dropped before display. */
+  dropped_sources: string[];
+}
+
 export interface Conversation {
   id: string;
   root_id: string;
