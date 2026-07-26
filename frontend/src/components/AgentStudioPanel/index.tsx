@@ -69,8 +69,8 @@ function Login({ onLogin }: { onLogin: () => void }) {
   return (
     <form className="admin-login" onSubmit={submit}>
       <span className="login-icon"><KeyRound size={24} /></span>
-      <h3>כניסת FDE</h3>
-      <p>עריכת טולים, תהליכים והנחיות מוגנת בסיסמה.</p>
+      <h3>כניסת מנהל מערכת</h3>
+      <p>כאן מנהלים מקורות מידע, תהליכי סיכום ו־Skills.</p>
       <label>
         <span>סיסמה</span>
         <input
@@ -193,7 +193,7 @@ function PackageCatalog({
   return (
     <div className="studio-split">
       <section className="studio-list">
-        <header><h3>קטלוג טולים</h3><span>{items.length} טולים</span></header>
+        <header><h3>מקורות מידע</h3><span>{items.length} מקורות</span></header>
         {items.map((item) => (
           <button type="button" className="catalog-card" key={item.id} onClick={() => edit(item)}>
             <span className="catalog-icon"><Wrench size={18} /></span>
@@ -208,15 +208,15 @@ function PackageCatalog({
             <ArrowLeft size={16} />
           </button>
         ))}
-        {!items.length && <p className="panel-empty">הוסיפו את טול ה-FLAPI הראשון.</p>}
+        {!items.length && <p className="panel-empty">הוסיפו את מקור המידע הראשון.</p>}
       </section>
 
       <form className="studio-form" onSubmit={save}>
         <header>
           <span><PackagePlus size={19} /></span>
           <div>
-            <h3>{form.package_key ? "גרסה חדשה לטול" : "טול חדש"}</h3>
-            <p>טול הוא חבילת FLAPI שהסוכן יכול לחבר לתהליך או להריץ להעמקה.</p>
+            <h3>{form.package_key ? "גרסה חדשה למקור" : "מקור מידע חדש"}</h3>
+            <p>חבילת FLAPI שמביאה נתונים לתהליך הסיכום.</p>
           </div>
         </header>
         <div className="form-grid two">
