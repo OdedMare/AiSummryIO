@@ -619,6 +619,7 @@ function ContentStudio({
 }) {
   const [form, setForm] = useState({
     content_key: "", kind: "skill", name: "", description: "", content: "",
+    user_selectable: true,
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -629,6 +630,7 @@ function ContentStudio({
     name: item.name,
     description: item.description,
     content: item.content,
+    user_selectable: item.user_selectable,
   });
 
   const save = async (event: FormEvent) => {
@@ -639,8 +641,12 @@ function ContentStudio({
       await api.createContent({
         ...form,
         content_key: form.content_key || undefined,
+        user_selectable: form.kind === "skill" && form.user_selectable,
       });
-      setForm({ content_key: "", kind: "skill", name: "", description: "", content: "" });
+      setForm({
+        content_key: "", kind: "skill", name: "", description: "", content: "",
+        user_selectable: true,
+      });
       await onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "השמירה נכשלה");
@@ -652,12 +658,19 @@ function ContentStudio({
   return (
     <div className="studio-split">
       <section className="studio-list">
-        <header><h3>מיומנויות והנחיות</h3><span>{items.length} פריטים</span></header>
+        <header><h3>Skills והנחיות</h3><span>{items.length} פריטים</span></header>
         {items.map((item) => (
           <article className="content-card" key={item.id}>
             <button type="button" onClick={() => edit(item)}>
               <span>{item.kind === "skill" ? <BookOpen size={17} /> : <Sparkles size={17} />}</span>
-              <span><strong>{item.name}</strong><small>{item.kind} · v{item.version} · {item.status}</small></span>
+              <span>
+                <strong>{item.name}</strong>
+                <small>
+                  {item.kind === "skill" ? "Skill" : "הנחיית מערכת"}
+                  {" · "}v{item.version}
+                  {item.user_selectable ? " · מוצג למשתמשים" : ""}
+                </small>
+              </span>
             </button>
             {item.status === "draft" && (
               <button type="button" onClick={() => void api.publishContent(item.id).then(onRefresh)}><Send size={15} /> פרסום</button>
@@ -666,16 +679,32 @@ function ContentStudio({
         ))}
       </section>
       <form className="studio-form" onSubmit={save}>
-        <header><span><BookOpen size={19} /></span><div><h3>{form.content_key ? "גרסה חדשה" : "תוכן סוכן חדש"}</h3><p>קצר, ממוקד, וברור מתי להשתמש בו.</p></div></header>
+        <header><span><BookOpen size={19} /></span><div><h3>{form.content_key ? "גרסה חדשה" : "Skill או הנחיה חדשים"}</h3><p>Skill שמוצג למשתמש באמת משנה את תוצאת הסיכום.</p></div></header>
         <div className="form-grid two">
-          <label><span>סוג</span><select value={form.kind} onChange={(e) => setForm((current) => ({ ...current, kind: e.target.value }))}><option value="skill">מיומנות</option><option value="prompt">הנחיית מערכת</option></select></label>
+          <label><span>סוג</span><select value={form.kind} onChange={(e) => setForm((current) => ({ ...current, kind: e.target.value }))}><option value="skill">Skill לסיכום</option><option value="prompt">הנחיית מערכת</option></select></label>
           <label><span>שם *</span><input value={form.name} onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))} /></label>
         </div>
-        <label><span>תיאור הפעלה</span><input value={form.description} onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))} /></label>
-        <label><span>תוכן</span><textarea className="content-editor" value={form.content} onChange={(e) => setForm((current) => ({ ...current, content: e.target.value }))} rows={18} /></label>
+        <label><span>מה המשתמש יקבל?</span><input value={form.description} onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))} /></label>
+        {form.kind === "skill" && (
+          <label className="agent-tool-toggle">
+            <input
+              type="checkbox"
+              checked={form.user_selectable}
+              onChange={(e) => setForm((current) => ({
+                ...current,
+                user_selectable: e.target.checked,
+              }))}
+            />
+            <span>
+              הצגה במסך הסיכום
+              <small>המשתמש יוכל לבחור את ה־Skill והתוצאה תופיע בנפרד.</small>
+            </span>
+          </label>
+        )}
+        <label><span>הוראות הפעלה אמיתיות</span><textarea className="content-editor" value={form.content} onChange={(e) => setForm((current) => ({ ...current, content: e.target.value }))} rows={18} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="form-actions">
-          {form.content_key && <button type="button" className="secondary-button" onClick={() => setForm({ content_key: "", kind: "skill", name: "", description: "", content: "" })}>ביטול</button>}
+          {form.content_key && <button type="button" className="secondary-button" onClick={() => setForm({ content_key: "", kind: "skill", name: "", description: "", content: "", user_selectable: true })}>ביטול</button>}
           <button className="primary-button" type="submit" disabled={saving || !form.name || !form.content}><Save size={17} /> שמירת טיוטה</button>
         </div>
       </form>
@@ -686,7 +715,7 @@ function ContentStudio({
 function ReviewQueue({ items }: { items: Array<Record<string, unknown>> }) {
   return (
     <section className="review-queue">
-      <header><div><h3>תור שיפור</h3><p>משוב שלילי ושאלות הדורשות טיפול FDE.</p></div><span>{items.length} פריטים</span></header>
+      <header><div><h3>תור שיפור</h3><p>סיכומים שסומנו ודורשים בדיקת מנהל.</p></div><span>{items.length} פריטים</span></header>
       {items.map((item) => (
         <article key={String(item.id)}>
           <span className="review-icon"><AlertTriangle size={18} /></span>
@@ -746,7 +775,7 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
       <section className="modal studio-modal" role="dialog" aria-modal="true" aria-labelledby="studio-title">
         <header className="modal-header studio-header">
           <span className="modal-icon"><Workflow size={20} /></span>
-          <div><h2 id="studio-title">Agent Studio</h2><p>טולים, תהליכים, מיומנויות ובקרת איכות.</p></div>
+          <div><h2 id="studio-title">מרכז ניהול</h2><p>מקורות מידע, תהליכי סיכום, Skills ובקרת איכות.</p></div>
           {authenticated && (
             <button type="button" onClick={() => { void api.logout(); setAuthenticated(false); }} aria-label="יציאה מהסטודיו"><LogOut size={19} /></button>
           )}
@@ -759,9 +788,9 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
           <>
             <nav className="studio-tabs" aria-label="אזורי Agent Studio">
               {([
-                ["packages", "טולים", Wrench],
-                ["workflows", "תהליכים", Workflow],
-                ["content", "מיומנויות והנחיות", BookOpen],
+                ["packages", "מקורות מידע", Wrench],
+                ["workflows", "תהליכי סיכום", Workflow],
+                ["content", "Skills והנחיות", BookOpen],
                 ["review", "תור שיפור", AlertTriangle],
               ] as const).map(([key, label, Icon]) => (
                 <button type="button" key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>

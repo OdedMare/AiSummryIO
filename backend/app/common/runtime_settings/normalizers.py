@@ -3,6 +3,14 @@ import re
 _JDBC_PREFIX = re.compile(r"^jdbc:", re.IGNORECASE)
 _PG_SCHEMES = ("postgresql://", "postgres://")
 
+# A schema name is interpolated into SQL (SET search_path), so it must never
+# accept arbitrary strings. Same rule LocatoAI uses for layers_table.
+_SCHEMA_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# JDBC spells the schema `currentSchema`; libpq has no such keyword and
+# rejects the whole URI. The equivalent is an `options` payload.
+_CURRENT_SCHEMA_RE = re.compile(r"[?&]currentSchema=([^&]+)", re.IGNORECASE)
+
 
 def normalize_http_url(value: str, field: str) -> str:
     cleaned = value.strip().rstrip("/")
