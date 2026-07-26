@@ -10,6 +10,7 @@ from app.common.runtime_settings.runtime_settings_store import (
     verify_password,
 )
 from app.dal.providers.flapi.mapper import FlunksMapper
+from app.dal.providers.flapi.provider import FlapiProvider
 from app.repository import Repository
 from app.workflows import SummaryService
 
@@ -60,6 +61,47 @@ def test_password_is_hashed_and_verified():
     assert "private value" not in encoded
     assert verify_password("private value", encoded)
     assert not verify_password("wrong", encoded)
+
+
+def test_flapi_provider_retries_once_and_adds_query_provenance(monkeypatch):
+    _install_fake_flunks(monkeypatch)
+
+    class Settings:
+        flapi_username = "fde"
+        flapi_token = "token"
+
+    class Store:
+        @staticmethod
+        def get():
+            return Settings()
+
+    attempts = []
+
+    class Runner:
+        def __init__(self, attempt):
+            self.attempt = attempt
+
+        def run(self):
+            if self.attempt == 1:
+                raise RuntimeError("temporary")
+            return pd.DataFrame([{"name": "בית"}])
+
+    def factory(_settings, _config):
+        attempts.append(len(attempts) + 1)
+        return Runner(attempts[-1])
+
+    provider = FlapiProvider(Store(), runner_factory=factory)
+    records = provider.run({
+        "package_key": "home",
+        "package_id": "PKG-007",
+        "input_cube_name": "root",
+        "input_cube_parameter": "identifier",
+        "output_cube_name": "facts",
+        "query_name": "home-summary",
+    }, ["001"])
+
+    assert attempts == [1, 2]
+    assert records == [{"name": "בית", "_package_query": "home-summary"}]
 
 
 def test_workflow_identifier_mapping_supports_fanout_and_deduplication():
