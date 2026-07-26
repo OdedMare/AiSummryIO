@@ -9,6 +9,8 @@ export interface SummarySection {
   facts: string[];
   warnings: string[];
   suggested_questions: string[];
+  /** Extra fields declared by the workflow's own output_schema. */
+  fields?: Record<string, unknown>;
   evidence_ids: string[];
 }
 

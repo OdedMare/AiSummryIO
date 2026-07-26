@@ -131,7 +131,7 @@ git log -5 --oneline --decorate
 
 ## Validation already completed
 
-- Backend unit tests: `6 passed`.
+- Backend unit tests: `14 passed` (was `6 passed`; see the P1 session below).
 - Manual live PostgreSQL integration covered:
   - schema creation;
   - seeded skills/prompts;
@@ -154,6 +154,59 @@ git log -5 --oneline --decorate
 Visual screenshot QA could not be completed because no controllable browser was
 available in that session. Do it in a future session when Browser/Chrome is
 available.
+
+## P1 session (Claude Code, 2026-07-26)
+
+Started from `3875f93`. The P0 decision on the Next.js pin was deferred by the
+user: **stay on `16.2.10` to keep LocatoAI parity**, and revisit only when both
+repos can move together. `npm audit --omit=dev` still reports 3 high advisories
+(next, postcss, sharp), all fixed by `16.2.12`. That P0 checkbox stays open on
+purpose.
+
+P0 items 1-6 were not attempted: they need the internal `flunks` wheel, real
+FLAPI/LLM credentials, and a real PostgreSQL. None are reachable from a normal
+dev machine. See "Environment reality" below.
+
+### Completed and verified
+
+- `depends_on` is now validated against `input_source`. A step reading
+  `steps.<key>` must declare that key as a dependency, so the graph is honest
+  before the real dependency scheduler lands.
+- Per-package timeout is enforced. `_run_with_timeout` bounds each `flunks`
+  call by the package's `timeout_seconds`, falling back to the global
+  `package_timeout_seconds`. Previously both were stored and ignored, so one
+  hung package could stall a whole run indefinitely.
+- `flapi_verify_tls` now reaches `FlApiConfig`, passed only when the installed
+  `flunks` exposes such a field (`verify_tls`/`verify`/`verify_ssl`). An older
+  wheel keeps working; if the setting cannot be honored it is logged rather
+  than silently dropped.
+- A workflow's `output_schema` is now used. `_merge_output_schema` extends the
+  shared section contract with the FDE's own properties instead of replacing
+  it, so the four keys the frontend renders can never be redefined away.
+  Custom values come back under `section.fields`. A malformed schema degrades
+  to the shared contract rather than failing the run.
+- Tests went from 6 to 14. Each new test covering a fix was confirmed to fail
+  against the pre-session code, so they are real regression guards.
+
+### Environment reality on a normal dev machine
+
+- No Python 3.8.10 available; the suite was run on 3.13.9. **The 3.8.10
+  compatibility claim is therefore unverified this session** - re-check in the
+  container before release. Keep annotations 3.8-safe (`Optional`/`List`/`Dict`).
+- `flunks` is not installable outside the internal index, and it is a hard
+  dependency in `pyproject.toml`, so `pip install -e '.[dev]'` fails. The
+  tests work because they stub `flunks` through `monkeypatch`. To reproduce:
+  create a venv and install only `pytest pandas psycopg pydantic
+  pydantic-settings fastapi httpx openai`, then run with `PYTHONPATH=.`.
+- No PostgreSQL was running, so every repository test is a pure-function test.
+  The PostgreSQL integration tests under "automated delivery" are still open.
+
+### Note for the next session
+
+Mid-session the working tree was committed outside this session as
+`4775781`, which briefly made a `git stash` verification step silently no-op.
+Confirm `git log -1` matches what you expect before trusting a stash-based
+before/after check.
 
 ## Remaining work before calling the app fully production-ready
 
@@ -184,15 +237,17 @@ repeatable verification.
 - [ ] Execute saved examples as real offline regression tests instead of merely
   checking that examples exist.
 - [ ] Persist test results and block publishing when mandatory examples fail.
-- [ ] Validate and use each workflow's `output_schema`; the current runtime
-  stores it but summarizes with the shared section schema.
+- [x] Validate and use each workflow's `output_schema`. Done 2026-07-26: it now
+  extends the shared section contract; extras land in `section.fields`.
 - [ ] Add package connection/config validation and a safe test-package action.
-- [ ] Expose and use per-package timeout settings. The setting exists but is
-  not yet enforced around a `flunks` run.
-- [ ] Pass `flapi_verify_tls` into the actual FLAPI client configuration; it is
-  currently stored but not consumed.
+- [x] Expose and use per-package timeout settings. Done 2026-07-26: enforced in
+  `FlapiProvider._run_with_timeout`, with the global setting as fallback.
+- [x] Pass `flapi_verify_tls` into the actual FLAPI client configuration. Done
+  2026-07-26, guarded so older `flunks` wheels still build.
 - [ ] Validate that `depends_on` matches each step's input source; execution is
   currently ordered but does not use a complete dependency scheduler.
+  Validation is done (2026-07-26); the **scheduler itself is still open** -
+  `_execute_workflow` still walks steps positionally.
 - [ ] Add version history, diff, rollback, and audit records for packages,
   workflows, skills, and prompts. Older rows exist, but the current UI lists
   only the latest version.
@@ -270,6 +325,8 @@ repeatable verification.
   integration verification was run manually.
 - [ ] Add workflow-engine tests for multiple workflows, fan-out, partial
   failures, routing, clarification, job recovery, and evidence ownership.
+  Partially done 2026-07-26: partial-failure isolation and progress reporting
+  are covered. Still missing: job recovery, evidence ownership, clarification.
 - [ ] Add frontend component tests and browser end-to-end tests for the user
   flow, Settings, and Agent Studio.
 - [ ] Add a FLAPI contract test using the exact internal `flunks` wheel.

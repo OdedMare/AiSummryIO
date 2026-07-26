@@ -78,13 +78,13 @@ class FlapiProvider:
             return self._runner_factory(settings, package_config)
         try:
             from flunks import FlunksRunner
-            from flunks.config import FlapiConfig, FlunksConfig
+            from flunks.config import FlApiConfig, FlunksConfig
         except ImportError as exc:
             raise ProviderError(
                 "flunks אינו מותקן. יש להוסיף אותו ל-wheelhouse הפנימי."
             ) from exc
         return FlunksRunner(
-            flapi_config=self._flapi_config(FlapiConfig, settings),
+            flapi_config=self._flapi_config(FlApiConfig, settings),
             package_config=package_config,
             flunks_config=FlunksConfig(),
         )
