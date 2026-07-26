@@ -297,14 +297,14 @@ class SummaryService:
     def _select_detail(
         self, question: str, workflows: List[dict], evidence: List[dict]
     ) -> dict:
-        if not workflows or evidence:
-            # Existing evidence is intentionally tried first.
-            if evidence:
-                return {"workflow_key": None}
-        if len(workflows) == 1:
-            return {"workflow_key": workflows[0]["workflow_key"]}
         if not workflows:
-            return {"workflow_key": None}
+            if evidence:
+                return {"action": "use_cached", "workflow_key": None}
+            return {
+                "action": "clarify",
+                "workflow_key": None,
+                "clarification": "אין עדיין תהליך מפורסם שיכול לענות על השאלה.",
+            }
         prompt = self._repository.published_content(
             "follow-up-router", "בחר workflow_key מתאים או clarification."
         )
@@ -316,31 +316,78 @@ class SummaryService:
         schema = {
             "type": "object",
             "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["use_cached", "workflow", "clarify"],
+                },
                 "workflow_key": {"type": ["string", "null"]},
                 "clarification": {"type": ["string", "null"]},
             },
-            "required": ["workflow_key", "clarification"],
+            "required": ["action", "workflow_key", "clarification"],
             "additionalProperties": False,
         }
+        evidence_by_step = {}
+        for item in evidence:
+            evidence_by_step.setdefault(item["step_key"], []).extend(
+                item["records"]
+            )
+        evidence_summary = self._chunk_facts(evidence_by_step)[:20]
         try:
-            return self._llm.complete_json(
+            selected = self._llm.complete_json(
                 prompt,
                 json.dumps(
-                    {"question": question, "workflows": options},
+                    {
+                        "question": question,
+                        "available_workflows": options,
+                        "existing_evidence": evidence_summary,
+                    },
                     ensure_ascii=False,
                 ),
                 schema,
             )
+            valid_keys = {item["workflow_key"] for item in workflows}
+            if (
+                selected.get("action") == "workflow"
+                and selected.get("workflow_key") not in valid_keys
+            ):
+                return {
+                    "action": "clarify",
+                    "workflow_key": None,
+                    "clarification": "לאיזה נושא תרצו להעמיק?",
+                }
+            if selected.get("action") == "use_cached" and not evidence:
+                if len(workflows) == 1:
+                    return {
+                        "action": "workflow",
+                        "workflow_key": workflows[0]["workflow_key"],
+                    }
+                return {
+                    "action": "clarify",
+                    "workflow_key": None,
+                    "clarification": "לאיזה נושא תרצו להעמיק?",
+                }
+            return selected
         except AgentError:
+            if evidence:
+                return {"action": "use_cached", "workflow_key": None}
+            if len(workflows) == 1:
+                return {
+                    "action": "workflow",
+                    "workflow_key": workflows[0]["workflow_key"],
+                }
             return {
+                "action": "clarify",
                 "clarification": "לאיזה נושא תרצו להעמיק?",
                 "workflow_key": None,
             }
 
     def _synthesize_cached(self, question: str, evidence: List[dict]) -> dict:
-        facts = self._chunk_facts({
-            item["step_key"]: item["records"] for item in evidence
-        })
+        records_by_step = {}
+        for item in evidence:
+            records_by_step.setdefault(item["step_key"], []).extend(
+                item["records"]
+            )
+        facts = self._chunk_facts(records_by_step)
         generated = self._section_summary(
             {"name": "ראיות קיימות", "system_prompt": ""}, facts, []
         )
@@ -367,7 +414,9 @@ class JobRunner:
     def __init__(self, repository, service, workers=4):
         self._repository = repository
         self._service = service
-        self._pool = ThreadPoolExecutor(max_workers=max(2, workers))
+        worker_count = max(2, workers)
+        self._full_pool = ThreadPoolExecutor(max_workers=worker_count - 1)
+        self._follow_up_pool = ThreadPoolExecutor(max_workers=1)
         self._submitted = set()
         self._lock = threading.Lock()
 
@@ -376,11 +425,17 @@ class JobRunner:
             self.submit(run["id"])
 
     def submit(self, run_id: str) -> None:
+        run = self._repository.get_run(run_id)
         with self._lock:
             if run_id in self._submitted:
                 return
             self._submitted.add(run_id)
-        self._pool.submit(self._execute, run_id)
+        pool = (
+            self._follow_up_pool
+            if run["kind"] == "follow_up"
+            else self._full_pool
+        )
+        pool.submit(self._execute, run_id)
 
     def _execute(self, run_id: str) -> None:
         try:
@@ -420,4 +475,3 @@ class JobRunner:
         finally:
             with self._lock:
                 self._submitted.discard(run_id)
-

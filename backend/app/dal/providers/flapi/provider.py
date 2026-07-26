@@ -16,9 +16,9 @@ class FlapiProvider:
 
     def run(self, package: dict, identifiers: List[str]) -> List[dict]:
         config = self._mapper.package_config(package, identifiers)
-        runner = self._runner(config)
         for attempt in range(2):
             try:
+                runner = self._runner(config)
                 result = runner.run()
                 records = self._mapper.normalize(result)
                 self._logger.info(
@@ -58,4 +58,3 @@ class FlapiProvider:
             package_config=package_config,
             flunks_config=FlunksConfig(),
         )
-

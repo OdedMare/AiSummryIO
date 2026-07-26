@@ -26,6 +26,7 @@ export default function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
   const [dark, setDark] = useState(true);
+  const [notice, setNotice] = useState("");
 
   const loadHistory = useCallback(() => {
     api.conversations().then(setConversations).catch(() => undefined);
@@ -35,8 +36,8 @@ export default function AppShell() {
     const saved = window.localStorage.getItem("aisummry-theme");
     const nextDark = saved ? saved === "dark" :
       window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setDark(nextDark);
     document.documentElement.dataset.theme = nextDark ? "dark" : "light";
+    window.setTimeout(() => setDark(nextDark), 0);
     loadHistory();
   }, [loadHistory]);
 
@@ -62,6 +63,7 @@ export default function AppShell() {
     setRootId("");
     setMessage("");
     setError("");
+    setNotice("");
     setSidebarOpen(false);
   };
 
@@ -83,9 +85,18 @@ export default function AppShell() {
     if (submitting || isActive(run)) return;
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       if (!conversation) {
-        if (!rootId.trim()) throw new Error("יש להזין מזהה");
+        if (!rootId.trim()) {
+          const detected = message.match(
+            /(?:^|\s)(?:id|מזהה)\s*[:#=-]?\s*([A-Za-z0-9][A-Za-z0-9._/-]{0,255})(?:\s|$)/i,
+          );
+          if (!detected) throw new Error("יש להזין מזהה בשדה או לכתוב „מזהה: …”");
+          setRootId(detected[1]);
+          setNotice(`זיהינו את המזהה ${detected[1]}. בדקו אותו ולחצו שוב לאישור.`);
+          return;
+        }
         const created = await api.start(rootId.trim(), message.trim());
         setConversation(created.conversation);
         setRun(created.run);
@@ -207,12 +218,13 @@ export default function AppShell() {
             />
           </label>
           {error && <p className="composer-error" role="alert">{error}</p>}
+          {notice && <p className="composer-notice" role="status">{notice}</p>}
           <button
             className="submit-button"
             type="submit"
             disabled={
               submitting || isActive(run) ||
-              (!conversation && !rootId.trim()) ||
+              (!conversation && !rootId.trim() && !message.trim()) ||
               (!!conversation && !message.trim())
             }
           >
@@ -236,4 +248,3 @@ export default function AppShell() {
     </div>
   );
 }
-

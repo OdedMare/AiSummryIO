@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock3,
   Database, FileText, LoaderCircle, ThumbsDown, ThumbsUp,
@@ -52,13 +52,32 @@ function EvidenceDrawer({
   runId: string;
   open: boolean;
 }) {
-  const [items, setItems] = useState<Evidence[] | null>(null);
-  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState<{
+    runId: string;
+    items: Evidence[];
+    error: string;
+  } | null>(null);
 
-  if (open && items === null && !error) {
-    api.evidence(runId).then(setItems).catch((reason) => setError(reason.message));
-  }
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    api.evidence(runId)
+      .then((next) => {
+        if (current) setLoaded({ runId, items: next, error: "" });
+      })
+      .catch((reason) => {
+        if (current) {
+          setLoaded({ runId, items: [], error: reason.message });
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [open, runId]);
+
   if (!open) return null;
+  const items = loaded?.runId === runId ? loaded.items : null;
+  const error = loaded?.runId === runId ? loaded.error : "";
   if (error) return <p role="alert">{error}</p>;
   if (!items) return <p className="loading-line"><LoaderCircle size={16} /> טוען ראיות…</p>;
   return (
@@ -202,4 +221,3 @@ export default function SummaryWorkspace({
     </main>
   );
 }
-

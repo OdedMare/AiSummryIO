@@ -148,8 +148,14 @@ def conversation(
 def run_status(run_id: str, session_id: str = Depends(user_session)):
     run = repository.get_run(run_id)
     repository.get_conversation(run["conversation_id"], session_id)
-    run["evidence"] = repository.run_evidence(run_id)
     return run
+
+
+@app.get("/api/runs/{run_id}/evidence")
+def run_evidence(run_id: str, session_id: str = Depends(user_session)):
+    run = repository.get_run(run_id)
+    repository.get_conversation(run["conversation_id"], session_id)
+    return repository.run_evidence(run_id)
 
 
 @app.post("/api/feedback")
@@ -256,4 +262,3 @@ def publish_agent_content(content_id: str):
 @app.get("/api/review-queue", dependencies=[Depends(admin_dependency)])
 def review_queue():
     return repository.review_queue()
-

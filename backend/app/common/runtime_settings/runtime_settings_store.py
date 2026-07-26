@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import os
 from dataclasses import asdict, fields
@@ -39,12 +40,19 @@ class RuntimeSettingsStore:
             conversation_retention_days=env.conversation_retention_days,
             log_retention_days=env.log_retention_days,
             admin_password_hash=env.admin_password_hash,
-            cookie_secret=env.cookie_secret or os.urandom(32).hex(),
+            cookie_secret=env.cookie_secret,
         )
-        if env.admin_password and not self._settings.admin_password_hash:
-            self._settings.admin_password_hash = hash_password(env.admin_password)
         if self._path.exists():
             self._apply(json.loads(self._path.read_text("utf-8")), False)
+        changed = False
+        if not self._settings.cookie_secret:
+            self._settings.cookie_secret = os.urandom(32).hex()
+            changed = True
+        if env.admin_password and not self._settings.admin_password_hash:
+            self._settings.admin_password_hash = hash_password(env.admin_password)
+            changed = True
+        if changed:
+            self._persist()
 
     def get(self) -> RuntimeSettings:
         return self._settings
@@ -57,12 +65,15 @@ class RuntimeSettingsStore:
 
     def update(self, patch: dict) -> RuntimeSettings:
         self._apply(patch, True)
+        self._persist()
+        return self._settings
+
+    def _persist(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(
             json.dumps(asdict(self._settings), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        return self._settings
 
     def _apply(self, patch: dict, strict: bool) -> None:
         known = {item.name for item in fields(RuntimeSettings)}
@@ -101,7 +112,6 @@ def verify_password(password: str, encoded: str) -> bool:
             password.encode("utf-8"), salt=bytes.fromhex(salt),
             n=int(n), r=int(r), p=int(p), dklen=32,
         )
-        return hashlib.compare_digest(actual.hex(), expected)
+        return hmac.compare_digest(actual.hex(), expected)
     except (TypeError, ValueError):
         return False
-

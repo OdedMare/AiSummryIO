@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { CheckCircle2, LoaderCircle, Save, Settings, X } from "lucide-react";
+import {
+  CheckCircle2, KeyRound, LoaderCircle, Save, Send, Settings, X,
+} from "lucide-react";
 import { api } from "@/services/api";
 
 const FIELDS = [
@@ -23,13 +25,35 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
-    api.settings()
-      .then(setValues)
-      .catch((reason) => setError(reason.message))
+    api.adminSession()
+      .then(() => api.settings())
+      .then((next) => {
+        setValues(next);
+        setAuthenticated(true);
+      })
+      .catch(() => setAuthenticated(false))
       .finally(() => setLoading(false));
   }, []);
+
+  const authenticate = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await api.login(password);
+      setValues(await api.settings());
+      setPassword("");
+      setAuthenticated(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "ההתחברות נכשלה");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -55,6 +79,30 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         </header>
         {loading ? (
           <p className="loading-line"><LoaderCircle className="spin" /> טוען…</p>
+        ) : authenticated === false ? (
+          <form className="admin-login" onSubmit={authenticate}>
+            <span className="login-icon"><KeyRound size={24} /></span>
+            <h3>כניסת FDE</h3>
+            <p>הגדרות המערכת מוגנות באותה הרשאה של Agent Studio.</p>
+            <label>
+              <span>סיסמה</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                autoFocus
+              />
+            </label>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={saving || !password}
+            >
+              <Send size={17} /> {saving ? "מתחבר…" : "כניסה להגדרות"}
+            </button>
+          </form>
         ) : (
           <form onSubmit={save} className="settings-form">
             {FIELDS.map(([key, label, type]) => (
@@ -88,4 +136,3 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-

@@ -29,7 +29,12 @@ class Repository:
 
     def initialize(self) -> None:
         with connect(self._store) as connection:
-            connection.execute(_SCHEMA)
+            for statement in _SCHEMA.split(";"):
+                if statement.strip():
+                    connection.execute(statement)
+            connection.execute(
+                "DELETE FROM conversations WHERE expires_at <= NOW()"
+            )
             connection.commit()
         self._seed_agent_content()
 
@@ -133,8 +138,7 @@ class Repository:
 
     def publish_workflow(self, version_id: str) -> dict:
         workflow = self.get_workflow(version_id)
-        if not workflow["steps"]:
-            raise ValueError("אי אפשר לפרסם תהליך ללא שלבים")
+        self._validate_for_publish(workflow)
         with connect(self._store) as connection:
             connection.execute("""
                 UPDATE summary_workflows
@@ -266,11 +270,13 @@ class Repository:
         return self._one("SELECT * FROM summary_runs WHERE id=%s", (run_id,))
 
     def queued_runs(self) -> List[dict]:
+        with connect(self._store) as connection:
+            connection.execute("""
+                UPDATE summary_runs SET status='queued'
+                WHERE status='running'
+            """)
+            connection.commit()
         return self._all("""
-            UPDATE summary_runs SET status='queued'
-            WHERE status='running'
-            RETURNING *
-        """) + self._all("""
             SELECT * FROM summary_runs WHERE status='queued' ORDER BY created_at
         """)
 
@@ -386,7 +392,35 @@ class Repository:
                 raise ValueError(
                     "שלב תלוי בשלב מאוחר או לא קיים: " + ", ".join(missing)
                 )
+            source = step.get("input_source", "workflow.id")
+            if source != "workflow.id":
+                parts = source.split(".")
+                if (
+                    len(parts) != 2 or parts[0] != "steps"
+                    or parts[1] not in seen
+                ):
+                    raise ValueError("מקור הקלט חייב להיות שלב מוקדם יותר")
+                if not step.get("input_field", "").strip():
+                    raise ValueError("נדרש שדה פלט למיפוי משלב קודם")
             seen.add(step["key"])
+
+    def _validate_for_publish(self, workflow: dict) -> None:
+        if not workflow["steps"]:
+            raise ValueError("אי אפשר לפרסם תהליך ללא שלבים")
+        self._validate_steps(workflow["steps"])
+        has_workflow_examples = bool(workflow.get("examples"))
+        packages_have_examples = all(
+            bool(package.get("example_input"))
+            and bool(package.get("example_output"))
+            for package in (
+                self.get_package(step["package_version_id"])
+                for step in workflow["steps"]
+            )
+        )
+        if not has_workflow_examples and not packages_have_examples:
+            raise ValueError(
+                "נדרשת דוגמת תהליך או דוגמאות קלט ופלט לכל חבילה לפני פרסום"
+            )
 
 
 _SCHEMA = """
@@ -552,4 +586,3 @@ summary, key_findings, risks, missing_data ו-suggested_questions.
 אם כמה תהליכים מתאימים החזר clarification. אל תמציא כלי או תהליך.""",
     },
 ]
-
