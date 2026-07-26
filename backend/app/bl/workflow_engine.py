@@ -33,10 +33,31 @@ _FINAL_SCHEMA = {
         "suggested_questions": {
             "type": "array", "items": {"type": "string"}
         },
+        "skill_results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "skill_key": {"type": "string"},
+                    "name": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "items": {
+                        "type": "array", "items": {"type": "string"}
+                    },
+                    "sources": {
+                        "type": "array", "items": {"type": "string"}
+                    },
+                },
+                "required": [
+                    "skill_key", "name", "summary", "items", "sources"
+                ],
+                "additionalProperties": False,
+            },
+        },
     },
     "required": [
         "summary", "key_findings", "risks",
-        "missing_data", "suggested_questions",
+        "missing_data", "suggested_questions", "skill_results",
     ],
     "additionalProperties": False,
 }
@@ -109,8 +130,14 @@ class SummaryService:
 
     def full_summary(self, run: dict, conversation: dict, progress) -> dict:
         workflows = self._repository.published_workflows(["baseline", "both"])
+        skill_keys = run.get("skill_keys", [])
+        skills = (
+            self._repository.published_summary_skills(skill_keys)
+            if skill_keys else []
+        )
         return self._execute(
-            run, conversation["root_id"], run["question"], workflows, progress
+            run, conversation["root_id"], run["question"], workflows, progress,
+            skills,
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
@@ -121,6 +148,11 @@ class SummaryService:
         ]
         details = self._repository.published_workflows(["detail", "both"])
         tools = self._repository.agent_tools()
+        skill_keys = run.get("skill_keys", [])
+        skills = (
+            self._repository.published_summary_skills(skill_keys)
+            if skill_keys else []
+        )
         selected = self._select_detail(
             run["question"], details, prior, tools=tools
         )
@@ -131,7 +163,8 @@ class SummaryService:
                 "suggested_questions": [
                     workflow["name"] for workflow in details
                 ] + [tool["name"] for tool in tools],
-                "sections": [], "partial": False, "needs_clarification": True,
+                "skill_results": [], "sections": [], "partial": False,
+                "needs_clarification": True,
             }
         workflows = [
             item for item in details
@@ -145,9 +178,10 @@ class SummaryService:
             workflows = [self._tool_workflow(selected_tool)]
         if workflows:
             return self._execute(
-                run, conversation["root_id"], run["question"], workflows, progress
+                run, conversation["root_id"], run["question"], workflows,
+                progress, skills,
             )
-        return self._synthesize_cached(run["question"], prior)
+        return self._synthesize_cached(run["question"], prior, skills)
 
     def plan_workflow(self, prompt: str) -> dict:
         tools = self._repository.list_packages()
@@ -222,7 +256,8 @@ class SummaryService:
         )
 
     def _execute(
-        self, run, root_id, question, workflows, progress_callback
+        self, run, root_id, question, workflows, progress_callback,
+        skills=None,
     ) -> dict:
         if not workflows:
             return self._empty_result("לא פורסמו תהליכי עבודה מתאימים.")
@@ -256,7 +291,7 @@ class SummaryService:
                 with lock:
                     sections.append(section)
                     progress_callback(len(sections), total, list(sections))
-        return self._final_summary(root_id, question, sections)
+        return self._final_summary(root_id, question, sections, skills or [])
 
     def _execute_workflow(
         self, run, root_id, workflow, save_evidence=True
@@ -427,21 +462,40 @@ class SummaryService:
             }
 
     def _final_summary(
-        self, root_id: str, question: str, sections: List[dict]
+        self, root_id: str, question: str, sections: List[dict],
+        skills=None,
     ) -> dict:
+        skills = skills or []
         prompt = self._repository.published_content(
             "final-summary",
             "סכם בעברית על סמך העובדות בלבד והחזר JSON.",
         )
+        prompt += (
+            "\nהחזר skill_results עבור כל Skill שנבחר, לפי ההנחיות שלו. "
+            "אם לא נבחר Skill החזר מערך ריק. sources יכיל רק שמות או "
+            "מפתחות של חלקי הסיכום שסופקו."
+        )
         safe_sections = [{
             key: section[key]
-            for key in ("name", "status", "summary", "facts", "warnings")
+            for key in (
+                "workflow_key", "name", "status", "summary", "facts", "warnings"
+            )
         } for section in sections]
+        safe_skills = [{
+            "skill_key": skill["content_key"],
+            "name": skill["name"],
+            "description": skill.get("description", ""),
+            "instructions": skill["content"],
+        } for skill in skills]
         try:
             final = self._llm.complete_json(
                 prompt,
                 json.dumps(
-                    {"question": question, "sections": safe_sections},
+                    {
+                        "question": question,
+                        "sections": safe_sections,
+                        "selected_skills": safe_skills,
+                    },
                     ensure_ascii=False,
                 ),
                 _FINAL_SCHEMA,
@@ -464,12 +518,52 @@ class SummaryService:
                     for section in sections
                     for question in section["suggested_questions"]
                 ],
+                "skill_results": [{
+                    "skill_key": skill["content_key"],
+                    "name": skill["name"],
+                    "summary": "לא ניתן היה להפעיל את ה-Skill ללא מנוע הסיכום.",
+                    "items": [],
+                    "sources": [],
+                } for skill in skills],
             }
+        final["skill_results"] = self._valid_skill_results(
+            final.get("skill_results", []), skills, sections
+        )
         final["sections"] = sections
         final["partial"] = any(
             section["status"] != "completed" for section in sections
         )
         return final
+
+    @staticmethod
+    def _valid_skill_results(results, skills, sections) -> List[dict]:
+        allowed = {skill["content_key"]: skill for skill in skills}
+        source_names = {
+            value
+            for section in sections
+            for value in (section["name"], section["workflow_key"])
+        }
+        valid, seen = [], set()
+        for result in results if isinstance(results, list) else []:
+            key = result.get("skill_key") if isinstance(result, dict) else None
+            if key not in allowed or key in seen:
+                continue
+            seen.add(key)
+            items = result.get("items", [])
+            sources = result.get("sources", [])
+            valid.append({
+                "skill_key": key,
+                "name": allowed[key]["name"],
+                "summary": str(result.get("summary", "")),
+                "items": [
+                    str(item) for item in items[:8]
+                ] if isinstance(items, list) else [],
+                "sources": [
+                    str(source) for source in sources
+                    if source in source_names
+                ] if isinstance(sources, list) else [],
+            })
+        return valid
 
     def _select_detail(
         self, question: str, workflows: List[dict], evidence: List[dict],
@@ -717,7 +811,9 @@ class SummaryService:
             return "object"
         return "string"
 
-    def _synthesize_cached(self, question: str, evidence: List[dict]) -> dict:
+    def _synthesize_cached(
+        self, question: str, evidence: List[dict], skills=None
+    ) -> dict:
         records_by_step = {}
         for item in evidence:
             records_by_step.setdefault(item["step_key"], []).extend(
@@ -727,20 +823,23 @@ class SummaryService:
         generated = self._section_summary(
             {"name": "ראיות קיימות", "system_prompt": ""}, facts, []
         )
-        return {
+        section = {
+            "workflow_id": "cached",
+            "workflow_key": "cached-evidence",
+            "name": "ראיות קיימות",
+            "status": "completed",
             "summary": generated["summary"],
-            "key_findings": generated["facts"],
-            "risks": generated["warnings"],
-            "missing_data": [],
+            "facts": generated["facts"],
+            "warnings": generated["warnings"],
             "suggested_questions": generated["suggested_questions"],
-            "sections": [],
-            "partial": False,
+            "evidence_ids": [],
         }
+        return self._final_summary("", question, [section], skills or [])
 
     @staticmethod
     def _empty_result(message: str) -> dict:
         return {
             "summary": message, "key_findings": [], "risks": [],
             "missing_data": [], "suggested_questions": [],
-            "sections": [], "partial": True,
+            "skill_results": [], "sections": [], "partial": True,
         }

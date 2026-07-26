@@ -185,6 +185,27 @@ class Repository:
             ORDER BY content_key, version DESC
         """)
 
+    def list_summary_skills(self) -> List[dict]:
+        return self._all("""
+            SELECT content_key, name, description
+            FROM agent_content
+            WHERE kind='skill' AND status='published'
+              AND user_selectable IS TRUE
+            ORDER BY name
+        """)
+
+    def published_summary_skills(self, keys: List[str]) -> List[dict]:
+        if not keys:
+            return []
+        rows = self._all("""
+            SELECT content_key, name, description, content
+            FROM agent_content
+            WHERE kind='skill' AND status='published'
+              AND user_selectable IS TRUE AND content_key = ANY(%s)
+        """, (keys,))
+        by_key = {row["content_key"]: row for row in rows}
+        return [by_key[key] for key in keys if key in by_key]
+
     def create_agent_content(self, data: dict) -> dict:
         content_key = data.get("content_key") or _key(data["name"])
         version = self._next_version("agent_content", "content_key", content_key)
@@ -193,11 +214,12 @@ class Repository:
             connection.execute("""
                 INSERT INTO agent_content (
                     id, content_key, version, kind, name, description,
-                    content, status
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,'draft')
+                    content, user_selectable, status
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft')
             """, (
                 row_id, content_key, version, data["kind"], data["name"],
                 data.get("description", ""), data["content"],
+                data.get("user_selectable", False),
             ))
             connection.commit()
         return self._one("SELECT * FROM agent_content WHERE id=%s", (row_id,))
@@ -263,15 +285,20 @@ class Repository:
             ORDER BY updated_at DESC LIMIT 30
         """, (session_id,))
 
-    def create_run(self, conversation_id: str, question: str, kind: str) -> dict:
+    def create_run(
+        self, conversation_id: str, question: str, kind: str,
+        skill_keys=None,
+    ) -> dict:
         row_id = _id()
         with connect(self._store) as connection:
             connection.execute("""
                 INSERT INTO summary_runs (
-                    id, conversation_id, kind, question, status, progress
-                ) VALUES (%s,%s,%s,%s,'queued',%s)
+                    id, conversation_id, kind, question, skill_keys,
+                    status, progress
+                ) VALUES (%s,%s,%s,%s,%s,'queued',%s)
             """, (
                 row_id, conversation_id, kind, question,
+                Jsonb(skill_keys or []),
                 Jsonb({"completed": 0, "total": 0, "sections": []}),
             ))
             connection.execute(
@@ -515,11 +542,15 @@ CREATE TABLE IF NOT EXISTS agent_content (
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
+    user_selectable BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     published_at TIMESTAMPTZ,
     UNIQUE(content_key, version)
 );
+
+ALTER TABLE agent_content
+    ADD COLUMN IF NOT EXISTS user_selectable BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
@@ -535,6 +566,7 @@ CREATE TABLE IF NOT EXISTS summary_runs (
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     kind TEXT NOT NULL CHECK (kind IN ('full','follow_up')),
     question TEXT NOT NULL DEFAULT '',
+    skill_keys JSONB NOT NULL DEFAULT '[]',
     status TEXT NOT NULL CHECK (
         status IN ('queued','running','completed','partial','failed')
     ),
@@ -544,6 +576,9 @@ CREATE TABLE IF NOT EXISTS summary_runs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finished_at TIMESTAMPTZ
 );
+
+ALTER TABLE summary_runs
+    ADD COLUMN IF NOT EXISTS skill_keys JSONB NOT NULL DEFAULT '[]';
 
 CREATE TABLE IF NOT EXISTS summary_evidence (
     id TEXT PRIMARY KEY,
@@ -601,6 +636,54 @@ _SEED_CONTENT = [
 
 התחל מה-trace ומהראיות. סווג את שורש התקלה כחיבור FLAPI, קלט, מיפוי,
 חוזה פלט, skill או prompt. הצע גרסת טיוטה חדשה ושמור את הגרסה שפורסמה.""",
+    },
+    {
+        "content_key": "summary-executive",
+        "kind": "skill",
+        "name": "תקציר מנהלים",
+        "description": "התמונה החשובה ביותר, קצר וללא מונחים טכניים.",
+        "user_selectable": True,
+        "content": """# תקציר מנהלים
+
+נסח פסקה קצרה שמסבירה מה חשוב לדעת עכשיו, ואחריה 3–5 נקודות מכריעות.
+תעדף משמעות והשפעה על פני פירוט טכני. ציין חוסר ודאות או מידע חסר.
+השתמש רק בעובדות שבחלקי הסיכום והפנה בשמות למקורות שעליהם הסתמכת.""",
+    },
+    {
+        "content_key": "summary-risks",
+        "kind": "skill",
+        "name": "סיכונים ודגלים אדומים",
+        "description": "מזהה חריגות, סתירות וחוסרים שדורשים תשומת לב.",
+        "user_selectable": True,
+        "content": """# סיכונים ודגלים אדומים
+
+דרג רק סיכונים הנתמכים בעובדות. לכל סיכון הסבר מה נמצא, מה ההשפעה
+האפשרית ומה כדאי לבדוק. אל תהפוך מידע חסר לסיכון מוכח; הצג אותו כחוסר.
+אם אין סיכון מבוסס, אמור זאת במפורש ואל תמציא.""",
+    },
+    {
+        "content_key": "summary-actions",
+        "kind": "skill",
+        "name": "צעדים מומלצים",
+        "description": "הופך את הממצאים לרשימת פעולות ברורה ומעשית.",
+        "user_selectable": True,
+        "content": """# צעדים מומלצים
+
+הצע פעולות ממוקדות שנובעות ישירות מהממצאים. לכל פעולה כתוב מה לעשות
+ולמה, לפי סדר עדיפות. אל תקבע עובדות חדשות ואל תמליץ על פעולה שאין לה
+בסיס בראיות; במקרה כזה הצע קודם איזה מידע צריך להשלים.""",
+    },
+    {
+        "content_key": "summary-timeline",
+        "kind": "skill",
+        "name": "ציר זמן",
+        "description": "מסדר אירועים ותאריכים לפי סדר כרונולוגי.",
+        "user_selectable": True,
+        "content": """# ציר זמן
+
+אסוף רק אירועים שיש להם תאריך או סדר מפורש והצג אותם מהישן לחדש.
+לכל אירוע כתוב תאריך, תיאור קצר והמקור. אל תנחש תאריכים ואל תיצור סדר
+כרונולוגי כשאין לכך תמיכה; ציין במפורש אם אין מספיק נתוני זמן.""",
     },
     {
         "content_key": "final-summary",
