@@ -5,8 +5,10 @@ from types import ModuleType
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from app.common.errors import AgentError, ProviderError
+from app.models import GeoBoundaries
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
     extract_url_schema,
@@ -199,6 +201,42 @@ def test_workflow_identifier_mapping_supports_fanout_and_deduplication():
     assert SummaryService._identifiers(step, context) == ["001", "A-7"]
 
 
+def test_map_boundaries_reach_the_package_as_multipolygon_wkt():
+    """The drawn area travels to flunks as one opaque WKT string."""
+    step = {"input_source": "workflow.boundaries"}
+    context = {
+        "workflow": {
+            "id": "ROOT-1",
+            "boundaries": {
+                "type": "MultiPolygon",
+                "coordinates": [[[
+                    [34.75, 32.05], [34.80, 32.05],
+                    [34.80, 32.10], [34.75, 32.05],
+                ]]],
+            },
+        },
+        "steps": {},
+    }
+
+    assert SummaryService._identifiers(step, context) == [
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)))"
+    ]
+
+
+def test_a_step_scoped_to_the_map_fails_clearly_without_a_drawn_area():
+    step = {"input_source": "workflow.boundaries"}
+    context = {"workflow": {"id": "ROOT-1", "boundaries": None}, "steps": {}}
+
+    with pytest.raises(ValueError, match="אזור"):
+        SummaryService._identifiers(step, context)
+
+
+def test_boundaries_must_be_a_closed_multipolygon():
+    ring = [[34.75, 32.05], [34.80, 32.05], [34.80, 32.10]]
+    with pytest.raises(ValidationError):
+        GeoBoundaries(type="MultiPolygon", coordinates=[[ring]])
+
+
 def test_invalid_workflow_cannot_reference_a_future_step():
     with pytest.raises(ValueError, match="שלב"):
         Repository._validate_steps([
@@ -345,7 +383,7 @@ def test_failed_workflow_keeps_successful_sections_visible():
 
     service = SummaryService(FakeRepository(), None, FakeLlm(), FakeStore())
 
-    def execute(run, root_id, workflow, save_evidence=True):
+    def execute(run, root_id, workflow, save_evidence=True, boundaries=None):
         if workflow["workflow_key"] == "broken":
             raise RuntimeError("package exploded")
         return {
@@ -699,7 +737,10 @@ def test_follow_up_can_select_an_approved_tool_without_a_workflow():
     }
     captured = {}
 
-    def execute(_run, _root_id, _question, workflows, _progress, _skills=None):
+    def execute(
+        _run, _root_id, _question, workflows, _progress, _skills=None,
+        _boundaries=None,
+    ):
         captured["workflow"] = workflows[0]
         return {"summary": "ok"}
 

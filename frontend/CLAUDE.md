@@ -7,7 +7,10 @@ Read this before changing `frontend/`.
 Hebrew-first (`lang="he"`, `dir="rtl"`) workspace for complete summaries by
 identifier. The UI reuses LocatoAI's shell: dark history/navigation rail,
 bounded conversation, bottom composer, Settings, tool catalog, and Agent
-Studio. There is no map.
+Studio. It also has a small optional map picker in the composer
+(`components/MapWorkspace/`), ported from LocatoAI: one drawn polygon or
+rectangle scopes the request. It is a picker, not LocatoAI's full map
+workspace — no result layers, no layer catalog, no plan pipeline.
 
 ## Commands
 
@@ -29,9 +32,11 @@ training knowledge.
 question, run polling, history, theme, Settings, and Agent Studio visibility.
 `services/api.ts` is the browser's only backend boundary.
 
-An initial request posts `{root_id, question}`. The API returns a persistent
-run ID; poll it until complete while rendering progressive workflow sections.
-Follow-ups post to the same conversation and retain the original ID/evidence.
+An initial request posts `{root_id, question, skill_keys, boundaries}`, where
+`boundaries` is a GeoJSON `MultiPolygon` or `null`. The API returns a
+persistent run ID; poll it until complete while rendering progressive workflow
+sections. Follow-ups post to the same conversation and retain the original
+ID/evidence, and reuse the conversation's stored boundaries.
 
 ## UX rules
 
