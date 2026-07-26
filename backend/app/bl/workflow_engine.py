@@ -63,6 +63,17 @@ _FINAL_SCHEMA = {
     "additionalProperties": False,
 }
 
+_SKILL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "items": {"type": "array", "items": {"type": "string"}},
+        "sources": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["summary", "items", "sources"],
+    "additionalProperties": False,
+}
+
 _WORKFLOW_PLAN_SCHEMA = {
     "type": "object",
     "properties": {
@@ -483,9 +494,7 @@ class SummaryService:
             "סכם בעברית על סמך העובדות בלבד והחזר JSON.",
         )
         prompt += (
-            "\nהחזר skill_results עבור כל Skill שנבחר, לפי ההנחיות שלו. "
-            "אם לא נבחר Skill החזר מערך ריק. sources יכיל רק שמות או "
-            "מפתחות של חלקי הסיכום שסופקו."
+            "\nהחזר skill_results כמערך ריק. כל Skill מופעל בקריאה נפרדת."
         )
         safe_sections = [{
             key: section[key]
@@ -493,21 +502,11 @@ class SummaryService:
                 "workflow_key", "name", "status", "summary", "facts", "warnings"
             )
         } for section in sections]
-        safe_skills = [{
-            "skill_key": skill["content_key"],
-            "name": skill["name"],
-            "description": skill.get("description", ""),
-            "instructions": skill["content"],
-        } for skill in skills]
         try:
             final = self._llm.complete_json(
                 prompt,
                 json.dumps(
-                    {
-                        "question": question,
-                        "sections": safe_sections,
-                        "selected_skills": safe_skills,
-                    },
+                    {"question": question, "sections": safe_sections},
                     ensure_ascii=False,
                 ),
                 _FINAL_SCHEMA,
@@ -530,16 +529,10 @@ class SummaryService:
                     for section in sections
                     for question in section["suggested_questions"]
                 ],
-                "skill_results": [{
-                    "skill_key": skill["content_key"],
-                    "name": skill["name"],
-                    "summary": "לא ניתן היה להפעיל את ה-Skill ללא מנוע הסיכום.",
-                    "items": [],
-                    "sources": [],
-                } for skill in skills],
+                "skill_results": [],
             }
-        final["skill_results"] = self._valid_skill_results(
-            final.get("skill_results", []), skills, sections
+        final["skill_results"] = self._run_skills(
+            question, skills, sections, safe_sections
         )
         final["sections"] = sections
         final["partial"] = any(
@@ -547,35 +540,94 @@ class SummaryService:
         )
         return final
 
-    @staticmethod
-    def _valid_skill_results(results, skills, sections) -> List[dict]:
-        allowed = {skill["content_key"]: skill for skill in skills}
+    def _run_skills(
+        self, question: str, skills: List[dict], sections: List[dict],
+        safe_sections: List[dict],
+    ) -> List[dict]:
+        """Run each selected Skill in its own LLM call.
+
+        One shared call forced every Skill to share a token budget and a single
+        generic schema, so its own instructions competed with the other Skills'
+        for attention. A dedicated call per Skill puts its full guidance in the
+        system prompt against a narrow schema. Skills are independent, so they
+        run concurrently; one failing Skill degrades to a stated reason and
+        never discards another Skill's result.
+        """
+        if not skills:
+            return []
         source_names = {
             value
             for section in sections
             for value in (section["name"], section["workflow_key"])
         }
-        valid, seen = [], set()
-        for result in results if isinstance(results, list) else []:
-            key = result.get("skill_key") if isinstance(result, dict) else None
-            if key not in allowed or key in seen:
-                continue
-            seen.add(key)
-            items = result.get("items", [])
-            sources = result.get("sources", [])
-            valid.append({
-                "skill_key": key,
-                "name": allowed[key]["name"],
-                "summary": str(result.get("summary", "")),
-                "items": [
-                    str(item) for item in items[:8]
-                ] if isinstance(items, list) else [],
-                "sources": [
-                    str(source) for source in sources
-                    if source in source_names
-                ] if isinstance(sources, list) else [],
-            })
-        return valid
+        payload = json.dumps(
+            {"question": question, "sections": safe_sections},
+            ensure_ascii=False,
+        )
+        results: Dict[str, dict] = {}
+        workers = min(self._store.get().max_parallel_workflows, len(skills))
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            futures = {
+                pool.submit(self._run_skill, skill, payload, source_names):
+                    skill
+                for skill in skills
+            }
+            for future in as_completed(futures):
+                skill = futures[future]
+                try:
+                    results[skill["content_key"]] = future.result()
+                except Exception:
+                    results[skill["content_key"]] = self._skill_failure(skill)
+        # Preserve the order the user picked rather than completion order.
+        return [
+            results[skill["content_key"]]
+            for skill in skills
+            if skill["content_key"] in results
+        ]
+
+    def _run_skill(self, skill: dict, payload: str, source_names) -> dict:
+        system = (
+            skill["content"]
+            + "\n\nהשתמש רק בעובדות שבחלקי הסיכום שסופקו. אל תוסיף מידע חדש."
+            "\nהחזר JSON עם summary, items ו-sources. sources יכיל רק שמות"
+            " של חלקי סיכום שסופקו. אם אין בסיס בעובדות, אמור זאת ב-summary"
+            " והחזר items ריק."
+        )
+        try:
+            result = self._llm.complete_json(system, payload, _SKILL_SCHEMA)
+        except AgentError as exc:
+            return self._skill_failure(skill, str(exc))
+        return self._valid_skill_result(result, skill, source_names)
+
+    @staticmethod
+    def _valid_skill_result(result, skill: dict, source_names) -> dict:
+        result = result if isinstance(result, dict) else {}
+        items = result.get("items", [])
+        sources = result.get("sources", [])
+        return {
+            "skill_key": skill["content_key"],
+            "name": skill["name"],
+            "summary": str(result.get("summary", "")),
+            "items": [
+                str(item) for item in items[:8]
+            ] if isinstance(items, list) else [],
+            "sources": [
+                str(source) for source in sources
+                if source in source_names
+            ] if isinstance(sources, list) else [],
+        }
+
+    @staticmethod
+    def _skill_failure(skill: dict, reason: str = "") -> dict:
+        return {
+            "skill_key": skill["content_key"],
+            "name": skill["name"],
+            "summary": "לא ניתן היה להפעיל את ה-Skill" + (
+                ": " + reason if reason else "."
+            ),
+            "items": [],
+            "sources": [],
+        }
 
     def _select_detail(
         self, question: str, workflows: List[dict], evidence: List[dict],
