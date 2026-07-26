@@ -10,19 +10,14 @@ import {
 } from "./RunContent";
 
 export default function SummaryWorkspace({
-  run, skills, selectedSkillKeys, onToggleSkill,
+  run, skills,
 }: {
   run: SummaryRun | null;
   skills: SummarySkill[];
-  selectedSkillKeys: string[];
-  onToggleSkill: (key: string) => void;
 }) {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
-  if (!run) {
-    return <EmptyWorkspace skills={skills} selected={selectedSkillKeys}
-      onToggle={onToggleSkill} />;
-  }
+  if (!run) return <EmptyWorkspace skills={skills} />;
   return (
     <main id="main-workspace" className="workspace" aria-live="polite">
       <RunHeader run={run} />
