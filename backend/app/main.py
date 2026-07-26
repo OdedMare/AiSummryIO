@@ -2,27 +2,21 @@
 
 import json
 import logging
-import uuid
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.auth import (
-    login, require_admin_token, session_signature, verify_session,
-)
+from app.api.dependencies import make_dependencies
+from app.api.routers import register
+from app.api.routers.context import ApiContext
 from app.bl.jobs import JobRunner
 from app.bl.workflow_engine import SummaryService
 from app.common.config.settings import Settings
-from app.common.errors import AppError, AuthError
+from app.common.errors import AppError
 from app.common.runtime_settings.runtime_settings_store import RuntimeSettingsStore
 from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.providers.flapi.provider import FlapiProvider
-from app.api.models import (
-    AdminLogin, AgentContentCreate, FeedbackCreate, FollowUpCreate,
-    PackageCreate, PackageInspect, SkillPreview, SummaryCreate,
-    WorkflowCreate, WorkflowPlanCreate,
-)
 from app.dal.repository import Repository
 
 env = Settings()
@@ -32,7 +26,29 @@ llm = OpenAIJsonClient(store)
 provider = FlapiProvider(store)
 service = SummaryService(repository, provider, llm, store)
 jobs = JobRunner(repository, service, store.get().max_parallel_workflows)
-app = FastAPI(title="AiSummryIO", version="0.1.0")
+
+app = FastAPI(
+    title="AiSummryIO",
+    version="0.1.0",
+    description=(
+        "Evidence-backed Hebrew summaries by identifier or map area. "
+        "Programmatic clients authenticate with the API token as "
+        "`X-API-Key` or `Authorization: Bearer`."
+    ),
+)
+
+admin_dependency, user_session, set_session_cookie = make_dependencies(store)
+
+register(app, ApiContext(
+    repository=repository,
+    service=service,
+    jobs=jobs,
+    store=store,
+    llm=llm,
+    admin_dependency=admin_dependency,
+    user_session=user_session,
+    set_session_cookie=set_session_cookie,
+))
 
 
 @app.on_event("startup")
@@ -70,228 +86,3 @@ async def request_log(request: Request, call_next):
     except OSError:
         pass
     return response
-
-
-def admin_dependency(
-    aisummry_admin: str = Cookie(default=""),
-):
-    require_admin_token(store, aisummry_admin)
-
-
-def user_session(
-    aisummry_session: str = Cookie(default=""),
-) -> str:
-    if aisummry_session:
-        try:
-            return verify_session(store, aisummry_session)
-        except AuthError:
-            pass
-    return str(uuid.uuid4())
-
-
-def set_session_cookie(response: Response, session_id: str) -> None:
-    response.set_cookie(
-        "aisummry_session", session_signature(store, session_id),
-        httponly=True, samesite="lax", max_age=30 * 24 * 60 * 60,
-    )
-
-
-@app.get("/api/health")
-def health():
-    return {"status": "ok", **repository.health()}
-
-
-@app.post("/api/summaries")
-def create_summary(
-    payload: SummaryCreate,
-    response: Response,
-    session_id: str = Depends(user_session),
-):
-    conversation = repository.create_conversation(
-        session_id, payload.root_id,
-        payload.boundaries.model_dump() if payload.boundaries else None,
-    )
-    run = repository.create_run(
-        conversation["id"], payload.question, "full", payload.skill_keys
-    )
-    jobs.submit(run["id"])
-    set_session_cookie(response, session_id)
-    return {"conversation": conversation, "run": run}
-
-
-@app.post("/api/conversations/{conversation_id}/messages")
-def follow_up(
-    conversation_id: str,
-    payload: FollowUpCreate,
-    response: Response,
-    session_id: str = Depends(user_session),
-):
-    repository.get_conversation(conversation_id, session_id)
-    run = repository.create_run(
-        conversation_id, payload.question, "follow_up", payload.skill_keys
-    )
-    jobs.submit(run["id"])
-    set_session_cookie(response, session_id)
-    return run
-
-
-@app.get("/api/conversations")
-def conversations(session_id: str = Depends(user_session)):
-    return repository.list_conversations(session_id)
-
-
-@app.get("/api/skills")
-def summary_skills():
-    return repository.list_summary_skills()
-
-
-@app.get("/api/conversations/{conversation_id}")
-def conversation(
-    conversation_id: str, session_id: str = Depends(user_session)
-):
-    return repository.get_conversation(conversation_id, session_id)
-
-
-@app.get("/api/runs/{run_id}")
-def run_status(run_id: str, session_id: str = Depends(user_session)):
-    run = repository.get_run(run_id)
-    repository.get_conversation(run["conversation_id"], session_id)
-    return run
-
-
-@app.get("/api/runs/{run_id}/evidence")
-def run_evidence(run_id: str, session_id: str = Depends(user_session)):
-    run = repository.get_run(run_id)
-    repository.get_conversation(run["conversation_id"], session_id)
-    return repository.run_evidence(run_id)
-
-
-@app.post("/api/feedback")
-def feedback(
-    payload: FeedbackCreate,
-    session_id: str = Depends(user_session),
-):
-    run = repository.get_run(payload.run_id)
-    repository.get_conversation(run["conversation_id"], session_id)
-    return repository.save_feedback(session_id, payload.model_dump())
-
-
-@app.post("/api/admin/login")
-def admin_login(payload: AdminLogin, response: Response):
-    token = login(store, payload.password)
-    response.set_cookie(
-        "aisummry_admin", token, httponly=True, samesite="strict",
-        max_age=12 * 60 * 60,
-    )
-    return {"authenticated": True}
-
-
-@app.get("/api/admin/session", dependencies=[Depends(admin_dependency)])
-def admin_session():
-    return {"authenticated": True}
-
-
-@app.delete("/api/admin/session")
-def admin_logout(response: Response):
-    response.delete_cookie("aisummry_admin")
-    return {"authenticated": False}
-
-
-@app.get("/api/settings", dependencies=[Depends(admin_dependency)])
-def get_settings():
-    return store.public()
-
-
-@app.put("/api/settings", dependencies=[Depends(admin_dependency)])
-def update_settings(patch: dict):
-    store.update(patch)
-    return store.public()
-
-
-@app.get("/api/models", dependencies=[Depends(admin_dependency)])
-def models():
-    return {"models": llm.list_models()}
-
-
-@app.get("/api/packages", dependencies=[Depends(admin_dependency)])
-def packages():
-    return repository.list_packages()
-
-
-@app.post("/api/packages", dependencies=[Depends(admin_dependency)])
-def create_package(payload: PackageCreate):
-    return repository.create_package(payload.model_dump())
-
-
-@app.post("/api/packages/inspect", dependencies=[Depends(admin_dependency)])
-def inspect_package(payload: PackageInspect):
-    data = payload.model_dump()
-    root_id = data.pop("root_id")
-    return service.inspect_tool(data, root_id)
-
-
-@app.get("/api/workflows", dependencies=[Depends(admin_dependency)])
-def workflows():
-    return repository.list_workflows()
-
-
-@app.post("/api/workflows", dependencies=[Depends(admin_dependency)])
-def create_workflow(payload: WorkflowCreate):
-    return repository.create_workflow(payload.model_dump())
-
-
-@app.post("/api/workflows/plan", dependencies=[Depends(admin_dependency)])
-def plan_workflow(payload: WorkflowPlanCreate):
-    return service.plan_workflow(payload.prompt)
-
-
-@app.post(
-    "/api/workflows/{workflow_id}/publish",
-    dependencies=[Depends(admin_dependency)],
-)
-def publish_workflow(workflow_id: str):
-    return repository.publish_workflow(workflow_id)
-
-
-@app.post(
-    "/api/workflows/{workflow_id}/dry-run",
-    dependencies=[Depends(admin_dependency)],
-)
-def dry_run(workflow_id: str, payload: SummaryCreate):
-    return service.dry_run(workflow_id, payload.root_id)
-
-
-@app.get("/api/agent-content", dependencies=[Depends(admin_dependency)])
-def agent_content():
-    return repository.list_agent_content()
-
-
-@app.post("/api/agent-content", dependencies=[Depends(admin_dependency)])
-def create_agent_content(payload: AgentContentCreate):
-    return repository.create_agent_content(payload.model_dump())
-
-
-@app.post(
-    "/api/agent-content/{content_id}/publish",
-    dependencies=[Depends(admin_dependency)],
-)
-def publish_agent_content(content_id: str):
-    return repository.publish_agent_content(content_id)
-
-
-@app.post(
-    "/api/agent-content/preview-skill",
-    dependencies=[Depends(admin_dependency)],
-)
-def preview_skill(payload: SkillPreview):
-    return service.preview_skill(
-        payload.name,
-        payload.content,
-        payload.question,
-        [section.model_dump() for section in payload.sections],
-    )
-
-
-@app.get("/api/review-queue", dependencies=[Depends(admin_dependency)])
-def review_queue():
-    return repository.review_queue()
