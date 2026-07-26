@@ -127,6 +127,12 @@ button:disabled {
   overflow: hidden;
 }
 
+/* Third column holds the map panel. The document is RTL, so the nav rail is
+   the visual right edge and this track lands on the visual left. */
+.app-shell.has-map {
+  grid-template-columns: 272px minmax(0, 1fr) minmax(300px, 25%);
+}
+
 .sidebar {
   position: relative;
   z-index: 20;
@@ -913,18 +919,33 @@ button:disabled {
 
 /* ---- Map picker (small map ported from LocatoAI) ---- */
 
-.map-field {
-  grid-column: 1 / -1;
+.map-panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
+  height: 100vh;
+  padding: 18px 16px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
 }
 
-.map-field-label {
-  color: var(--text-soft);
+.map-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.map-panel-head h2 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.map-panel-head span {
+  color: var(--text-muted);
   font-size: 11px;
-  font-weight: 700;
 }
 
 .map-picker {
@@ -933,6 +954,9 @@ button:disabled {
   gap: 8px;
   min-width: 0;
   max-width: 100%;
+  /* Fill the panel so the canvas below can flex into the free space. */
+  flex: 1;
+  min-height: 0;
 }
 
 .map-picker-tools {
@@ -1061,7 +1085,7 @@ button:disabled {
 
 @media (max-width: 720px) {
   .map-picker-canvas {
-    height: 180px;
+    min-height: 160px;
   }
 }
 
@@ -2217,8 +2241,21 @@ select:focus {
 }
 
 @media (max-width: 900px) {
-  .app-shell {
+  .app-shell,
+  .app-shell.has-map {
     grid-template-columns: 1fr;
+  }
+
+  /* No room for a side column: the panel becomes a bounded block under the
+     conversation instead of a full-height rail. */
+  .map-panel {
+    height: auto;
+    border-inline-end: 0;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .map-picker-canvas {
+    min-height: 180px;
   }
 
   .sidebar {

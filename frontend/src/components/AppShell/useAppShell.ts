@@ -63,13 +63,16 @@ export function useAppShell() {
     if (submitting || isActive(run)) return;
     setSubmitting(true); setError(""); setNotice("");
     try {
-      const detected = detectIdentifier(rootId, message, conversation);
+      const parsed = parseCommands(message, skills);
+      const detected = detectIdentifier(rootId, parsed.text, conversation);
       if (detected) {
         setRootId(detected); setNotice(identifierNotice(detected));
         return;
       }
+      if (parsed.unknown.length) throw new Error(unknownNotice(parsed.unknown));
+      setSelectedSkillKeys(parsed.keys);
       const next = await submitRequest(
-        conversation, rootId, message, selectedSkillKeys, geometry
+        conversation, rootId, parsed.text, parsed.keys, geometry
       );
       setConversation(next.conversation); setRun(next.run);
       setMessage(""); loadHistory();
@@ -80,17 +83,12 @@ export function useAppShell() {
     }
   };
 
-  const toggleSkill = (key: string) => {
-    setError("");
-    setSelectedSkillKeys((current) => toggleKey(current, key, setError));
-  };
-
   return {
     rootId, setRootId, message, setMessage, geoMode, setGeoMode,
     geometry, setGeometry, conversations, skills, selectedSkillKeys,
     conversation, run, error, submitting, sidebarOpen, setSidebarOpen,
     settingsOpen, setSettingsOpen, studioOpen, setStudioOpen, dark, setDark,
-    notice, startNew, selectConversation, submit, toggleSkill,
+    notice, startNew, selectConversation, submit,
   };
 }
 
@@ -171,11 +169,42 @@ async function submitRequest(
   return created;
 }
 
-function toggleKey(current: string[], key: string, setError: Setter<string>) {
-  if (current.includes(key)) return current.filter((item) => item !== key);
-  if (current.length < 3) return [...current, key];
-  setError("אפשר לבחור עד 3 Skills בכל סיכום");
-  return current;
+/** `/תקציר מנהלים` in the message text, Claude-style. */
+const COMMAND = /(?:^|\s)\/([^\s/][^/\n]*?)(?=\s*(?:\/|$|\n))/g;
+
+const normalize = (value: string) =>
+  value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+
+/**
+ * Pulls `/name` commands out of the message and maps them to Skill keys.
+ * A command matches a Skill's Hebrew name or its `content_key`, with or
+ * without the `summary-` prefix, so `/תקציר מנהלים` and `/executive` both work.
+ */
+export function parseCommands(message: string, skills: SummarySkill[]) {
+  const keys: string[] = [];
+  const unknown: string[] = [];
+  const text = message.replace(COMMAND, (whole, name: string) => {
+    const key = matchSkill(name, skills);
+    if (!key) { unknown.push(name.trim()); return whole; }
+    if (!keys.includes(key)) keys.push(key);
+    return whole.startsWith(" ") ? " " : "";
+  });
+  return { text: text.replace(/\s+/g, " ").trim(), keys, unknown };
+}
+
+function matchSkill(name: string, skills: SummarySkill[]) {
+  const wanted = normalize(name);
+  if (!wanted) return null;
+  const found = skills.find((skill) =>
+    normalize(skill.name) === wanted ||
+    normalize(skill.content_key) === wanted ||
+    normalize(skill.content_key.replace(/^summary-/, "")) === wanted);
+  return found?.content_key ?? null;
+}
+
+function unknownNotice(unknown: string[]) {
+  return `לא מצאנו Skill בשם ${unknown.map((n) => `„${n}”`).join(", ")}. ` +
+    "כתבו / כדי לראות את הרשימה.";
 }
 
 function errorMessage(reason: unknown, fallback: string) {

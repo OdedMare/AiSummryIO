@@ -16,11 +16,10 @@ export default function AppShell() {
       <Sidebar app={app} />
       <section className="conversation-shell">
         <Topbar app={app} />
-        <SummaryWorkspace run={app.run} skills={app.skills}
-          selectedSkillKeys={app.selectedSkillKeys}
-          onToggleSkill={app.toggleSkill} />
+        <SummaryWorkspace run={app.run} skills={app.skills} />
         <Composer app={app} />
       </section>
+      {!app.conversation && <MapPanel app={app} />}
       {app.settingsOpen &&
         <SettingsPanel onClose={() => app.setSettingsOpen(false)} />}
       {app.studioOpen &&
