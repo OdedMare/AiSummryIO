@@ -24,7 +24,7 @@ python -m pytest -q
 
 `flunks` is not on PyPI and is not installed in CI, so
 `_install_fake_flunks(monkeypatch)`
-([test_core.py:33](test_core.py#L33)) injects stub modules into `sys.modules`.
+([test_core.py:34](test_core.py#L34)) injects stub modules into `sys.modules`.
 Every flunks model becomes a permissive attribute bag:
 
 ```python

@@ -16,11 +16,20 @@ takes an **input cube** (a named parameter plus a list of values) and produces
 an **output cube** (a table of results). The app never writes SQL or HTTP
 against FLAPI; it can only invoke packages that already exist there.
 
-**`flunks`** is the internal Python client for FLAPI. It is **not on PyPI** —
-it ships in `backend/wheelhouse/`. It is imported lazily (inside functions,
-never at module top level) so the app boots, tests run, and the admin UI works
-on a machine that has no wheel installed. A missing wheel surfaces as a Hebrew
-`ProviderError`, not an `ImportError` traceback at startup.
+**`flunks`** is the internal Python client for FLAPI. It is **not on PyPI**, so
+it is supplied either as a wheel dropped into `backend/wheelhouse/` (wheels are
+gitignored — only the README and pin file are tracked) or from the internal
+index at build time. See [wheelhouse/README.md](../../../../wheelhouse/README.md).
+
+It is imported **lazily — inside functions, never at module top level** — so
+the app boots, tests run, and the admin UI works on a machine with no wheel
+installed. A missing wheel surfaces as a Hebrew `ProviderError` on the first
+package call, not an `ImportError` traceback at startup.
+
+> The image build runs `import flunks` right after install, so a broken wheel
+> fails the build. That check exists because the `FlapiConfig` / `FlApiConfig`
+> capitalization typo once reached `main` — hence the emphasis on the capital
+> `A` below.
 
 The flunks objects used here:
 
@@ -148,13 +157,13 @@ in [models.py:7](../../../models.py#L7).
 | `timeout_seconds` | runner_config | Optional per-package override |
 
 `input_mode` is applied one level up in
-[workflow_engine.py:343](../../bl/workflow_engine.py#L343) — the provider always
+[workflow_engine.py:343](../../../bl/workflow_engine.py#L343) — the provider always
 receives a ready list.
 
 ## Testing without flunks
 
 `_install_fake_flunks(monkeypatch)` in
-[tests/test_core.py:33](../../../../tests/test_core.py#L33) injects stub
+[tests/test_core.py:34](../../../../tests/test_core.py#L34) injects stub
 modules into `sys.modules`, so every flunks model becomes a permissive
 attribute bag. Combined with `FlapiProvider(store, runner_factory=...)`, the
 whole provider is testable with no wheel present. Prefer `runner_factory` over
