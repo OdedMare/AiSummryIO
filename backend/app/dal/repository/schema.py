@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS conversations (
 ALTER TABLE conversations
     ADD COLUMN IF NOT EXISTS boundaries JSONB;
 
+-- A conversation may now be scoped by a drawn area alone, so the identifier
+-- is optional. Existing rows already hold a value and are unaffected.
+ALTER TABLE conversations ALTER COLUMN root_id DROP NOT NULL;
+
 CREATE TABLE IF NOT EXISTS summary_runs (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,

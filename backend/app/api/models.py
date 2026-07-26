@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PackageCreate(BaseModel):
@@ -173,17 +173,27 @@ class GeoBoundaries(BaseModel):
 
 
 class SummaryCreate(BaseModel):
-    root_id: str
+    """A summary request scoped by an identifier, an area, or both.
+
+    Either ``root_id`` or ``boundaries`` must be present. A request carrying
+    only an area runs the published workflows whose steps read
+    ``workflow.boundaries``; steps needing ``workflow.id`` degrade to a
+    warning rather than failing the run.
+    """
+
+    root_id: Optional[str] = None
     question: str = ""
     skill_keys: List[str] = Field(default_factory=list)
     boundaries: Optional[GeoBoundaries] = None
 
     @field_validator("root_id")
     @classmethod
-    def root_is_string(cls, value: str) -> str:
+    def root_is_string(cls, value):
+        if value is None:
+            return None
         cleaned = value.strip()
         if not cleaned:
-            raise ValueError("נדרש מזהה")
+            return None
         if len(cleaned) > 256:
             raise ValueError("המזהה ארוך מדי")
         return cleaned
@@ -196,6 +206,33 @@ class SummaryCreate(BaseModel):
         ))
         if len(cleaned) > 3:
             raise ValueError("אפשר לבחור עד 3 Skills")
+        return cleaned
+
+    @model_validator(mode="after")
+    def scope_required(self):
+        if not self.root_id and not self.boundaries:
+            raise ValueError("נדרש מזהה או אזור על המפה")
+        return self
+
+
+class DryRunCreate(BaseModel):
+    """An FDE dry run always tests one concrete identifier.
+
+    Separate from ``SummaryCreate``, which now accepts an area instead of an
+    identifier; a dry run has no map to draw on.
+    """
+
+    root_id: str
+    question: str = "בדיקת FDE"
+
+    @field_validator("root_id")
+    @classmethod
+    def root_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("נדרש מזהה")
+        if len(cleaned) > 256:
+            raise ValueError("המזהה ארוך מדי")
         return cleaned
 
 

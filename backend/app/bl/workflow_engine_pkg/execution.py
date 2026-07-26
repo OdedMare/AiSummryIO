@@ -8,12 +8,39 @@ from typing import Dict, List
 from app.common.geometry import multipolygon_to_wkt
 
 
+def geo_capable(workflow: dict) -> bool:
+    """True when any step reads the drawn area.
+
+    A geo-only request has no identifier, so a workflow whose every step wants
+    ``workflow.id`` could only produce warnings. Selecting on this keeps such
+    a run to the workflows that can genuinely answer it.
+    """
+    return any(
+        step.get("input_source") == "workflow.boundaries"
+        for step in workflow.get("steps", [])
+    )
+
+
+def select_workflows(workflows: List[dict], root_id, boundaries) -> List[dict]:
+    """Narrow the published workflows to those the request can satisfy."""
+    if root_id:
+        return workflows
+    if not boundaries:
+        return workflows
+    return [item for item in workflows if geo_capable(item)]
+
+
 def execute(
     service, run, root_id, question, workflows, progress_callback,
     skills=None, boundaries=None,
 ) -> dict:
+    workflows = select_workflows(workflows, root_id, boundaries)
     if not workflows:
-        return empty_result("לא פורסמו תהליכי עבודה מתאימים.")
+        return empty_result(
+            "לא פורסם תהליך עבודה שמקבל אזור על המפה."
+            if boundaries and not root_id
+            else "לא פורסמו תהליכי עבודה מתאימים."
+        )
     sections = _execute_all(
         service, run, root_id, workflows, progress_callback, boundaries
     )
@@ -157,10 +184,23 @@ def run_package(service, package: dict, identifiers: List[str]) -> List[dict]:
 def identifiers(step: dict, context: dict) -> List[str]:
     source = step["input_source"]
     if source == "workflow.id":
-        return [str(context["workflow"]["id"])]
+        return _root_identifiers(context)
     if source == "workflow.boundaries":
         return _boundary_identifiers(context)
     return _step_identifiers(step, context, source)
+
+
+def _root_identifiers(context: dict) -> List[str]:
+    """The conversation's root identifier.
+
+    A request may now be scoped by a drawn area alone, so this can be absent.
+    Raising here is what turns such a step into a visible warning on its
+    section instead of silently sending the string "None" to FLAPI.
+    """
+    root_id = context["workflow"].get("id")
+    if root_id is None or str(root_id).strip() == "":
+        raise ValueError("לשלב זה נדרש מזהה, והבקשה כוללת אזור בלבד")
+    return [str(root_id)]
 
 
 def _boundary_identifiers(context: dict) -> List[str]:

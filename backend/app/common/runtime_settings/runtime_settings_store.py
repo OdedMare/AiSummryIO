@@ -16,7 +16,7 @@ from app.common.runtime_settings.runtime_settings import RuntimeSettings
 
 _SECRET_FIELDS = {
     "database_password", "openai_api_key", "flapi_token",
-    "admin_password_hash", "cookie_secret",
+    "admin_password_hash", "cookie_secret", "api_token",
 }
 
 # Fields where None/empty means "clear the value", not "keep current".
@@ -52,6 +52,7 @@ class RuntimeSettingsStore:
             log_retention_days=env.log_retention_days,
             admin_password_hash=env.admin_password_hash,
             cookie_secret=env.cookie_secret,
+            api_token=env.api_token,
         )
         if self._path.exists():
             self._apply(json.loads(self._path.read_text("utf-8")), False)

@@ -24,4 +24,5 @@ class RuntimeSettings:
     log_retention_days: int
     admin_password_hash: str
     cookie_secret: str
+    api_token: str
 
