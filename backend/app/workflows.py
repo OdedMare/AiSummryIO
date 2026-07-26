@@ -144,6 +144,13 @@ class SummaryService:
                     run["id"], workflow["id"], step["key"], records
                 ))
         facts = self._chunk_facts(context["steps"])
+        prompts = {
+            step["key"]: step.get("summary_prompt", "")
+            for step in workflow["steps"] if step.get("summary_prompt")
+        }
+        for fact in facts:
+            if fact["step"] in prompts:
+                fact["summary_instruction"] = prompts[fact["step"]]
         generated = self._section_summary(workflow, facts, warnings)
         return {
             "workflow_id": workflow["id"],

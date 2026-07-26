@@ -21,6 +21,11 @@ class FlapiProvider:
                 runner = self._runner(config)
                 result = runner.run()
                 records = self._mapper.normalize(result)
+                if package.get("query_name"):
+                    for record in records:
+                        record.setdefault(
+                            "_package_query", package["query_name"]
+                        )
                 self._logger.info(
                     "FLAPI package OK package=%s rows=%d",
                     package["package_key"], len(records),
