@@ -270,6 +270,62 @@ Mid-session the working tree was committed outside this session as
 Confirm `git log -1` matches what you expect before trusting a stash-based
 before/after check.
 
+## P0 session (Claude Code, 2026-07-26) — flunks DataFrame path
+
+Focus: `flunks` returns a **pandas DataFrame**, so everything the mapper does
+with that frame is on the critical path to real evidence. Tests went 17 → 22.
+
+### The backend Docker image could not build at all
+
+`RUN pip install --no-cache-dir .` failed on `flunks`, which is not on the
+public index. Every P0 item downstream was blocked by this. Two independent
+blockers, both fixed and verified by an actual `docker build`:
+
+1. **No source for `flunks`.** The Dockerfile now installs from
+   `backend/wheelhouse/*.whl` when a wheel is present, else from the index
+   given by the `PIP_INDEX_URL` build arg. An `import flunks` step runs right
+   after install, so a missing or broken wheel fails the *build* instead of
+   surfacing on the first package call — which is exactly how the
+   `FlapiConfig`/`FlApiConfig` typo reached `main`.
+2. **`backports.zoneinfo` needs a compiler** (no arm64 wheel, pulled in by
+   pydantic on 3.8) and `python:3.8.10-slim` is Debian 10 **buster, now EOL**,
+   so `apt-get update` 404s. apt is repointed at `archive.debian.org`; `gcc` is
+   installed for the build and purged afterwards.
+
+Verified with a stand-in wheel: `Installing flunks from the local wheelhouse`
+→ `flunks OK` → image tagged. The real wheel is still required for a genuine
+run; this only proves the mechanism.
+
+### DataFrame normalization bugs (found by probing realistic frames)
+
+- **pandas temporal values aborted the whole evidence write.** `save_evidence`
+  passes records straight to `Jsonb`, and `Timestamp`/`NaT` are not JSON
+  serializable. `_value` checked `hasattr(value, "item")` — but `pd.Timestamp`
+  *has* `.item()` and it returns another `Timestamp`, so the value passed
+  through unconverted. An `isoformat` branch now runs first. A single time
+  column would have lost every row of that step, not just the one cell.
+- **Duplicate columns were dropped in silence.** `to_dict("records")` keeps
+  only the last of each duplicate name and merely warns. flunks joins cubes, so
+  this is reachable, and it would make a summary quietly incomplete. It now
+  raises `ProviderError`.
+- Empty frames (a package that legitimately matched nothing) are confirmed to
+  normalize to `[]` rather than looking like a failure.
+
+### Correction to an earlier assumption
+
+Leading zeros are **not** at risk from pandas: a column of digit *strings*
+stays `object`, so `"00123"` survives normalization unchanged. An int64 column
+only happens when flunks itself already returned an integer, at which point the
+zeros are gone upstream and the mapper cannot recover them. The regression test
+pins that no "looks numeric, cast it" step is ever added, rather than asserting
+a conversion that was never needed.
+
+### Still not done
+
+No real end-to-end run happened. `flunks` remains uninstallable here
+(`pip download flunks` → "No matching distribution found"), and there are still
+no FLAPI/LLM credentials. P0 items 2-6 are untouched.
+
 ## Remaining work before calling the app fully production-ready
 
 Work in this order. Do not mark an item complete without an automated or
@@ -401,7 +457,11 @@ repeatable verification.
 - [ ] Add a FLAPI contract test using the exact internal `flunks` wheel.
   **Raised in priority**: a wrong class name (`FlapiConfig` vs `FlApiConfig`)
   reached the repo undetected because the tests stub `flunks`. Nothing
-  currently verifies the real API surface.
+  currently verifies the real API surface. The Docker `import flunks` step
+  (2026-07-26) now catches a missing/broken wheel at build time, but it does
+  **not** check the API surface — `FlApiConfig`, `FlunksRunner`,
+  `PackageInputCube.values` accepting arbitrary strings, and the returned
+  DataFrame's dtypes all still need a real contract test.
 - [ ] Add GitHub Actions or the air-gapped CI equivalent for Python 3.8 tests,
   lint/typecheck/build, dependency scanning, Docker builds, and integration
   tests.
