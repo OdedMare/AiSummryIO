@@ -279,6 +279,19 @@ def publish_agent_content(content_id: str):
     return repository.publish_agent_content(content_id)
 
 
+@app.post(
+    "/api/agent-content/preview-skill",
+    dependencies=[Depends(admin_dependency)],
+)
+def preview_skill(payload: SkillPreview):
+    return service.preview_skill(
+        payload.name,
+        payload.content,
+        payload.question,
+        [section.model_dump() for section in payload.sections],
+    )
+
+
 @app.get("/api/review-queue", dependencies=[Depends(admin_dependency)])
 def review_queue():
     return repository.review_queue()

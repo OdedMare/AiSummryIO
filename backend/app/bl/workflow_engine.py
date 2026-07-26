@@ -260,6 +260,40 @@ class SummaryService:
             "output_schema": self._infer_output_schema(records),
         }
 
+    def preview_skill(
+        self, name: str, content: str, question: str, sections: List[dict]
+    ) -> dict:
+        """Run unsaved Skill instructions against sample sections.
+
+        Judging a Skill through a full summary confuses wording problems with
+        package failures. This isolates the wording question: no packages run,
+        nothing is persisted, and the same validation as production applies —
+        so a Skill that cites an invented source shows an empty `sources` here
+        exactly as it would for a user.
+        """
+        skill = {
+            "content_key": "skill-preview",
+            "name": name or "טיוטת Skill",
+            "content": content,
+        }
+        source_names = {
+            value
+            for section in sections
+            for value in (section.get("name", ""), section.get("workflow_key", ""))
+            if value
+        }
+        payload = json.dumps(
+            {"question": question, "sections": sections}, ensure_ascii=False
+        )
+        result = self._run_skill(skill, payload, source_names)
+        dropped = [
+            str(source)
+            for source in (result.get("_raw_sources") or [])
+            if source not in source_names
+        ]
+        result.pop("_raw_sources", None)
+        return {"result": result, "dropped_sources": dropped}
+
     def dry_run(self, workflow_id: str, root_id: str) -> dict:
         workflow = self._repository.get_workflow(workflow_id)
         fake_run = {"id": "dry-run", "question": "בדיקת FDE"}
@@ -578,11 +612,14 @@ class SummaryService:
                 except Exception:
                     results[skill["content_key"]] = self._skill_failure(skill)
         # Preserve the order the user picked rather than completion order.
-        return [
+        ordered = [
             results[skill["content_key"]]
             for skill in skills
             if skill["content_key"] in results
         ]
+        for result in ordered:
+            result.pop("_raw_sources", None)
+        return ordered
 
     def _skill_workers(self, skills: List[dict]) -> int:
         """At most three Skills can be selected, so this stays small. Falls
@@ -609,9 +646,16 @@ class SummaryService:
 
     @staticmethod
     def _valid_skill_result(result, skill: dict, source_names) -> dict:
+        """Enforce the evidence rule: a cited source must be a real section.
+
+        `_raw_sources` carries what the model originally cited so
+        `preview_skill` can show an FDE which citations were dropped. It is
+        stripped before the result reaches a user.
+        """
         result = result if isinstance(result, dict) else {}
         items = result.get("items", [])
         sources = result.get("sources", [])
+        sources = sources if isinstance(sources, list) else []
         return {
             "skill_key": skill["content_key"],
             "name": skill["name"],
@@ -622,7 +666,8 @@ class SummaryService:
             "sources": [
                 str(source) for source in sources
                 if source in source_names
-            ] if isinstance(sources, list) else [],
+            ],
+            "_raw_sources": [str(source) for source in sources],
         }
 
     @staticmethod

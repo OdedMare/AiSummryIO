@@ -98,6 +98,50 @@ class AgentContentCreate(BaseModel):
     user_selectable: bool = False
 
 
+class SkillPreviewSection(BaseModel):
+    """One sample summary section fed to a Skill under test."""
+
+    workflow_key: str = "sample"
+    name: str
+    status: str = "completed"
+    summary: str = ""
+    facts: List[str] = []
+    warnings: List[str] = []
+
+
+class SkillPreview(BaseModel):
+    """Try unsaved Skill instructions against sample sections.
+
+    An FDE could previously only judge a Skill by running a whole summary,
+    which mixes package failures into what is really a wording question.
+    This runs one Skill against supplied sections and persists nothing.
+    """
+
+    name: str = "טיוטת Skill"
+    content: str
+    question: str = ""
+    sections: List[SkillPreviewSection]
+
+    @field_validator("content")
+    @classmethod
+    def content_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("נדרשות הנחיות ל-Skill")
+        if len(cleaned) > 20000:
+            raise ValueError("ההנחיות ארוכות מדי")
+        return cleaned
+
+    @field_validator("sections")
+    @classmethod
+    def sections_required(cls, value):
+        if not value:
+            raise ValueError("נדרש לפחות חלק סיכום אחד לבדיקה")
+        if len(value) > 10:
+            raise ValueError("עד 10 חלקי סיכום בבדיקה")
+        return value
+
+
 class GeoBoundaries(BaseModel):
     """GeoJSON MultiPolygon scoping a summary request, drawn on the map.
 
