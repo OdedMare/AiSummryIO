@@ -98,10 +98,39 @@ class AgentContentCreate(BaseModel):
     user_selectable: bool = False
 
 
+class GeoBoundaries(BaseModel):
+    """GeoJSON MultiPolygon scoping a summary request, drawn on the map.
+
+    Mirrors LocatoAI's boundary contract and the frontend's
+    ``GeoJSONMultiPolygon``. Coordinates are [lng, lat] (RFC 7946).
+    """
+
+    type: Literal["MultiPolygon"]
+    coordinates: List[List[List[List[float]]]]
+
+    @field_validator("coordinates")
+    @classmethod
+    def rings_are_closed(cls, value):
+        if not value:
+            raise ValueError("נדרש לפחות פוליגון אחד")
+        for polygon in value:
+            if not polygon:
+                raise ValueError("פוליגון ללא טבעות")
+            for ring in polygon:
+                if len(ring) < 4:
+                    raise ValueError("טבעת חייבת לכלול לפחות 4 נקודות")
+                if any(len(point) < 2 for point in ring):
+                    raise ValueError("נקודה חייבת לכלול קו אורך וקו רוחב")
+                if ring[0][:2] != ring[-1][:2]:
+                    raise ValueError("טבעת הפוליגון חייבת להיסגר")
+        return value
+
+
 class SummaryCreate(BaseModel):
     root_id: str
     question: str = ""
     skill_keys: List[str] = Field(default_factory=list)
+    boundaries: Optional[GeoBoundaries] = None
 
     @field_validator("root_id")
     @classmethod

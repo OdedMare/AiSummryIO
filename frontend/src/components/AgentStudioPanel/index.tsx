@@ -562,12 +562,13 @@ function WorkflowEditor({
                 <label><span>מקור המזהה</span>
                   <select value={step.input_source} onChange={(e) => updateStep(index, { input_source: e.target.value })}>
                     <option value="workflow.id">המזהה הראשי</option>
+                    <option value="workflow.boundaries">האזור מהמפה (MULTIPOLYGON)</option>
                     {steps.slice(0, index).map((prior) => (
                       <option key={prior.key} value={`steps.${prior.key}`}>פלט: {prior.name}</option>
                     ))}
                   </select>
                 </label>
-                {step.input_source !== "workflow.id" && (
+                {step.input_source !== "workflow.id" && step.input_source !== "workflow.boundaries" && (
                   <label><span>שדה מזהה מתוך הפלט</span><input dir="ltr" value={step.input_field} onChange={(e) => updateStep(index, { input_field: e.target.value })} /></label>
                 )}
               </div>

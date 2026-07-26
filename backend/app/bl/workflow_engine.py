@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 from app.common.errors import AgentError
+from app.common.geometry import multipolygon_to_wkt
 from app.repository import Repository
 
 _SECTION_SCHEMA = {
@@ -137,7 +138,7 @@ class SummaryService:
         )
         return self._execute(
             run, conversation["root_id"], run["question"], workflows, progress,
-            skills,
+            skills, conversation.get("boundaries"),
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
@@ -179,7 +180,7 @@ class SummaryService:
         if workflows:
             return self._execute(
                 run, conversation["root_id"], run["question"], workflows,
-                progress, skills,
+                progress, skills, conversation.get("boundaries"),
             )
         return self._synthesize_cached(run["question"], prior, skills)
 
@@ -257,7 +258,7 @@ class SummaryService:
 
     def _execute(
         self, run, root_id, question, workflows, progress_callback,
-        skills=None,
+        skills=None, boundaries=None,
     ) -> dict:
         if not workflows:
             return self._empty_result("לא פורסמו תהליכי עבודה מתאימים.")
@@ -268,8 +269,10 @@ class SummaryService:
         workers = min(self._store.get().max_parallel_workflows, total)
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
-                pool.submit(self._execute_workflow, run, root_id, workflow):
-                    workflow
+                pool.submit(
+                    self._execute_workflow, run, root_id, workflow,
+                    True, boundaries,
+                ): workflow
                 for workflow in workflows
             }
             for future in as_completed(futures):
@@ -294,9 +297,12 @@ class SummaryService:
         return self._final_summary(root_id, question, sections, skills or [])
 
     def _execute_workflow(
-        self, run, root_id, workflow, save_evidence=True
+        self, run, root_id, workflow, save_evidence=True, boundaries=None
     ) -> dict:
-        context = {"workflow": {"id": root_id}, "steps": {}}
+        context = {
+            "workflow": {"id": root_id, "boundaries": boundaries},
+            "steps": {},
+        }
         warnings, evidence_ids = [], []
         for step in workflow["steps"]:
             package = self._repository.get_package(step["package_version_id"])
@@ -348,6 +354,12 @@ class SummaryService:
         source = step["input_source"]
         if source == "workflow.id":
             return [str(context["workflow"]["id"])]
+        if source == "workflow.boundaries":
+            # The drawn area is an opaque string to FLAPI, exactly like an ID.
+            wkt = multipolygon_to_wkt(context["workflow"].get("boundaries"))
+            if not wkt:
+                raise ValueError("לא נבחר אזור על המפה")
+            return [wkt]
         parts = source.split(".")
         if len(parts) < 2 or parts[0] != "steps":
             raise ValueError("מקור קלט לא מוכר: " + source)

@@ -248,15 +248,21 @@ class Repository:
         """, (key,))
         return rows[0]["content"] if rows else fallback
 
-    def create_conversation(self, session_id: str, root_id: str) -> dict:
+    def create_conversation(
+        self, session_id: str, root_id: str, boundaries=None
+    ) -> dict:
         row_id = _id()
         retention = self._store.get().conversation_retention_days
         expires = datetime.now(timezone.utc) + timedelta(days=retention)
         with connect(self._store) as connection:
             connection.execute("""
-                INSERT INTO conversations (id, session_id, root_id, expires_at)
-                VALUES (%s,%s,%s,%s)
-            """, (row_id, session_id, root_id, expires))
+                INSERT INTO conversations
+                    (id, session_id, root_id, boundaries, expires_at)
+                VALUES (%s,%s,%s,%s,%s)
+            """, (
+                row_id, session_id, root_id,
+                Jsonb(boundaries) if boundaries else None, expires,
+            ))
             connection.commit()
         return self.get_conversation(row_id, session_id)
 
@@ -562,6 +568,9 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL
 );
+
+ALTER TABLE conversations
+    ADD COLUMN IF NOT EXISTS boundaries JSONB;
 
 CREATE TABLE IF NOT EXISTS summary_runs (
     id TEXT PRIMARY KEY,

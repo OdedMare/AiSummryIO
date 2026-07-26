@@ -108,7 +108,8 @@ def create_summary(
     session_id: str = Depends(user_session),
 ):
     conversation = repository.create_conversation(
-        session_id, payload.root_id
+        session_id, payload.root_id,
+        payload.boundaries.model_dump() if payload.boundaries else None,
     )
     run = repository.create_run(
         conversation["id"], payload.question, "full", payload.skill_keys
