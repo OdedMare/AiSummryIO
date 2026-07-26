@@ -146,7 +146,12 @@ function ContentForm({
   );
 }
 
-function SelectableToggle({ form, update }) {
+function SelectableToggle({
+  form, update,
+}: {
+  form: typeof emptyContent;
+  update: (patch: Partial<typeof emptyContent>) => void;
+}) {
   return (
     <label className="agent-tool-toggle">
       <input type="checkbox" checked={form.user_selectable}
