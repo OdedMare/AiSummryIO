@@ -1,6 +1,6 @@
 import type {
   AgentContent, Conversation, Evidence, PackageVersion,
-  SummaryRun, WorkflowVersion,
+  SummaryRun, WorkflowPlan, WorkflowVersion,
 } from "@/types";
 
 export async function request<T>(
@@ -68,6 +68,11 @@ export const api = {
     request<WorkflowVersion>("/api/workflows", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  planWorkflow: (prompt: string) =>
+    request<WorkflowPlan>("/api/workflows/plan", {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
     }),
   publishWorkflow: (id: string) =>
     request<WorkflowVersion>(`/api/workflows/${id}/publish`, { method: "POST" }),

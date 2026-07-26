@@ -2,13 +2,13 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Beaker, BookOpen, Box, CheckCircle2,
+  AlertTriangle, ArrowLeft, Beaker, BookOpen, Bot, CheckCircle2,
   ChevronDown, GitFork, KeyRound, LoaderCircle, LogOut, PackagePlus,
-  Play, Plus, RefreshCw, Save, Send, Sparkles, Trash2, Workflow, X,
+  Play, Plus, RefreshCw, Save, Send, Sparkles, Trash2, Workflow, Wrench, X,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
-  AgentContent, PackageVersion, WorkflowStep, WorkflowVersion,
+  AgentContent, PackageVersion, WorkflowPlan, WorkflowStep, WorkflowVersion,
 } from "@/types";
 
 type Tab = "packages" | "workflows" | "content" | "review";
@@ -23,6 +23,8 @@ const emptyPackage = {
   input_mode: "single",
   output_cube_name: "",
   query_name: "",
+  agent_enabled: true,
+  agent_instructions: "",
   example_input: "[]",
   example_output: "[]",
 };
@@ -97,7 +99,10 @@ function PackageCatalog({
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const update = (key: keyof typeof emptyPackage, value: string) =>
+  const update = <Key extends keyof typeof emptyPackage>(
+    key: Key,
+    value: (typeof emptyPackage)[Key],
+  ) =>
     setForm((current) => ({ ...current, [key]: value }));
 
   const edit = (item: PackageVersion) => setForm({
@@ -110,6 +115,8 @@ function PackageCatalog({
     input_mode: item.input_mode,
     output_cube_name: item.output_cube_name,
     query_name: item.query_name,
+    agent_enabled: item.agent_enabled,
+    agent_instructions: item.agent_instructions,
     example_input: JSON.stringify(item.example_input, null, 2),
     example_output: JSON.stringify(item.example_output, null, 2),
   });
@@ -128,7 +135,7 @@ function PackageCatalog({
           form.example_output, [],
         ),
       });
-      setMessage("נשמרה גרסת חבילה חדשה.");
+      setMessage("נשמרה גרסת טול חדשה.");
       setForm(emptyPackage);
       await onRefresh();
     } catch (reason) {
@@ -141,26 +148,30 @@ function PackageCatalog({
   return (
     <div className="studio-split">
       <section className="studio-list">
-        <header><h3>קטלוג חבילות</h3><span>{items.length} חבילות</span></header>
+        <header><h3>קטלוג טולים</h3><span>{items.length} טולים</span></header>
         {items.map((item) => (
           <button type="button" className="catalog-card" key={item.id} onClick={() => edit(item)}>
-            <span className="catalog-icon"><Box size={18} /></span>
+            <span className="catalog-icon"><Wrench size={18} /></span>
             <span>
               <strong>{item.name}</strong>
-              <small dir="ltr">{item.package_id} · v{item.version}</small>
+              <small>
+                <bdi dir="ltr">{item.package_id} · v{item.version}</bdi>
+                {" · "}
+                {item.agent_enabled ? "זמין לסוכן" : "ל-workflow בלבד"}
+              </small>
             </span>
             <ArrowLeft size={16} />
           </button>
         ))}
-        {!items.length && <p className="panel-empty">הוסיפו את חבילת FLAPI הראשונה.</p>}
+        {!items.length && <p className="panel-empty">הוסיפו את טול ה-FLAPI הראשון.</p>}
       </section>
 
       <form className="studio-form" onSubmit={save}>
         <header>
           <span><PackagePlus size={19} /></span>
           <div>
-            <h3>{form.package_key ? "גרסה חדשה לחבילה" : "חבילה חדשה"}</h3>
-            <p>המזהה וערכי הקלט נשמרים תמיד כמחרוזות.</p>
+            <h3>{form.package_key ? "גרסה חדשה לטול" : "טול חדש"}</h3>
+            <p>טול הוא חבילת FLAPI שהסוכן יכול לחבר לתהליך או להריץ להעמקה.</p>
           </div>
         </header>
         <div className="form-grid two">
@@ -176,7 +187,19 @@ function PackageCatalog({
           </label>
           <label><span>Output cube *</span><input dir="ltr" value={form.output_cube_name} onChange={(e) => update("output_cube_name", e.target.value)} /></label>
         </div>
-        <label><span>תיאור לסוכן</span><textarea value={form.description} onChange={(e) => update("description", e.target.value)} rows={2} /></label>
+        <label><span>מתי הטול שימושי</span><textarea value={form.description} onChange={(e) => update("description", e.target.value)} rows={2} /></label>
+        <label><span>איך לסכם את תוצאות הטול</span><textarea value={form.agent_instructions} onChange={(e) => update("agent_instructions", e.target.value)} rows={3} /></label>
+        <label className="agent-tool-toggle">
+          <input
+            type="checkbox"
+            checked={form.agent_enabled}
+            onChange={(e) => update("agent_enabled", e.target.checked)}
+          />
+          <span>
+            זמין לסוכן כטול עצמאי
+            <small>מאפשר לבחור בטול לשאלת העמקה גם בלי workflow מוכן.</small>
+          </span>
+        </label>
         <label><span>Query name (לא חובה)</span><input dir="ltr" value={form.query_name} onChange={(e) => update("query_name", e.target.value)} /></label>
         <details className="advanced-block">
           <summary><Beaker size={16} /> דוגמאות קלט ופלט</summary>
@@ -214,6 +237,9 @@ function WorkflowEditor({
   const [dryRunId, setDryRunId] = useState("");
   const [dryResult, setDryResult] = useState("");
   const [saving, setSaving] = useState(false);
+  const [planPrompt, setPlanPrompt] = useState("");
+  const [planResult, setPlanResult] = useState<WorkflowPlan | null>(null);
+  const [planning, setPlanning] = useState(false);
 
   const update = (key: keyof typeof emptyWorkflow, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -306,6 +332,35 @@ function WorkflowEditor({
     }
   };
 
+  const planWorkflow = async () => {
+    if (!planPrompt.trim()) {
+      setError("יש לתאר מה התהליך צריך להשיג");
+      return;
+    }
+    setPlanning(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await api.planWorkflow(planPrompt.trim());
+      setPlanResult(result);
+      if (result.can_build) {
+        setForm({
+          ...emptyWorkflow,
+          name: result.name,
+          description: result.description,
+          role: result.role,
+          system_prompt: result.system_prompt,
+        });
+        setSteps(result.steps);
+        setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "תכנון התהליך נכשל");
+    } finally {
+      setPlanning(false);
+    }
+  };
+
   return (
     <div className="workflow-studio">
       <section className="workflow-library">
@@ -339,9 +394,59 @@ function WorkflowEditor({
       </section>
 
       <form className="studio-form workflow-form" onSubmit={save}>
+        <section className="workflow-planner" aria-labelledby="workflow-planner-title">
+          <header>
+            <span><Bot size={19} /></span>
+            <div>
+              <h3 id="workflow-planner-title">בניית workflow בעזרת הסוכן</h3>
+              <p>הצעת AI בלבד: הסוכן משתמש בטולים הקיימים או מפרט מה חסר.</p>
+            </div>
+          </header>
+          <label>
+            <span>הנחיית FDE</span>
+            <textarea
+              value={planPrompt}
+              onChange={(e) => setPlanPrompt(e.target.value)}
+              rows={4}
+              placeholder="לדוגמה: בנה תהליך שמאתר בעלות, קשרים וסיכונים סביב המזהה"
+            />
+          </label>
+          <button
+            type="button"
+            className="planner-button"
+            onClick={() => void planWorkflow()}
+            disabled={planning || !planPrompt.trim()}
+          >
+            {planning ? <LoaderCircle className="spin" size={17} /> : <Sparkles size={17} />}
+            {planning ? "מתכנן…" : "הרכבת הצעה"}
+          </button>
+          {planResult && (
+            <div className="planner-result" aria-live="polite">
+              {planResult.rationale && <p>{planResult.rationale}</p>}
+              {!!planResult.missing_tools.length && (
+                <section>
+                  <strong>מה חסר כדי להשלים את הבקשה</strong>
+                  <ul>
+                    {planResult.missing_tools.map((item, index) => (
+                      <li key={`${item.name}-${index}`}>
+                        <b>{item.name}</b>
+                        <span>{item.reason}</span>
+                        {(item.input_description || item.output_description) && (
+                          <small>
+                            קלט: {item.input_description || "לא צוין"} · פלט: {item.output_description || "לא צוין"}
+                          </small>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+          )}
+        </section>
         <header>
           <span><Workflow size={19} /></span>
-          <div><h3>{form.workflow_key ? "גרסת תהליך חדשה" : "תהליך חדש"}</h3><p>כל שלב משתמש בחבילה שפורסמה ובפלט שכבר קיים.</p></div>
+          <div><h3>{form.workflow_key ? "גרסת תהליך חדשה" : "תהליך חדש"}</h3><p>כל שלב משתמש בגרסת טול קבועה ובפלט שכבר קיים.</p></div>
         </header>
         <div className="form-grid two">
           <label><span>שם התהליך *</span><input value={form.name} onChange={(e) => update("name", e.target.value)} /></label>
@@ -368,9 +473,9 @@ function WorkflowEditor({
               <div className="form-grid two">
                 <label><span>מפתח שלב</span><input dir="ltr" value={step.key} onChange={(e) => updateStep(index, { key: e.target.value })} /></label>
                 <label><span>שם ברור ל-FDE</span><input value={step.name} onChange={(e) => updateStep(index, { name: e.target.value })} /></label>
-                <label><span>חבילת FLAPI</span>
+                <label><span>טול</span>
                   <select value={step.package_version_id} onChange={(e) => updateStep(index, { package_version_id: e.target.value })}>
-                    <option value="">בחירת חבילה</option>
+                    <option value="">בחירת טול</option>
                     {packages.map((item) => <option key={item.id} value={item.id}>{item.name} · v{item.version}</option>)}
                   </select>
                 </label>
@@ -391,7 +496,7 @@ function WorkflowEditor({
               </button>
             </article>
           ))}
-          {!steps.length && <p className="panel-empty">הוסיפו שלב ראשון ובחרו חבילה מהקטלוג.</p>}
+          {!steps.length && <p className="panel-empty">הוסיפו שלב ראשון ובחרו טול מהקטלוג.</p>}
           {!!steps.length && (
             <div className="graph-preview" aria-label="תצוגה מקדימה של התהליך">
               {steps.map((step, index) => (
@@ -561,7 +666,7 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
       <section className="modal studio-modal" role="dialog" aria-modal="true" aria-labelledby="studio-title">
         <header className="modal-header studio-header">
           <span className="modal-icon"><Workflow size={20} /></span>
-          <div><h2 id="studio-title">Agent Studio</h2><p>חבילות, תהליכים, מיומנויות ובקרת איכות.</p></div>
+          <div><h2 id="studio-title">Agent Studio</h2><p>טולים, תהליכים, מיומנויות ובקרת איכות.</p></div>
           {authenticated && (
             <button type="button" onClick={() => { void api.logout(); setAuthenticated(false); }} aria-label="יציאה מהסטודיו"><LogOut size={19} /></button>
           )}
@@ -574,7 +679,7 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
           <>
             <nav className="studio-tabs" aria-label="אזורי Agent Studio">
               {([
-                ["packages", "חבילות", Box],
+                ["packages", "טולים", Wrench],
                 ["workflows", "תהליכים", Workflow],
                 ["content", "מיומנויות והנחיות", BookOpen],
                 ["review", "תור שיפור", AlertTriangle],
@@ -598,4 +703,3 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-

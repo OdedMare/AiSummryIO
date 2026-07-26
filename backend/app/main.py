@@ -20,7 +20,7 @@ from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.providers.flapi.provider import FlapiProvider
 from app.models import (
     AdminLogin, AgentContentCreate, FeedbackCreate, FollowUpCreate,
-    PackageCreate, SummaryCreate, WorkflowCreate,
+    PackageCreate, SummaryCreate, WorkflowCreate, WorkflowPlanCreate,
 )
 from app.repository import Repository
 
@@ -224,6 +224,11 @@ def workflows():
 @app.post("/api/workflows", dependencies=[Depends(admin_dependency)])
 def create_workflow(payload: WorkflowCreate):
     return repository.create_workflow(payload.model_dump())
+
+
+@app.post("/api/workflows/plan", dependencies=[Depends(admin_dependency)])
+def plan_workflow(payload: WorkflowPlanCreate):
+    return service.plan_workflow(payload.prompt)
 
 
 @app.post(

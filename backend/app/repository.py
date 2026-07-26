@@ -50,6 +50,17 @@ class Repository:
             ORDER BY package_key, version DESC
         """)
 
+    def agent_tools(self) -> List[dict]:
+        return self._all("""
+            SELECT * FROM (
+                SELECT DISTINCT ON (package_key) *
+                FROM summary_packages
+                ORDER BY package_key, version DESC
+            ) AS latest
+            WHERE agent_enabled IS TRUE
+            ORDER BY name
+        """)
+
     def get_package(self, version_id: str) -> dict:
         return self._one(
             "SELECT * FROM summary_packages WHERE id=%s", (version_id,)
@@ -65,9 +76,10 @@ class Repository:
                     id, package_key, version, name, description, package_id,
                     input_cube_name, input_cube_parameter, input_mode,
                     output_cube_name, query_name, timeout_seconds,
+                    agent_enabled, agent_instructions,
                     example_input, example_output
                 ) VALUES (
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                 )
             """, (
                 row_id, package_key, version, data["name"],
@@ -75,6 +87,8 @@ class Repository:
                 data["input_cube_name"], data["input_cube_parameter"],
                 data.get("input_mode", "single"), data["output_cube_name"],
                 data.get("query_name", ""), data.get("timeout_seconds"),
+                data.get("agent_enabled", True),
+                data.get("agent_instructions", ""),
                 Jsonb(data.get("example_input", [])),
                 Jsonb(data.get("example_output", [])),
             ))
@@ -448,9 +462,16 @@ CREATE TABLE IF NOT EXISTS summary_packages (
     timeout_seconds INTEGER,
     example_input JSONB NOT NULL DEFAULT '[]',
     example_output JSONB NOT NULL DEFAULT '[]',
+    agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    agent_instructions TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(package_key, version)
 );
+
+ALTER TABLE summary_packages
+    ADD COLUMN IF NOT EXISTS agent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE summary_packages
+    ADD COLUMN IF NOT EXISTS agent_instructions TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS summary_workflows (
     id TEXT PRIMARY KEY,
@@ -593,5 +614,25 @@ summary, key_findings, risks, missing_data ו-suggested_questions.
         "description": "בוחר תהליך detail שפורסם או משתמש בראיות קיימות.",
         "content": """בחר workflow_key אחד רק אם הראיות הקיימות אינן מספיקות.
 אם כמה תהליכים מתאימים החזר clarification. אל תמציא כלי או תהליך.""",
+    },
+    {
+        "content_key": "tool-aware-router",
+        "kind": "prompt",
+        "name": "ניתוב העמקה עם טולים",
+        "description": "בוחר ראיות קיימות, workflow או טול עצמאי מאושר.",
+        "content": """בחר פעולה אחת בלבד לשאלת ההמשך:
+use_cached כשהראיות הקיימות מספיקות, workflow לתהליך מפורסם, tool לטול
+עצמאי מאושר, או clarify כשחסר מידע. השתמש רק במפתחות ובמזהים שסופקו.
+העדף workflow כשנדרשים כמה שלבים, וטול כשהעמקה אחת מספיקה.""",
+    },
+    {
+        "content_key": "workflow-planner",
+        "kind": "prompt",
+        "name": "מתכנן תהליכים מטולים",
+        "description": "מרכיב טיוטת workflow או מסביר איזה טול חסר.",
+        "content": """אתה מתכנן workflow עבור FDE. השתמש רק ב-tool_version_id
+שקיים בקטלוג שסופק. חבר שלבים לפי שדות הפלט שבדוגמאות, שמור מזהים
+כמחרוזות, והחזר טיוטה בלבד. אם אי אפשר להשלים את הבקשה, אל תמציא טול:
+הוסף ל-missing_tools תיאור מדויק של הקלט, הפלט והסיבה שהוא חסר.""",
     },
 ]

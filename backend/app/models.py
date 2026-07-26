@@ -14,6 +14,8 @@ class PackageCreate(BaseModel):
     output_cube_name: str
     query_name: str = ""
     timeout_seconds: Optional[int] = None
+    agent_enabled: bool = True
+    agent_instructions: str = ""
     example_input: List[str] = Field(default_factory=list)
     example_output: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -56,6 +58,20 @@ class WorkflowCreate(BaseModel):
     output_schema: Dict[str, Any] = Field(default_factory=dict)
     examples: List[Dict[str, Any]] = Field(default_factory=list)
     steps: List[WorkflowStep] = Field(default_factory=list)
+
+
+class WorkflowPlanCreate(BaseModel):
+    prompt: str
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("נדרשת הנחיה לתכנון")
+        if len(cleaned) > 10000:
+            raise ValueError("ההנחיה ארוכה מדי")
+        return cleaned
 
 
 class AgentContentCreate(BaseModel):
@@ -101,4 +117,3 @@ class FeedbackCreate(BaseModel):
     run_id: str
     rating: Literal[-1, 1]
     comment: str = ""
-

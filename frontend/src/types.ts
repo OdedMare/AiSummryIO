@@ -62,6 +62,9 @@ export interface PackageVersion {
   input_mode: "single" | "many";
   output_cube_name: string;
   query_name: string;
+  timeout_seconds?: number | null;
+  agent_enabled: boolean;
+  agent_instructions: string;
   example_input: string[];
   example_output: Array<Record<string, unknown>>;
 }
@@ -90,6 +93,24 @@ export interface WorkflowVersion {
   steps: WorkflowStep[];
 }
 
+export interface MissingTool {
+  name: string;
+  reason: string;
+  input_description: string;
+  output_description: string;
+}
+
+export interface WorkflowPlan {
+  can_build: boolean;
+  name: string;
+  description: string;
+  role: "baseline" | "detail" | "both";
+  rationale: string;
+  system_prompt: string;
+  steps: WorkflowStep[];
+  missing_tools: MissingTool[];
+}
+
 export interface AgentContent {
   id: string;
   content_key: string;
@@ -108,4 +129,3 @@ export interface Evidence {
   records: Array<Record<string, unknown>>;
   created_at: string;
 }
-

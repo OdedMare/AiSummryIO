@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 from app.common.errors import AgentError
+from app.repository import Repository
 
 _SECTION_SCHEMA = {
     "type": "object",
@@ -40,6 +41,64 @@ _FINAL_SCHEMA = {
     "additionalProperties": False,
 }
 
+_WORKFLOW_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "role": {
+            "type": "string",
+            "enum": ["baseline", "detail", "both"],
+        },
+        "rationale": {"type": "string"},
+        "system_prompt": {"type": "string"},
+        "steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string"},
+                    "name": {"type": "string"},
+                    "package_version_id": {"type": "string"},
+                    "depends_on": {
+                        "type": "array", "items": {"type": "string"}
+                    },
+                    "input_source": {"type": "string"},
+                    "input_field": {"type": "string"},
+                    "summary_prompt": {"type": "string"},
+                },
+                "required": [
+                    "key", "name", "package_version_id", "depends_on",
+                    "input_source", "input_field", "summary_prompt",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "missing_tools": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "input_description": {"type": "string"},
+                    "output_description": {"type": "string"},
+                },
+                "required": [
+                    "name", "reason",
+                    "input_description", "output_description",
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": [
+        "name", "description", "role", "rationale",
+        "system_prompt", "steps", "missing_tools",
+    ],
+    "additionalProperties": False,
+}
+
 
 class SummaryService:
     def __init__(self, repository, provider, llm, settings_store):
@@ -61,25 +120,80 @@ class SummaryService:
             for item in self._repository.run_evidence(old_run["id"])
         ]
         details = self._repository.published_workflows(["detail", "both"])
-        selected = self._select_detail(run["question"], details, prior)
+        tools = self._repository.agent_tools()
+        selected = self._select_detail(
+            run["question"], details, prior, tools=tools
+        )
         if selected.get("clarification"):
             return {
                 "summary": selected["clarification"],
                 "key_findings": [], "risks": [], "missing_data": [],
                 "suggested_questions": [
                     workflow["name"] for workflow in details
-                ],
+                ] + [tool["name"] for tool in tools],
                 "sections": [], "partial": False, "needs_clarification": True,
             }
         workflows = [
             item for item in details
             if item["workflow_key"] == selected.get("workflow_key")
         ]
+        selected_tool = next((
+            item for item in tools
+            if item["id"] == selected.get("tool_version_id")
+        ), None)
+        if selected_tool:
+            workflows = [self._tool_workflow(selected_tool)]
         if workflows:
             return self._execute(
                 run, conversation["root_id"], run["question"], workflows, progress
             )
         return self._synthesize_cached(run["question"], prior)
+
+    def plan_workflow(self, prompt: str) -> dict:
+        tools = self._repository.list_packages()
+        if not tools:
+            return {
+                "can_build": False,
+                "name": "", "description": "", "role": "detail",
+                "rationale": "אין טולים בקטלוג.",
+                "system_prompt": "", "steps": [],
+                "missing_tools": [{
+                    "name": "טול ראשון",
+                    "reason": "הקטלוג ריק ולכן אי אפשר להרכיב workflow.",
+                    "input_description": "מזהה ראשי כמחרוזת",
+                    "output_description": "עובדות מובנות לסיכום",
+                }],
+            }
+        catalog = []
+        for tool in tools:
+            output_fields = sorted({
+                str(field)
+                for row in tool.get("example_output", [])
+                if isinstance(row, dict)
+                for field in row
+            })
+            catalog.append({
+                "tool_version_id": tool["id"],
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "agent_instructions": tool.get("agent_instructions", ""),
+                "input_mode": tool["input_mode"],
+                "input_parameter": tool["input_cube_parameter"],
+                "output_fields": output_fields,
+            })
+        system = self._repository.published_content(
+            "workflow-planner",
+            "הרכב טיוטת workflow רק מהטולים שסופקו; ציין מה חסר.",
+        )
+        plan = self._llm.complete_json(
+            system,
+            json.dumps(
+                {"fde_prompt": prompt, "available_tools": catalog},
+                ensure_ascii=False,
+            ),
+            _WORKFLOW_PLAN_SCHEMA,
+        )
+        return self._validated_plan(plan, tools)
 
     def dry_run(self, workflow_id: str, root_id: str) -> dict:
         workflow = self._repository.get_workflow(workflow_id)
@@ -339,9 +453,11 @@ class SummaryService:
         return final
 
     def _select_detail(
-        self, question: str, workflows: List[dict], evidence: List[dict]
+        self, question: str, workflows: List[dict], evidence: List[dict],
+        tools=None,
     ) -> dict:
-        if not workflows:
+        tools = tools or []
+        if not workflows and not tools:
             if evidence:
                 return {"action": "use_cached", "workflow_key": None}
             return {
@@ -350,24 +466,34 @@ class SummaryService:
                 "clarification": "אין עדיין תהליך מפורסם שיכול לענות על השאלה.",
             }
         prompt = self._repository.published_content(
-            "follow-up-router", "בחר workflow_key מתאים או clarification."
+            "tool-aware-router",
+            "בחר ראיות קיימות, workflow, טול עצמאי או clarification.",
         )
         options = [{
             "workflow_key": item["workflow_key"],
             "name": item["name"],
             "description": item["description"],
         } for item in workflows]
+        tool_options = [{
+            "tool_version_id": item["id"],
+            "name": item["name"],
+            "description": item.get("description", ""),
+            "agent_instructions": item.get("agent_instructions", ""),
+        } for item in tools]
         schema = {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["use_cached", "workflow", "clarify"],
+                    "enum": ["use_cached", "workflow", "tool", "clarify"],
                 },
                 "workflow_key": {"type": ["string", "null"]},
+                "tool_version_id": {"type": ["string", "null"]},
                 "clarification": {"type": ["string", "null"]},
             },
-            "required": ["action", "workflow_key", "clarification"],
+            "required": [
+                "action", "workflow_key", "tool_version_id", "clarification"
+            ],
             "additionalProperties": False,
         }
         evidence_by_step = {}
@@ -383,6 +509,7 @@ class SummaryService:
                     {
                         "question": question,
                         "available_workflows": options,
+                        "available_tools": tool_options,
                         "existing_evidence": evidence_summary,
                     },
                     ensure_ascii=False,
@@ -390,6 +517,7 @@ class SummaryService:
                 schema,
             )
             valid_keys = {item["workflow_key"] for item in workflows}
+            valid_tools = {item["id"] for item in tools}
             if (
                 selected.get("action") == "workflow"
                 and selected.get("workflow_key") not in valid_keys
@@ -399,11 +527,28 @@ class SummaryService:
                     "workflow_key": None,
                     "clarification": "לאיזה נושא תרצו להעמיק?",
                 }
+            if (
+                selected.get("action") == "tool"
+                and selected.get("tool_version_id") not in valid_tools
+            ):
+                return {
+                    "action": "clarify",
+                    "workflow_key": None,
+                    "tool_version_id": None,
+                    "clarification": "לאיזה נושא תרצו להעמיק?",
+                }
             if selected.get("action") == "use_cached" and not evidence:
-                if len(workflows) == 1:
+                choices = len(workflows) + len(tools)
+                if choices == 1 and workflows:
                     return {
                         "action": "workflow",
                         "workflow_key": workflows[0]["workflow_key"],
+                    }
+                if choices == 1:
+                    return {
+                        "action": "tool",
+                        "workflow_key": None,
+                        "tool_version_id": tools[0]["id"],
                     }
                 return {
                     "action": "clarify",
@@ -414,16 +559,89 @@ class SummaryService:
         except AgentError:
             if evidence:
                 return {"action": "use_cached", "workflow_key": None}
-            if len(workflows) == 1:
+            if len(workflows) + len(tools) == 1 and workflows:
                 return {
                     "action": "workflow",
                     "workflow_key": workflows[0]["workflow_key"],
+                }
+            if len(workflows) + len(tools) == 1:
+                return {
+                    "action": "tool",
+                    "workflow_key": None,
+                    "tool_version_id": tools[0]["id"],
                 }
             return {
                 "action": "clarify",
                 "clarification": "לאיזה נושא תרצו להעמיק?",
                 "workflow_key": None,
             }
+
+    @staticmethod
+    def _tool_workflow(tool: dict) -> dict:
+        instructions = (
+            tool.get("agent_instructions")
+            or tool.get("description")
+            or "סכם בעברית רק את עובדות הטול."
+        )
+        return {
+            "id": "tool:" + tool["id"],
+            "workflow_key": "tool:" + tool["package_key"],
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "system_prompt": instructions,
+            "output_schema": {},
+            "steps": [{
+                "key": "tool",
+                "name": tool["name"],
+                "package_version_id": tool["id"],
+                "depends_on": [],
+                "input_source": "workflow.id",
+                "input_field": "",
+                "summary_prompt": instructions,
+            }],
+        }
+
+    @staticmethod
+    def _validated_plan(plan: dict, tools: List[dict]) -> dict:
+        valid_ids = {tool["id"] for tool in tools}
+        missing = list(plan.get("missing_tools", []))
+        steps = list(plan.get("steps", []))
+        unknown = [
+            step for step in steps
+            if step.get("package_version_id") not in valid_ids
+        ]
+        if unknown:
+            missing.append({
+                "name": "טול שלא קיים בקטלוג",
+                "reason": "הצעת המודל כללה מזהה טול שאינו קיים.",
+                "input_description": "",
+                "output_description": "",
+            })
+            steps = []
+        try:
+            Repository._validate_steps(steps)
+        except ValueError as exc:
+            missing.append({
+                "name": "מיפוי שלבים",
+                "reason": str(exc),
+                "input_description": "פלט משלב מוקדם",
+                "output_description": "מזהה קלט לשלב הבא",
+            })
+            steps = []
+        return {
+            "can_build": bool(steps),
+            "name": str(plan.get("name", "")),
+            "description": str(plan.get("description", "")),
+            "role": (
+                plan.get("role")
+                if plan.get("role") in ("baseline", "detail", "both")
+                else "detail"
+            ),
+            "rationale": str(plan.get("rationale", "")),
+            "system_prompt": str(plan.get("system_prompt", "")),
+            "steps": steps,
+            "missing_tools": missing,
+        }
 
     def _synthesize_cached(self, question: str, evidence: List[dict]) -> dict:
         records_by_step = {}
@@ -452,4 +670,3 @@ class SummaryService:
             "missing_data": [], "suggested_questions": [],
             "sections": [], "partial": True,
         }
-
