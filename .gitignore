@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.next/
+node_modules/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+backend/.venv/
+backend/runtime-settings.json
+backend/logs/
+frontend/.next/
+frontend/node_modules/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
