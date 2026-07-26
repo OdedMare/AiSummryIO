@@ -25,6 +25,7 @@ a model, or a flunks wheel.
 | `plan_workflow` | FDE asks for a workflow | Drafts one from catalog tools; never publishes |
 | `inspect_tool` | FDE previews a package | One identifier, bounded preview, inferred schema, no persistence |
 | `dry_run` | FDE tests a workflow | Executes with `save_evidence=False` |
+| `preview_skill` | FDE tests Skill wording | Runs one Skill against sample sections; no packages, no persistence |
 
 `follow_up` may return `needs_clarification` instead of running anything, when
 `_select_detail` cannot confidently pick a workflow. It suggests the available
@@ -80,8 +81,29 @@ sections into the answer. Both call the LLM with a JSON schema:
 - `_FINAL_SCHEMA` — adds `key_findings`, `risks`, `missing_data`, and
   `skill_results`.
 
-`_valid_skill_results` drops skill output that cites no real source, enforcing
-the rule that **claims require evidence references**.
+### Skills — one LLM call each
+
+`_run_skills` runs **every selected Skill in its own call** under
+`_SKILL_SCHEMA` (`summary`, `items`, `sources`), with that Skill's full
+instructions as the system prompt. One shared call made the Skills compete for
+a single token budget and one generic schema; a dedicated call is why detailed
+Skill instructions are worth writing. The shared `_final_summary` call is
+therefore told to return `skill_results` empty.
+
+Skills are independent, so they run concurrently (`_skill_workers`, bounded by
+`max_parallel_workflows` and by the 3-Skill selection limit). Results are
+reordered to the user's selection rather than completion order, and a Skill
+that fails degrades to a stated reason via `_skill_failure` without discarding
+another Skill's result.
+
+`_valid_skill_result` drops any cited source that is not a real section,
+enforcing the rule that **claims require evidence references**. It also records
+the original citations under `_raw_sources`, which `preview_skill` surfaces to
+an FDE and `_run_skills` strips before any result reaches a user.
+
+`preview_skill` runs unsaved Skill instructions against caller-supplied sample
+sections — no packages, no persistence — so a wording problem can be separated
+from a package failure.
 
 ### Planning and tools
 

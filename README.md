@@ -17,8 +17,10 @@ examples; users provide one identifier and receive a progressive full summary.
 - Successful sections remain visible when another package fails, and raw
   evidence is available separately from the Hebrew summary.
 - Users can add up to three published summary Skills to a run. The built-in
-  Skills produce an executive brief, risk review, recommended actions, or a
-  timeline, and each result names the summary sections it used.
+  Skills produce an executive brief, risk review, recommended actions, a
+  timeline, cross-source contradictions, an entity map, or an evidence-quality
+  audit. Each Skill runs in its own model call with its full instructions, and
+  each result names the summary sections it used.
 
 There are no GIS providers or map dependencies.
 
@@ -60,6 +62,10 @@ their respective `CLAUDE.md` files.
 
 ## First FDE setup
 
+Step-by-step instructions, exact field meanings, a troubleshooting table, and
+a new-environment checklist are in **[FDE_GUIDE.md](FDE_GUIDE.md)**. The short
+version:
+
 1. Sign in to **Agent Studio**.
 2. Add each FLAPI package as a tool, including when the agent may use it,
    example string input, and example output rows.
@@ -71,6 +77,18 @@ their respective `CLAUDE.md` files.
 6. Publish the workflow. The server blocks workflows without valid mappings or
    publishable examples.
 
-The studio is preloaded with four user-facing summary Skills and separate
+The studio is preloaded with seven user-facing summary Skills and separate
 operator guidance for building, testing, and diagnosing workflows. A manager
 can publish more Skills and choose which ones appear on the summary screen.
+
+Skill instructions are written in English — models follow English guidance more
+precisely — and each one directs the model to read the Hebrew sections and
+return Hebrew. The seeded Skills are also the template to copy: each states
+what it produces, its method, its evidence rules, its format, and a worked
+example.
+
+**Test a Skill without a full run.** The Skill editor has a
+`בדיקת ה-Skill` panel that runs only the Skill against sample sections, so
+wording can be iterated in seconds without executing packages or persisting
+anything. It also lists sources the Skill cited that do not exist — the
+citations the evidence rule silently drops in a real run.
