@@ -277,8 +277,15 @@ repeatable verification.
 
 ### P0 — real environment and end-to-end summary
 
-- [ ] Make the internal `flunks` wheel/index available to the backend Docker
-  build and pin the exact tested version/checksum.
+- [~] Make the internal `flunks` wheel/index available to the backend Docker
+  build and pin the exact tested version/checksum. **Mechanism done
+  2026-07-26**, pin still open. `backend/Dockerfile` now installs from
+  `backend/wheelhouse/*.whl` when present and otherwise falls back to the
+  configured index (`PIP_INDEX_URL` build arg); see
+  `backend/wheelhouse/README.md`. Verified by building the image with a
+  stand-in `flunks` wheel: install succeeded and the new `import flunks`
+  build step printed `flunks OK`. Wheels are gitignored. **Still open**: drop
+  the real wheel in, then pin version + sha256 in `pyproject.toml`.
 - [ ] Verify that the air-gapped `flunks` build accepts arbitrary string values
   in `PackageInputCube.values`; patch that internal library if its model still
   restricts identifiers.

@@ -7,7 +7,13 @@ import pandas as pd
 import pytest
 
 from app.common.errors import AgentError, ProviderError
+from app.common.config.settings import Settings
+from app.common.runtime_settings.normalizers import (
+    normalize_database_url,
+    normalize_llm_base_url,
+)
 from app.common.runtime_settings.runtime_settings_store import (
+    RuntimeSettingsStore,
     hash_password,
     verify_password,
 )
@@ -664,3 +670,67 @@ def test_fetch_one_id_infers_the_tool_output_schema():
     assert schema["properties"]["note"]["type"] == "null"
     assert "_package_query" not in schema["properties"]
     assert schema["required"] == ["owner_id", "score"]
+
+
+@pytest.mark.parametrize("pasted", [
+    "http://ollama:11434/v1/chat/completions",
+    "http://ollama:11434/v1/completions",
+    "http://ollama:11434/v1/models",
+    "http://ollama:11434/v1/",
+])
+def test_llm_base_url_strips_pasted_endpoint_suffixes(pasted):
+    """The SDK appends the operation path itself, so a pasted endpoint
+    would otherwise produce /v1/chat/completions/chat/completions."""
+    assert normalize_llm_base_url(pasted) == "http://ollama:11434/v1"
+
+
+def test_llm_base_url_requires_an_http_scheme():
+    with pytest.raises(ValueError):
+        normalize_llm_base_url("ollama:11434/v1")
+
+
+def test_database_url_accepts_and_converts_jdbc_prefix():
+    assert normalize_database_url(
+        "jdbc:postgresql://db:5432/summaries"
+    ) == "postgresql://db:5432/summaries"
+
+
+def test_database_url_rejects_non_postgres_schemes():
+    with pytest.raises(ValueError):
+        normalize_database_url("mysql://db:3306/summaries")
+
+
+def _store(tmp_path):
+    return RuntimeSettingsStore(
+        Settings(runtime_settings_file=str(tmp_path / "runtime-settings.json"))
+    )
+
+
+def test_clearing_a_nullable_setting_unsets_it(tmp_path):
+    """An emptied base URL means "use the default OpenAI host", so it must
+    become None rather than being skipped as a no-op update."""
+    store = _store(tmp_path)
+    store.update({"llm_base_url": "http://gateway/v1"})
+    assert store.update({"llm_base_url": ""}).llm_base_url is None
+    assert store.update({"database_port": None}).database_port is None
+
+
+def test_masked_secret_does_not_overwrite_the_stored_value(tmp_path):
+    store = _store(tmp_path)
+    store.update({"openai_api_key": "real-key"})
+    assert store.update({"openai_api_key": "********"}).openai_api_key == "real-key"
+    assert store.public()["openai_api_key"] == "********"
+
+
+def test_saved_settings_survive_a_restart(tmp_path):
+    _store(tmp_path).update({"llm_model": "gemma4:31b-cloud-v2"})
+    assert _store(tmp_path).get().llm_model == "gemma4:31b-cloud-v2"
+
+
+def test_invalid_saved_value_does_not_prevent_boot(tmp_path):
+    path = tmp_path / "runtime-settings.json"
+    store = _store(tmp_path)
+    saved = json.loads(path.read_text("utf-8"))
+    saved["database_url"] = "mysql://nope"
+    path.write_text(json.dumps(saved), encoding="utf-8")
+    assert _store(tmp_path).get().database_url == store.get().database_url
