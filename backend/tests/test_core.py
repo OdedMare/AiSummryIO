@@ -217,11 +217,11 @@ def test_package_timeout_falls_back_to_the_global_setting(monkeypatch):
         def get():
             return Settings()
 
-    provider = FlapiProvider(Store())
+    settings = Settings()
 
-    assert provider._timeout({"timeout_seconds": 7}) == 7
-    assert provider._timeout({"timeout_seconds": None}) == 45
-    assert provider._timeout({}) == 45
+    assert resolve_timeout({"timeout_seconds": 7}, settings) == 7
+    assert resolve_timeout({"timeout_seconds": None}, settings) == 45
+    assert resolve_timeout({}, settings) == 45
 
 
 def test_verify_tls_reaches_flapi_config_only_when_the_field_exists():
