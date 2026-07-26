@@ -82,8 +82,8 @@ class OpenAIJsonClient:
             raise AgentError("לא הוגדר חיבור למודל")
         try:
             response = httpx.get(
-                (base or "https://api.openai.com/v1").rstrip("/") + "/models",
-                headers={"Authorization": "Bearer " + (key or _LOCAL_KEY)},
+                (base or _DEFAULT_BASE_URL).rstrip("/") + "/models",
+                headers={"Authorization": "Bearer " + (key or _LOCAL_SERVER_KEY_PLACEHOLDER)},
                 timeout=30,
             )
             response.raise_for_status()
@@ -95,7 +95,7 @@ class OpenAIJsonClient:
         cache_key = (api_key, base_url)
         if self._cached_client is None or self._cached_key != cache_key:
             self._cached_client = OpenAI(
-                api_key=api_key or _LOCAL_KEY, base_url=base_url or None
+                api_key=api_key or _LOCAL_SERVER_KEY_PLACEHOLDER, base_url=base_url or None
             )
             self._cached_key = cache_key
         return self._cached_client
