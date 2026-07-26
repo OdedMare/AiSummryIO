@@ -138,10 +138,10 @@ class SummaryService:
             except Exception as exc:
                 warnings.append("%s: %s" % (step["name"], exc))
                 records = []
-            context["steps"][step["step_key"]] = records
+            context["steps"][step["key"]] = records
             if save_evidence:
                 evidence_ids.append(self._repository.save_evidence(
-                    run["id"], workflow["id"], step["step_key"], records
+                    run["id"], workflow["id"], step["key"], records
                 ))
         facts = self._chunk_facts(context["steps"])
         generated = self._section_summary(workflow, facts, warnings)

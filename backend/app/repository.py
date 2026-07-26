@@ -355,7 +355,11 @@ class Repository:
 
     def _steps(self, workflow_id: str) -> List[dict]:
         return self._all("""
-            SELECT * FROM workflow_steps
+            SELECT
+                id, workflow_id, position, step_key AS key, name,
+                package_version_id, depends_on, input_source, input_field,
+                summary_prompt
+            FROM workflow_steps
             WHERE workflow_id=%s ORDER BY position
         """, (workflow_id,))
 
