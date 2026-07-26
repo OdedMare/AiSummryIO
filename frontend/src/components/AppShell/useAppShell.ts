@@ -20,7 +20,6 @@ export function useAppShell() {
   const [geometry, setGeometry] = useState<GeoJSONPolygon | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [skills, setSkills] = useState<SummarySkill[]>([]);
-  const [selectedSkillKeys, setSelectedSkillKeys] = useState<string[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [run, setRun] = useState<SummaryRun | null>(null);
   const [error, setError] = useState("");
@@ -41,7 +40,7 @@ export function useAppShell() {
 
   const startNew = () => {
     setConversation(null); setRun(null); setRootId(""); setMessage("");
-    setError(""); setNotice(""); setSelectedSkillKeys([]);
+    setError(""); setNotice("");
     setGeoMode("none"); setGeometry(null); setSidebarOpen(false);
   };
 

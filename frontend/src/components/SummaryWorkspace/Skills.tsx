@@ -1,5 +1,5 @@
 import {
-  BriefcaseBusiness, CalendarDays, Check, GitCompareArrows, ListChecks,
+  BriefcaseBusiness, CalendarDays, GitCompareArrows, ListChecks,
   ScanSearch, ShieldAlert, Sparkles, Users,
 } from "lucide-react";
 import type { SkillResult, SummarySkill } from "@/types";
@@ -15,50 +15,30 @@ const SkillIcon = ({ skillKey, size }: { skillKey: string; size: number }) => {
   return <Sparkles size={size} />;
 };
 
-export function SkillPicker({
-  skills, selected, onToggle,
-}: {
-  skills: SummarySkill[];
-  selected: string[];
-  onToggle: (key: string) => void;
-}) {
+/** Read-only reference for the `/name` commands available in the composer. */
+export function SkillHint({ skills }: { skills: SummarySkill[] }) {
   if (!skills.length) return null;
   return (
-    <section className="skill-picker" aria-labelledby="skill-picker-title">
+    <section className="skill-hint" aria-labelledby="skill-hint-title">
       <header>
-        <div><span className="eyebrow">לא חובה</span>
-          <h2 id="skill-picker-title">מה תרצו לקבל מהסיכום?</h2>
-          <p>כל Skill מפעיל ניתוח נוסף על המידע שנאסף.</p>
-        </div>
-        <span>{selected.length}/3 נבחרו</span>
+        <span className="eyebrow">לא חובה</span>
+        <h2 id="skill-hint-title">רוצים ניתוח נוסף?</h2>
+        <p>כתבו <code dir="ltr">/</code> בתיבת ההודעה ובחרו מהרשימה,
+          למשל <span className="skill-command">/תקציר מנהלים</span>.</p>
       </header>
-      <div className="skill-grid">
+      <ul className="skill-hint-list">
         {skills.map((skill) =>
-          <SkillCard key={skill.content_key} skill={skill}
-            active={selected.includes(skill.content_key)} onToggle={onToggle} />)}
-      </div>
+          <li key={skill.content_key}>
+            <span className="skill-card-icon">
+              <SkillIcon skillKey={skill.content_key} size={18} />
+            </span>
+            <span>
+              <strong className="skill-command">/{skill.name}</strong>
+              <small>{skill.description}</small>
+            </span>
+          </li>)}
+      </ul>
     </section>
-  );
-}
-
-function SkillCard({
-  skill, active, onToggle,
-}: {
-  skill: SummarySkill;
-  active: boolean;
-  onToggle: (key: string) => void;
-}) {
-  return (
-    <button type="button" className={active ? "skill-card active" : "skill-card"}
-      onClick={() => onToggle(skill.content_key)} aria-pressed={active}>
-      <span className="skill-card-icon">
-        <SkillIcon skillKey={skill.content_key} size={20} />
-      </span>
-      <span><strong>{skill.name}</strong><small>{skill.description}</small></span>
-      <span className="skill-check" aria-hidden="true">
-        {active && <Check size={15} />}
-      </span>
-    </button>
   );
 }
 

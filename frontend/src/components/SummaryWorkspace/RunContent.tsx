@@ -3,15 +3,9 @@ import {
 } from "lucide-react";
 import type { SummaryRun, SummarySkill } from "@/types";
 import SectionCard from "./SectionCard";
-import { SkillPicker, SkillResults } from "./Skills";
+import { SkillHint, SkillResults } from "./Skills";
 
-export function EmptyWorkspace({
-  skills, selected, onToggle,
-}: {
-  skills: SummarySkill[];
-  selected: string[];
-  onToggle: (key: string) => void;
-}) {
+export function EmptyWorkspace({ skills }: { skills: SummarySkill[] }) {
   return (
     <main id="main-workspace" className="workspace empty-workspace">
       <div className="empty-intro">
@@ -23,7 +17,7 @@ export function EmptyWorkspace({
         <p>הזינו מזהה בתיבה למטה. נאסוף את המידע, נסביר אותו בעברית
           ונראה על אילו מקורות הסתמכנו.</p>
       </div>
-      <SkillPicker skills={skills} selected={selected} onToggle={onToggle} />
+      <SkillHint skills={skills} />
     </main>
   );
 }
