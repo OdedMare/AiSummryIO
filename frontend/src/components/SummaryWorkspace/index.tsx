@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle, BriefcaseBusiness, CalendarDays, Check, CheckCircle2,
-  ChevronDown, ChevronUp, Clock3, Database, FileText, ListChecks,
-  LoaderCircle, ShieldAlert, Sparkles, ThumbsDown, ThumbsUp,
+  ChevronDown, ChevronUp, Clock3, Database, FileText, GitCompareArrows,
+  ListChecks, LoaderCircle, ScanSearch, ShieldAlert, Sparkles, ThumbsDown,
+  ThumbsUp, Users,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
@@ -16,6 +17,9 @@ const skillIcon = (key: string) => {
   if (key.includes("risk")) return ShieldAlert;
   if (key.includes("action")) return ListChecks;
   if (key.includes("timeline")) return CalendarDays;
+  if (key.includes("contradiction")) return GitCompareArrows;
+  if (key.includes("entities")) return Users;
+  if (key.includes("evidence-quality")) return ScanSearch;
   return Sparkles;
 };
 
