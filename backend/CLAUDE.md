@@ -42,7 +42,7 @@ uvicorn app.main:app --reload
   - `runner_config.py` — timeout policy and `FlApiConfig` construction. The
     class is `FlApiConfig` (capital A), matching LocatoAI; `verify_tls` is
     passed only when the installed `flunks` exposes such a field.
-- `repository.py` — the only SQL owner.
+- `dal/repository/` — the only SQL owner.
 - `bl/workflow_engine.py` — `SummaryService`: execution, one retry, partial
   success, evidence retention, section summaries, and final synthesis. A
   workflow's `output_schema` extends the shared section contract; extras are
@@ -51,6 +51,7 @@ uvicorn app.main:app --reload
   bounded preview, and infers a reviewable output schema without persistence.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
   have priority.
+- `api/` — Pydantic HTTP contracts and signed authentication.
 - `main.py` — FastAPI routes and composition root.
 
 Business logic lives under `bl/` and data access under `dal/`, mirroring

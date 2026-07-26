@@ -134,5 +134,5 @@ even on failure.
 - Package failures stay visible as warnings and never discard successful
   sections.
 - Claims require evidence references.
-- Business logic stays here; SQL stays in `repository.py`; external calls stay
-  in `dal/`.
+- Business logic stays here; SQL stays in `dal/repository/`; external calls
+  stay in `dal/`.

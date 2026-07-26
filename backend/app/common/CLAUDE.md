@@ -41,5 +41,5 @@ Deliberately **dependency-free** — shapely is not in the backend wheelhouse.
 `_format` trims coordinates to 7 decimals and strips trailing zeros, which is
 what makes the WKT output stable enough to assert on in tests.
 
-Validation of the incoming shape (closed rings, etc.) happens in `GeoBoundaries`
-in [models.py](../models.py), not here.
+Validation of the incoming shape (closed rings, etc.) happens in
+`GeoBoundaries` in [api/models.py](../api/models.py), not here.

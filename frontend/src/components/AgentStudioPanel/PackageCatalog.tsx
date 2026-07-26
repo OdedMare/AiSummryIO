@@ -1,12 +1,17 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useState } from "react";
 import {
   ArrowLeft, Beaker, CheckCircle2, LoaderCircle, PackagePlus, Save, Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type { PackageInspection, PackageVersion } from "@/types";
 import { emptyPackage, parseJson } from "./forms";
+
+type PackageForm = typeof emptyPackage;
+type UpdatePackage = <Key extends keyof PackageForm>(
+  key: Key, value: PackageForm[Key]
+) => void;
 
 export default function PackageCatalog({
   items, onRefresh,
@@ -101,7 +106,12 @@ export default function PackageCatalog({
   );
 }
 
-function PackageList({ items, onEdit }) {
+function PackageList({
+  items, onEdit,
+}: {
+  items: PackageVersion[];
+  onEdit: (item: PackageVersion) => void;
+}) {
   return (
     <section className="studio-list">
       <header><h3>מקורות מידע</h3><span>{items.length} מקורות</span></header>
@@ -131,7 +141,12 @@ function FormHeader({ editing }: { editing: boolean }) {
   );
 }
 
-function PackageFields({ form, update }) {
+function PackageFields({
+  form, update,
+}: {
+  form: PackageForm;
+  update: UpdatePackage;
+}) {
   return (
     <>
       <div className="form-grid two">
@@ -179,6 +194,13 @@ function PackageFields({ form, update }) {
 
 function Inspector({
   form, inspectId, setInspectId, inspecting, inspect, inspection,
+}: {
+  form: PackageForm;
+  inspectId: string;
+  setInspectId: Dispatch<SetStateAction<string>>;
+  inspecting: boolean;
+  inspect: () => Promise<void>;
+  inspection: PackageInspection | null;
 }) {
   return (
     <section className="tool-inspector" aria-labelledby="tool-inspector-title">
@@ -205,7 +227,12 @@ function Inspector({
   );
 }
 
-function AdvancedFields({ form, update }) {
+function AdvancedFields({
+  form, update,
+}: {
+  form: PackageForm;
+  update: UpdatePackage;
+}) {
   return (
     <details className="advanced-block">
       <summary><Beaker size={16} /> Schema ודוגמאות קלט ופלט</summary>
@@ -236,7 +263,9 @@ function packagePayload(form: typeof emptyPackage) {
   };
 }
 
-function inspectionDisabled(form, inspectId: string, inspecting: boolean) {
+function inspectionDisabled(
+  form: PackageForm, inspectId: string, inspecting: boolean
+) {
   return inspecting || !inspectId.trim() || !form.name.trim() ||
     !form.package_id.trim() || !form.input_cube_name.trim() ||
     !form.input_cube_parameter.trim() || !form.output_cube_name.trim();

@@ -9,12 +9,12 @@ translates; `bl/` decides.
 | Path | Owns | Docs |
 |---|---|---|
 | `database/` | PostgreSQL connections and schema creation | below |
+| `repository/` | Application persistence and all SQL | [repository/CLAUDE.md](repository/CLAUDE.md) |
 | `llm/` | OpenAI-compatible JSON client + degradation ladder | [llm/CLAUDE.md](llm/CLAUDE.md) |
 | `providers/flapi/` | FLAPI Flow Packages through `flunks` | [providers/flapi/CLAUDE.md](providers/flapi/CLAUDE.md) |
 
-`repository.py` — the only SQL owner — sits one level up at
-[app/repository.py](../repository.py), not here, and is described in
-[app/CLAUDE.md](../CLAUDE.md).
+The repository now lives here under
+[repository/](repository/CLAUDE.md), beside the connection layer it uses.
 
 ## `database/postgres.py`
 
@@ -22,7 +22,8 @@ Two functions, both driven by live runtime settings (never a cached config):
 
 - `connect(store)` — opens a `psycopg` connection with `dict_row`, then issues
   `SET search_path TO <schema>, public` when a schema is configured. Every
-  unqualified table name in `repository.py` resolves through `search_path`, so
+  unqualified table name in `repository/repository.py` resolves through
+  `search_path`, so
   this one statement places all DDL and queries in the right schema without
   touching a single query.
 - `ensure_schema(store)` — `CREATE SCHEMA IF NOT EXISTS`. The app creates its

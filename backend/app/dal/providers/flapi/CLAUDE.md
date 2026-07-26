@@ -142,8 +142,8 @@ warning that the setting is being ignored rather than failing.
 ## The package dict
 
 Produced by `repository.get_package()`, schema in
-[repository.py:488](../../../repository.py#L488), validated by `PackageCreate`
-in [models.py:7](../../../models.py#L7).
+[repository/repository.py](../../repository/repository.py), validated by
+`PackageCreate` in [api/models.py](../../../api/models.py).
 
 | Key | Used by | Notes |
 |---|---|---|

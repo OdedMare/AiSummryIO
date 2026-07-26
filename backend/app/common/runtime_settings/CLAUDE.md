@@ -67,7 +67,7 @@ than rejected:
 ## Password hashing
 
 `hash_password` / `verify_password` live here (imported by
-[auth.py](../../auth.py)). **scrypt**, `n=16384, r=8, p=1`, 32-byte digest, a
+[api/auth.py](../../api/auth.py)). **scrypt**, `n=16384, r=8, p=1`, 32-byte digest, a
 random 16-byte salt, encoded as `scrypt$n$r$p$salt$digest`. Verification uses
 `hmac.compare_digest` and returns `False` on any malformed input rather than
 raising.
