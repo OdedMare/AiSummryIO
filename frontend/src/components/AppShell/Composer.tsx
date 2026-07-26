@@ -1,5 +1,6 @@
 import { Send } from "lucide-react";
 import MapWorkspace from "@/components/MapWorkspace";
+import type { GeoJSONPolygon } from "@/types/geo";
 import type { AppShellController } from "./useAppShell";
 import { isActive } from "./useAppShell";
 
@@ -32,7 +33,7 @@ function IdentifierField({ app }: { app: AppShellController }) {
 
 function MapField({ app }: { app: AppShellController }) {
   const clear = () => { app.setGeometry(null); app.setGeoMode("none"); };
-  const drawn = (geometry) => {
+  const drawn = (geometry: GeoJSONPolygon) => {
     app.setGeometry(geometry); app.setGeoMode("none");
   };
   return (
@@ -68,7 +69,13 @@ function FollowUpField({ app }: { app: AppShellController }) {
   );
 }
 
-function MessageInput({ app, placeholder }) {
+function MessageInput({
+  app,
+  placeholder,
+}: {
+  app: AppShellController;
+  placeholder: string;
+}) {
   return (
     <textarea value={app.message}
       onChange={(event) => app.setMessage(event.target.value)}

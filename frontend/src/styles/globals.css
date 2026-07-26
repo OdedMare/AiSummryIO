@@ -2112,6 +2112,96 @@ select:focus {
   to { transform: rotate(360deg); }
 }
 
+/* Skill tester: try Skill instructions without running a full summary. */
+.skill-tester {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 13px;
+}
+
+.skill-tester > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skill-tester > header > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--primary);
+  background: var(--surface);
+  border-radius: 9px;
+}
+
+.skill-tester h4,
+.skill-tester p {
+  margin: 0;
+}
+
+.skill-tester header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skill-tester label > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skill-tester textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.skill-tester > button {
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+.skill-tester-result {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.skill-tester-result h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.skill-tester-result p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.skill-tester-result ul {
+  margin: 10px 0 0;
+  padding-inline-start: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.skill-tester-sources {
+  margin-top: 10px !important;
+  color: var(--text-muted);
+  font-size: 11px !important;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;

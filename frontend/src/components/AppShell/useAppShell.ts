@@ -1,6 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useState,
+} from "react";
 import { api } from "@/services/api";
 import type { Conversation, SummaryRun, SummarySkill } from "@/types";
 import { toMultiPolygon } from "@/types/geo";
@@ -8,6 +10,8 @@ import type { GeographyMode, GeoJSONPolygon } from "@/types/geo";
 
 export const isActive = (run: SummaryRun | null) =>
   run?.status === "queued" || run?.status === "running";
+
+type Setter<T> = Dispatch<SetStateAction<T>>;
 
 export function useAppShell() {
   const [rootId, setRootId] = useState("");
@@ -92,7 +96,11 @@ export function useAppShell() {
 
 export type AppShellController = ReturnType<typeof useAppShell>;
 
-function useInitialData(loadHistory, setDark, setSkills) {
+function useInitialData(
+  loadHistory: () => void,
+  setDark: Setter<boolean>,
+  setSkills: Setter<SummarySkill[]>,
+) {
   useEffect(() => {
     const saved = window.localStorage.getItem("aisummry-theme");
     const dark = saved ? saved === "dark" :
@@ -111,7 +119,12 @@ function useTheme(dark: boolean) {
   }, [dark]);
 }
 
-function useRunPolling(run, setRun, setError, loadHistory) {
+function useRunPolling(
+  run: SummaryRun | null,
+  setRun: Setter<SummaryRun | null>,
+  setError: Setter<string>,
+  loadHistory: () => void,
+) {
   useEffect(() => {
     if (!run || !isActive(run)) return;
     const timer = window.setInterval(() => {
@@ -140,7 +153,11 @@ function identifierNotice(identifier: string) {
 }
 
 async function submitRequest(
-  conversation, rootId, message, skillKeys, geometry
+  conversation: Conversation | null,
+  rootId: string,
+  message: string,
+  skillKeys: string[],
+  geometry: GeoJSONPolygon | null,
 ) {
   if (conversation) {
     if (!message.trim()) throw new Error("יש לכתוב שאלת המשך");
@@ -154,7 +171,7 @@ async function submitRequest(
   return created;
 }
 
-function toggleKey(current: string[], key: string, setError) {
+function toggleKey(current: string[], key: string, setError: Setter<string>) {
   if (current.includes(key)) return current.filter((item) => item !== key);
   if (current.length < 3) return [...current, key];
   setError("אפשר לבחור עד 3 Skills בכל סיכום");
