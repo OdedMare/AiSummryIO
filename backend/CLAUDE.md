@@ -2,6 +2,11 @@
 
 Read this before changing `backend/`.
 
+**[INDEX.md](INDEX.md) maps every directory to its own `CLAUDE.md`** — use it
+to jump straight to the layer you are working in. The FLAPI/`flunks` adapter
+is documented in depth in
+[app/dal/providers/flapi/CLAUDE.md](app/dal/providers/flapi/CLAUDE.md).
+
 ## Purpose
 
 The backend turns one opaque string identifier into a traceable Hebrew
