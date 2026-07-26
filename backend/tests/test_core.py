@@ -440,3 +440,127 @@ def test_follow_up_router_can_choose_detail_workflow_despite_cached_evidence():
 
     assert selected["workflow_key"] == "home-details"
     assert llm.received["existing_evidence"][0]["row_count"] == 1
+
+
+def test_fde_prompt_builds_a_draft_only_from_existing_tools():
+    tools = [{
+        "id": "tool-v1",
+        "name": "בעלות",
+        "description": "מחזיר פרטי בעלות",
+        "agent_instructions": "סכם בעלים וקשרים.",
+        "input_mode": "single",
+        "input_cube_parameter": "identifier",
+        "example_output": [{"owner_id": "001", "owner_name": "דנה"}],
+    }]
+
+    class FakeRepository:
+        @staticmethod
+        def list_packages():
+            return tools
+
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+    class FakeLlm:
+        received = None
+
+        def complete_json(self, _system, user, _schema):
+            self.received = json.loads(user)
+            return {
+                "name": "בדיקת בעלות",
+                "description": "מעמיק בבעלות",
+                "role": "detail",
+                "rationale": "הטול הקיים מכסה את הבקשה.",
+                "system_prompt": "סכם עובדות בעלות בלבד.",
+                "steps": [{
+                    "key": "ownership",
+                    "name": "שליפת בעלות",
+                    "package_version_id": "tool-v1",
+                    "depends_on": [],
+                    "input_source": "workflow.id",
+                    "input_field": "",
+                    "summary_prompt": "הדגש בעלים.",
+                }],
+                "missing_tools": [],
+            }
+
+    llm = FakeLlm()
+    service = SummaryService(FakeRepository(), None, llm, None)
+    plan = service.plan_workflow("בנה תהליך לבדיקת בעלות")
+
+    assert plan["can_build"] is True
+    assert plan["steps"][0]["package_version_id"] == "tool-v1"
+    assert llm.received["available_tools"][0]["output_fields"] == [
+        "owner_id", "owner_name",
+    ]
+
+
+def test_workflow_plan_rejects_an_invented_tool():
+    plan = SummaryService._validated_plan({
+        "name": "לא תקין",
+        "description": "",
+        "role": "detail",
+        "rationale": "",
+        "system_prompt": "",
+        "steps": [{
+            "key": "invented",
+            "name": "טול מומצא",
+            "package_version_id": "missing",
+            "depends_on": [],
+            "input_source": "workflow.id",
+            "input_field": "",
+            "summary_prompt": "",
+        }],
+        "missing_tools": [],
+    }, [{"id": "real"}])
+
+    assert plan["can_build"] is False
+    assert plan["steps"] == []
+    assert plan["missing_tools"][0]["name"] == "טול שלא קיים בקטלוג"
+
+
+def test_follow_up_can_select_an_approved_tool_without_a_workflow():
+    tool = {
+        "id": "tool-v1",
+        "package_key": "ownership",
+        "name": "בעלות",
+        "description": "מעמיק בבעלות",
+        "agent_instructions": "סכם בעלים בלבד.",
+    }
+
+    class FakeRepository:
+        @staticmethod
+        def published_workflows(_roles):
+            return []
+
+        @staticmethod
+        def agent_tools():
+            return [tool]
+
+        @staticmethod
+        def run_evidence(_run_id):
+            return []
+
+    service = SummaryService(FakeRepository(), None, None, None)
+    service._select_detail = lambda *_args, **_kwargs: {
+        "action": "tool",
+        "tool_version_id": "tool-v1",
+    }
+    captured = {}
+
+    def execute(_run, _root_id, _question, workflows, _progress):
+        captured["workflow"] = workflows[0]
+        return {"summary": "ok"}
+
+    service._execute = execute
+    result = service.follow_up(
+        {"id": "run-2", "question": "מי הבעלים?"},
+        {"root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert result == {"summary": "ok"}
+    assert captured["workflow"]["id"] == "tool:tool-v1"
+    assert captured["workflow"]["steps"][0]["package_version_id"] == "tool-v1"
+    assert captured["workflow"]["system_prompt"] == "סכם בעלים בלבד."

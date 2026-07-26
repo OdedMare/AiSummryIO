@@ -1092,6 +1092,127 @@ select:focus {
   padding: 22px;
 }
 
+.workflow-planner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 13px;
+}
+
+.workflow-planner > header,
+.workflow-planner > label,
+.planner-result {
+  grid-column: 1 / -1;
+}
+
+.workflow-planner > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workflow-planner > header > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--primary);
+  background: var(--surface);
+  border-radius: 9px;
+}
+
+.workflow-planner h3,
+.workflow-planner p {
+  margin: 0;
+}
+
+.workflow-planner header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.planner-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fff;
+  font-weight: 800;
+  background: var(--primary);
+  border: 0;
+  border-radius: 9px;
+}
+
+.planner-result {
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.planner-result section {
+  margin-top: 10px;
+}
+
+.planner-result ul {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+
+.planner-result li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 10px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
+.planner-result li span,
+.planner-result li small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agent-tool-toggle {
+  display: flex !important;
+  align-items: flex-start;
+  flex-direction: row !important;
+  gap: 10px !important;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.agent-tool-toggle input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--primary);
+}
+
+.agent-tool-toggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agent-tool-toggle small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
 .studio-form > header {
   display: flex;
   align-items: center;
@@ -1506,6 +1627,14 @@ select:focus {
 
   .studio-form {
     padding: 14px;
+  }
+
+  .workflow-planner {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-button {
+    width: 100%;
   }
 
   .step-card {

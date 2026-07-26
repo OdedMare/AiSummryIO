@@ -226,6 +226,34 @@ the layering mirrors LocatoAI's `bl/` vs `dal/` split:
 - No PostgreSQL was running, so every repository test is a pure-function test.
   The PostgreSQL integration tests under "automated delivery" are still open.
 
+### Running both stacks locally (verified 2026-07-26)
+
+Both servers start and talk to each other on a normal dev machine:
+
+```bash
+# backend - :8000
+cd backend
+AISUMMRY_DATABASE_URL='postgresql://localhost:5432/summaries' \
+AISUMMRY_ADMIN_PASSWORD='<dev-only value>' \
+PYTHONPATH=. python -m uvicorn app.main:app --port 8000
+
+# frontend - :3000
+cd frontend
+BACKEND_URL=http://localhost:8000 npm run dev
+```
+
+- `/api/health` returned `{"status":"ok","database":"ok"}`; the frontend proxy
+  at `localhost:3000/api/health` also returned 200.
+- The page serves `lang="he"` and `dir="rtl"` as required.
+- The `summaries` database did **not** exist and had to be created once
+  (`CREATE DATABASE summaries`) against the local PostgreSQL. Startup then
+  created 8 tables and seeded/published 7 Hebrew skills and prompts.
+- The scratch venv also needs `uvicorn` (and `structlog`) on top of the test
+  dependencies listed above.
+- This exercises schema creation, seeding, and the HTTP surface only. It is
+  **not** the P0 end-to-end run: without `flunks` and real FLAPI/LLM
+  credentials no package call, evidence row, or Hebrew summary is produced.
+
 ### Note for the next session
 
 Mid-session the working tree was committed outside this session as
