@@ -1,3 +1,5 @@
+"""Signed admin and anonymous-session authentication."""
+
 import hashlib
 import hmac
 import time
@@ -55,4 +57,3 @@ def verify_session(store, token: str) -> str:
 def _sign(store, value: str) -> str:
     secret = store.get().cookie_secret.encode("utf-8")
     return hmac.new(secret, value.encode("utf-8"), hashlib.sha256).hexdigest()
-

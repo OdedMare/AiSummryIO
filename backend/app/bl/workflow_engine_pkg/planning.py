@@ -3,7 +3,7 @@
 import json
 from typing import List
 
-from app.repository import Repository
+from app.dal.repository import Repository
 from app.bl.workflow_engine_pkg.schemas import WORKFLOW_PLAN_SCHEMA
 
 

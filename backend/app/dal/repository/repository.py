@@ -1,4 +1,4 @@
-"""The only PostgreSQL repository: schema, catalog, workflows, runs, evidence."""
+"""PostgreSQL repository: schema, catalog, workflows, runs, and evidence."""
 
 import json
 import re

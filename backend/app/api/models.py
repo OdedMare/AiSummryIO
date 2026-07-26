@@ -1,3 +1,5 @@
+"""Pydantic contracts for the HTTP boundary."""
+
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator

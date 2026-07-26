@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import Cookie, Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.auth import (
+from app.api.auth import (
     login, require_admin_token, session_signature, verify_session,
 )
 from app.bl.jobs import JobRunner
@@ -18,12 +18,12 @@ from app.common.errors import AppError, AuthError
 from app.common.runtime_settings.runtime_settings_store import RuntimeSettingsStore
 from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.providers.flapi.provider import FlapiProvider
-from app.models import (
+from app.api.models import (
     AdminLogin, AgentContentCreate, FeedbackCreate, FollowUpCreate,
     PackageCreate, PackageInspect, SkillPreview, SummaryCreate,
     WorkflowCreate, WorkflowPlanCreate,
 )
-from app.repository import Repository
+from app.dal.repository import Repository
 
 env = Settings()
 store = RuntimeSettingsStore(env)

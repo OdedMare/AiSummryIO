@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.common.errors import AgentError, ProviderError
-from app.models import GeoBoundaries
+from app.api.models import GeoBoundaries
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
     extract_url_schema,
@@ -26,9 +26,9 @@ from app.dal.providers.flapi.provider import FlapiProvider
 from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
-from app.repository import Repository
+from app.dal.repository import Repository
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.models import SkillPreview, SkillPreviewSection, SummaryCreate
+from app.api.models import SkillPreview, SkillPreviewSection, SummaryCreate
 
 
 def _install_fake_flunks(monkeypatch):
