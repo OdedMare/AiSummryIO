@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { MapContainer, TileLayer, ZoomControl } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import MapGeoms from "./MapGeoms";
@@ -14,6 +14,27 @@ export interface LeafletMapProps {
   /** Called when the user finishes drawing a polygon or rectangle. */
   onGeometryDrawn: (geometry: GeoJSONPolygon, bbox: BBox) => void;
   disabled?: boolean;
+}
+
+/**
+ * Leaflet caches its container size at init. Inside the composer that size can
+ * be measured while the box is still collapsed or hidden behind a modal, which
+ * leaves the map rendering at the wrong width. Re-measure whenever the
+ * container actually resizes.
+ */
+function SyncMapSize() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(container);
+    // Catch the first paint, before any resize has fired.
+    map.invalidateSize();
+    return () => observer.disconnect();
+  }, [map]);
+
+  return null;
 }
 
 export default function LeafletMap({
@@ -46,6 +67,7 @@ export default function LeafletMap({
         value={drawnGeometry}
         onChange={onGeometryDrawn}
       />
+      <SyncMapSize />
       <ZoomControl position="bottomleft" />
       <div className="picker-layer-switch">
         {LAYERS.map((option) => (
