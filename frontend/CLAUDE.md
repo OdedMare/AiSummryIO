@@ -6,7 +6,7 @@ Read this before changing `frontend/`.
 
 Hebrew-first (`lang="he"`, `dir="rtl"`) workspace for complete summaries by
 identifier. The UI reuses LocatoAI's shell: dark history/navigation rail,
-bounded conversation, bottom composer, Settings, package catalog, and Agent
+bounded conversation, bottom composer, Settings, tool catalog, and Agent
 Studio. There is no map.
 
 ## Commands
@@ -40,8 +40,10 @@ Follow-ups post to the same conversation and retain the original ID/evidence.
 - All icon buttons have an accessible name and at least a 44px target.
 - Status changes use text/icons, not color alone; errors use `role="alert"`.
 - Evidence is progressive disclosure: summary first, raw records on demand.
-- FDE language is concrete: “חבילה”, “קלט”, “פלט”, “שלב”, “טיוטה”, “פורסם”.
+- FDE language is concrete: “טול”, “חבילת FLAPI”, “קלט”, “פלט”, “שלב”,
+  “טיוטה”, “פורסם”.
+- AI workflow proposals are labeled as suggestions and loaded only as drafts
+  for FDE review; missing tools show the required input and output contract.
 - Agent Studio uses structured forms and a read-only dependency preview,
   never an arbitrary code/SQL/HTTP editor.
 - Respect reduced motion and preserve visible focus rings.
-

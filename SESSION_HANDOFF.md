@@ -42,7 +42,9 @@ git log -5 --oneline --decorate
 - Numeric-looking IDs such as `00123` must remain strings.
 - The initial request runs every published `baseline`/`both` workflow.
 - Follow-up questions reuse stored evidence first and run relevant detail
-  workflows only when more data is required.
+  workflows or one FDE-approved standalone tool when more data is required.
+- Given an FDE prompt, the planner composes a reviewable workflow draft from
+  existing tool versions or proposes the exact tool contract that is missing.
 - Use FLAPI Flow Packages through the internal `flunks` library only.
 - Do not add GIS providers, MQS, Tyche, Cubes execution, or a map.
 - Workflows may chain package output into later package input and support
@@ -82,8 +84,10 @@ git log -5 --oneline --decorate
 - Sequential package chaining and string-ID fan-out.
 - Parallel independent workflows.
 - Progressive persisted run state and separate evidence endpoint.
-- Follow-up router that can use cached evidence, select a detail workflow, or
-  ask for clarification.
+- Follow-up router that can use cached evidence, select a detail workflow,
+  select an approved standalone tool, or ask for clarification.
+- Tool metadata for agent availability and summary instructions, plus an FDE
+  prompt-to-workflow planner that never invents tool IDs or auto-publishes.
 - Dedicated higher-priority executor for follow-up runs.
 - Startup recovery for queued jobs and cleanup of expired conversations.
 - Publish validation for step ordering/mappings and required examples.
@@ -101,7 +105,9 @@ git log -5 --oneline --decorate
 - Settings panel with FDE authentication, live model/settings controls, FLAPI,
   PostgreSQL, concurrency, timeout, and retention fields.
 - Agent Studio with:
-  - package catalog and version creation;
+  - tool/package catalog and version creation;
+  - independent-agent availability and per-tool summary instructions;
+  - AI-assisted workflow drafting and missing-tool proposals;
   - single/many string input modes;
   - package input/output examples;
   - structured workflow step editor;

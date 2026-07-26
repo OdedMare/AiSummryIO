@@ -173,7 +173,7 @@ class SummaryService:
                 for field in row
             })
             catalog.append({
-                "tool_version_id": tool["id"],
+                "package_version_id": tool["id"],
                 "name": tool["name"],
                 "description": tool.get("description", ""),
                 "agent_instructions": tool.get("agent_instructions", ""),

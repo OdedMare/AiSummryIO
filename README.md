@@ -8,7 +8,9 @@ examples; users provide one identifier and receive a progressive full summary.
 
 - The first request runs every published `baseline`/`both` workflow.
 - Follow-up questions reuse saved evidence and run a relevant `detail` workflow
-  only when more data is needed.
+  or one FDE-approved standalone tool only when more data is needed.
+- An FDE can describe a goal in plain language; the planner builds a reviewable
+  workflow draft from existing tools or specifies the missing tool contract.
 - Workflows chain version-pinned FLAPI Flow Packages through `flunks`.
 - Identifiers are opaque strings, including numeric-looking values such as
   `00123`; they are never converted to integers.
@@ -56,10 +58,10 @@ their respective `CLAUDE.md` files.
 ## First FDE setup
 
 1. Sign in to **Agent Studio**.
-2. Add each FLAPI package to the catalog, including example string input and
-   example output rows.
-3. Build a draft workflow from package steps and map later inputs from earlier
-   output fields.
+2. Add each FLAPI package as a tool, including when the agent may use it,
+   example string input, and example output rows.
+3. Ask the planner for a draft or build one from tool steps, then map later
+   inputs from earlier output fields.
 4. Run a live dry-run with a safe identifier.
 5. Publish the workflow. The server blocks workflows without valid mappings or
    publishable examples.

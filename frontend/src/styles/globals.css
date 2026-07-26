@@ -1094,7 +1094,7 @@ select:focus {
 
 .workflow-planner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding: 16px;
   background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
@@ -1140,6 +1140,7 @@ select:focus {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  justify-self: start;
   min-height: 44px;
   padding: 0 16px;
   color: #fff;
@@ -1627,10 +1628,6 @@ select:focus {
 
   .studio-form {
     padding: 14px;
-  }
-
-  .workflow-planner {
-    grid-template-columns: 1fr;
   }
 
   .planner-button {

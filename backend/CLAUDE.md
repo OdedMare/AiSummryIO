@@ -7,7 +7,7 @@ Read this before changing `backend/`.
 The backend turns one opaque string identifier into a traceable Hebrew
 summary. An initial request runs all published `baseline`/`both` workflows.
 Follow-ups reuse conversation evidence and run one relevant
-`detail`/`both` workflow when needed.
+`detail`/`both` workflow or one FDE-approved standalone tool when needed.
 
 ## Runtime and commands
 
@@ -41,7 +41,8 @@ uvicorn app.main:app --reload
 - `bl/workflow_engine.py` — `SummaryService`: execution, one retry, partial
   success, evidence retention, section summaries, and final synthesis. A
   workflow's `output_schema` extends the shared section contract; extras are
-  returned under `section.fields`.
+  returned under `section.fields`. It also owns standalone tool routing and FDE
+  workflow planning.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
   have priority.
 - `main.py` — FastAPI routes and composition root.
@@ -51,8 +52,11 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 
 ## Locked rules
 
-- The agent may select and parameterize only published, version-pinned
-  workflows. It never invents package calls, HTTP, SQL, or mappings.
+- The agent may select only published, version-pinned workflows or the latest
+  FDE-approved standalone tool version. It never invents package calls, HTTP,
+  SQL, or mappings.
+- Workflow planning creates a draft from catalog tool-version IDs or describes
+  a missing tool contract; it never publishes automatically.
 - A workflow input may reference `workflow.id` or an earlier step output.
 - Package input mode is `single` or `many`; both preserve strings.
 - Claims require evidence references. Package failures stay visible and do
@@ -62,4 +66,3 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - FDE edits create drafts. Publishing is blocked by invalid mappings or
   failing mandatory examples.
 - Keep the design simple: add a module only when it owns a distinct boundary.
-
