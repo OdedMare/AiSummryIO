@@ -4,9 +4,23 @@ Hebrew-first agent application for evidence-backed summaries by identifier.
 FDEs configure versioned FLAPI packages, workflows, skills, prompts, and
 examples; users provide one identifier and receive a progressive full summary.
 
-## Run
+## What it does
+
+- The first request runs every published `baseline`/`both` workflow.
+- Follow-up questions reuse saved evidence and run a relevant `detail` workflow
+  only when more data is needed.
+- Workflows chain version-pinned FLAPI Flow Packages through `flunks`.
+- Identifiers are opaque strings, including numeric-looking values such as
+  `00123`; they are never converted to integers.
+- Successful sections remain visible when another package fails, and raw
+  evidence is available separately from the Hebrew summary.
+
+There are no GIS providers or map dependencies.
+
+## Run with Docker
 
 ```bash
+export AISUMMRY_ADMIN_PASSWORD='your-fde-password'
 docker compose up --build
 ```
 
@@ -14,6 +28,41 @@ docker compose up --build
 - API: http://localhost:8000
 - API docs: http://localhost:8000/docs
 
-Set `AISUMMRY_ADMIN_PASSWORD` before first start. In an air-gapped environment,
-make the internal `flunks` wheel available to the backend build.
+The password is hashed on first start and persisted in the settings volume; it
+is never committed. In an air-gapped environment, make the internal `flunks`
+package available through the network's Python package source before building.
 
+## Local development
+
+The source versions match LocatoAI: Python 3.8.10, Next.js 16.2.10,
+React 18.3.1, and TypeScript.
+
+```bash
+cd backend
+python -m pip install -e '.[dev]'
+uvicorn app.main:app --reload
+```
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Start PostgreSQL first and configure values through `backend/.env` or the FDE
+Settings screen. Backend and frontend implementation rules are documented in
+their respective `CLAUDE.md` files.
+
+## First FDE setup
+
+1. Sign in to **Agent Studio**.
+2. Add each FLAPI package to the catalog, including example string input and
+   example output rows.
+3. Build a draft workflow from package steps and map later inputs from earlier
+   output fields.
+4. Run a live dry-run with a safe identifier.
+5. Publish the workflow. The server blocks workflows without valid mappings or
+   publishable examples.
+
+The studio is preloaded with Hebrew skills for building, testing, and
+diagnosing summary workflows, plus the final-summary and follow-up prompts.

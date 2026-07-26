@@ -51,6 +51,7 @@ export const api = {
     }),
   logout: () => request("/api/admin/session", { method: "DELETE" }),
   settings: () => request<Record<string, unknown>>("/api/settings"),
+  models: () => request<{ models: string[] }>("/api/models"),
   updateSettings: (data: Record<string, unknown>) =>
     request<Record<string, unknown>>("/api/settings", {
       method: "PUT",
@@ -85,4 +86,3 @@ export const api = {
     request<AgentContent>(`/api/agent-content/${id}/publish`, { method: "POST" }),
   reviewQueue: () => request<Array<Record<string, unknown>>>("/api/review-queue"),
 };
-

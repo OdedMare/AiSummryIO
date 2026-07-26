@@ -888,10 +888,34 @@ select:focus {
 }
 
 .settings-form label:has(input[type="url"]),
+.settings-tools,
 .settings-form .form-error,
 .settings-form .form-success,
 .settings-form .primary-button {
   grid-column: 1 / -1;
+}
+
+.settings-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-tools > span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-form label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+}
+
+.settings-form input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+  accent-color: var(--primary);
 }
 
 .form-error,
