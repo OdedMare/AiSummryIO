@@ -24,6 +24,7 @@ from app.dal.providers.flapi.runner_config import (
 )
 from app.repository import Repository
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
+from app.models import SummaryCreate
 
 
 def _install_fake_flunks(monkeypatch):
@@ -475,6 +476,82 @@ def test_custom_output_schema_fields_are_captured_separately():
     assert generated["summary"] == "סיכום"
     # The custom field is kept out of the rendered contract keys.
     assert generated["fields"] == {"owner_name": "דנה"}
+
+
+def test_selected_summary_skill_is_executed_and_unknown_results_are_dropped():
+    class FakeRepository:
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+    class FakeLlm:
+        received = None
+
+        def complete_json(self, _system, user, _schema):
+            self.received = json.loads(user)
+            return {
+                "summary": "סיכום",
+                "key_findings": ["עובדה"],
+                "risks": [],
+                "missing_data": [],
+                "suggested_questions": [],
+                "skill_results": [{
+                    "skill_key": "summary-actions",
+                    "name": "שם שהמודל לא קובע",
+                    "summary": "מה עושים עכשיו",
+                    "items": ["בדקו את הרשומה"],
+                    "sources": ["בעלות", "מקור מומצא"],
+                }, {
+                    "skill_key": "invented",
+                    "name": "לא קיים",
+                    "summary": "לא יוצג",
+                    "items": [],
+                    "sources": [],
+                }],
+            }
+
+    llm = FakeLlm()
+    service = SummaryService(FakeRepository(), None, llm, None)
+    skills = [{
+        "content_key": "summary-actions",
+        "name": "צעדים מומלצים",
+        "description": "פעולות ברורות",
+        "content": "הצע רק פעולות המבוססות על עובדות.",
+    }]
+    result = service._final_summary("", "", [{
+        "workflow_key": "ownership",
+        "name": "בעלות",
+        "status": "completed",
+        "summary": "נמצאה בעלות",
+        "facts": ["דנה היא הבעלים"],
+        "warnings": [],
+    }], skills)
+
+    assert llm.received["selected_skills"][0]["instructions"].startswith(
+        "הצע רק"
+    )
+    assert result["skill_results"] == [{
+        "skill_key": "summary-actions",
+        "name": "צעדים מומלצים",
+        "summary": "מה עושים עכשיו",
+        "items": ["בדקו את הרשומה"],
+        "sources": ["בעלות"],
+    }]
+
+
+def test_summary_request_limits_and_deduplicates_skills():
+    request = SummaryCreate(
+        root_id="001",
+        skill_keys=["summary-actions", "summary-actions", "summary-risks"],
+    )
+
+    assert request.skill_keys == ["summary-actions", "summary-risks"]
+
+    with pytest.raises(ValueError, match="עד 3"):
+        SummaryCreate(
+            root_id="001",
+            skill_keys=["one", "two", "three", "four"],
+        )
 
 
 def test_follow_up_router_can_choose_detail_workflow_despite_cached_evidence():

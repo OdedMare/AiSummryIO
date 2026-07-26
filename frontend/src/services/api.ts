@@ -1,6 +1,6 @@
 import type {
   AgentContent, Conversation, Evidence, PackageInspection, PackageVersion,
-  SummaryRun, WorkflowPlan, WorkflowVersion,
+  SummaryRun, SummarySkill, WorkflowPlan, WorkflowVersion,
 } from "@/types";
 
 export async function request<T>(
@@ -24,17 +24,26 @@ export async function request<T>(
 
 export const api = {
   conversations: () => request<Conversation[]>("/api/conversations"),
+  skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
-  start: (rootId: string, question: string) =>
+  start: (rootId: string, question: string, skillKeys: string[]) =>
     request<{ conversation: Conversation; run: SummaryRun }>("/api/summaries", {
       method: "POST",
-      body: JSON.stringify({ root_id: rootId, question }),
+      body: JSON.stringify({
+        root_id: rootId,
+        question,
+        skill_keys: skillKeys,
+      }),
     }),
-  followUp: (conversationId: string, question: string) =>
+  followUp: (
+    conversationId: string,
+    question: string,
+    skillKeys: string[],
+  ) =>
     request<SummaryRun>(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, skill_keys: skillKeys }),
     }),
   run: (id: string) => request<SummaryRun>(`/api/runs/${id}`),
   evidence: (id: string) => request<Evidence[]>(`/api/runs/${id}/evidence`),

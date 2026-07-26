@@ -9,7 +9,7 @@ import AgentStudioPanel from "@/components/AgentStudioPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import SummaryWorkspace from "@/components/SummaryWorkspace";
 import { api } from "@/services/api";
-import type { Conversation, SummaryRun } from "@/types";
+import type { Conversation, SummaryRun, SummarySkill } from "@/types";
 
 const isActive = (run: SummaryRun | null) =>
   run?.status === "queued" || run?.status === "running";
@@ -18,6 +18,8 @@ export default function AppShell() {
   const [rootId, setRootId] = useState("");
   const [message, setMessage] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [skills, setSkills] = useState<SummarySkill[]>([]);
+  const [selectedSkillKeys, setSelectedSkillKeys] = useState<string[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [run, setRun] = useState<SummaryRun | null>(null);
   const [error, setError] = useState("");
@@ -39,6 +41,7 @@ export default function AppShell() {
     document.documentElement.dataset.theme = nextDark ? "dark" : "light";
     window.setTimeout(() => setDark(nextDark), 0);
     loadHistory();
+    api.skills().then(setSkills).catch(() => undefined);
   }, [loadHistory]);
 
   useEffect(() => {
@@ -64,6 +67,7 @@ export default function AppShell() {
     setMessage("");
     setError("");
     setNotice("");
+    setSelectedSkillKeys([]);
     setSidebarOpen(false);
   };
 
@@ -73,7 +77,9 @@ export default function AppShell() {
       const selected = await api.conversation(id);
       setConversation(selected);
       setRootId(selected.root_id);
-      setRun(selected.runs?.at(-1) ?? null);
+      const lastRun = selected.runs?.at(-1) ?? null;
+      setRun(lastRun);
+      setSelectedSkillKeys(lastRun?.skill_keys ?? []);
       setSidebarOpen(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "לא ניתן לטעון שיחה");
@@ -97,13 +103,21 @@ export default function AppShell() {
           setNotice(`זיהינו את המזהה ${detected[1]}. בדקו אותו ולחצו שוב לאישור.`);
           return;
         }
-        const created = await api.start(rootId.trim(), message.trim());
+        const created = await api.start(
+          rootId.trim(),
+          message.trim(),
+          selectedSkillKeys,
+        );
         setConversation(created.conversation);
         setRun(created.run);
         loadHistory();
       } else {
         if (!message.trim()) throw new Error("יש לכתוב שאלת המשך");
-        setRun(await api.followUp(conversation.id, message.trim()));
+        setRun(await api.followUp(
+          conversation.id,
+          message.trim(),
+          selectedSkillKeys,
+        ));
       }
       setMessage("");
     } catch (reason) {
@@ -111,6 +125,20 @@ export default function AppShell() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const toggleSkill = (key: string) => {
+    setError("");
+    setSelectedSkillKeys((current) => {
+      if (current.includes(key)) {
+        return current.filter((item) => item !== key);
+      }
+      if (current.length === 3) {
+        setError("אפשר לבחור עד 3 Skills בכל סיכום");
+        return current;
+      }
+      return [...current, key];
+    });
   };
 
   return (
@@ -158,7 +186,7 @@ export default function AppShell() {
             <Settings size={18} /> הגדרות
           </button>
           <button type="button" onClick={() => setStudioOpen(true)}>
-            <Workflow size={18} /> Agent Studio
+            <Workflow size={18} /> מרכז ניהול
           </button>
           <button type="button" onClick={() => setDark((value) => !value)}>
             {dark ? <Sun size={18} /> : <Moon size={18} />}
@@ -178,7 +206,7 @@ export default function AppShell() {
             <Menu size={21} />
           </button>
           <div>
-            <span>סיכום פעיל</span>
+            <span>{conversation ? "מזהה נוכחי" : "סיכום חדש"}</span>
             <strong dir="ltr">{conversation?.root_id || "מזהה חדש"}</strong>
           </div>
           <span className="trust-indicator">
@@ -186,12 +214,17 @@ export default function AppShell() {
           </span>
         </header>
 
-        <SummaryWorkspace run={run} />
+        <SummaryWorkspace
+          run={run}
+          skills={skills}
+          selectedSkillKeys={selectedSkillKeys}
+          onToggleSkill={toggleSkill}
+        />
 
         <form className="composer" onSubmit={submit}>
           {!conversation && (
             <label className="id-field">
-              <span>מזהה לסיכום <b aria-hidden="true">*</b></span>
+              <span>המזהה שתרצו לסכם <b aria-hidden="true">*</b></span>
               <input
                 value={rootId}
                 onChange={(event) => setRootId(event.target.value)}
@@ -203,20 +236,41 @@ export default function AppShell() {
               />
             </label>
           )}
-          <label className="message-field">
-            <span>
-              {conversation ? "שאלת המשך" : "בקשה נוספת (לא חובה)"}
-            </span>
-            <textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder={conversation
-                ? "במה תרצו להעמיק?"
-                : "למשל: סכם את הסיכונים והקשרים החשובים"}
-              rows={2}
-              disabled={submitting || isActive(run)}
-            />
-          </label>
+          {conversation ? (
+            <label className="message-field">
+              <span>מה עוד תרצו לדעת?</span>
+              <textarea
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder="למשל: מה השתנה לאחרונה?"
+                rows={2}
+                disabled={submitting || isActive(run)}
+              />
+            </label>
+          ) : (
+            <details className="optional-request">
+              <summary>רוצים להוסיף בקשה אישית?</summary>
+              <label className="message-field">
+                <span>בקשה נוספת (לא חובה)</span>
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  placeholder="למשל: התמקדו במידע מהשנה האחרונה"
+                  rows={2}
+                  disabled={submitting || isActive(run)}
+                />
+              </label>
+            </details>
+          )}
+          {conversation && selectedSkillKeys.length > 0 && (
+            <p className="active-skills">
+              Skills פעילים:{" "}
+              {skills
+                .filter((skill) => selectedSkillKeys.includes(skill.content_key))
+                .map((skill) => skill.name)
+                .join(" · ")}
+            </p>
+          )}
           {error && <p className="composer-error" role="alert">{error}</p>}
           {notice && <p className="composer-notice" role="status">{notice}</p>}
           <button
@@ -229,8 +283,8 @@ export default function AppShell() {
             }
           >
             <Send size={18} />
-            {isActive(run) ? "התהליכים עובדים…" :
-              conversation ? "שליחת שאלה" : "יצירת סיכום מלא"}
+            {isActive(run) ? "מכינים את הסיכום…" :
+              conversation ? "שליחת שאלה" : "סכמו עכשיו"}
           </button>
         </form>
       </section>

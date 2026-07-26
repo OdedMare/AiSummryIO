@@ -2,11 +2,102 @@
 
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock3,
-  Database, FileText, LoaderCircle, ThumbsDown, ThumbsUp,
+  AlertTriangle, BriefcaseBusiness, CalendarDays, Check, CheckCircle2,
+  ChevronDown, ChevronUp, Clock3, Database, FileText, ListChecks,
+  LoaderCircle, ShieldAlert, Sparkles, ThumbsDown, ThumbsUp,
 } from "lucide-react";
 import { api } from "@/services/api";
-import type { Evidence, SummaryRun, SummarySection } from "@/types";
+import type {
+  Evidence, SkillResult, SummaryRun, SummarySection, SummarySkill,
+} from "@/types";
+
+const skillIcon = (key: string) => {
+  if (key.includes("executive")) return BriefcaseBusiness;
+  if (key.includes("risk")) return ShieldAlert;
+  if (key.includes("action")) return ListChecks;
+  if (key.includes("timeline")) return CalendarDays;
+  return Sparkles;
+};
+
+function SkillPicker({
+  skills,
+  selected,
+  onToggle,
+}: {
+  skills: SummarySkill[];
+  selected: string[];
+  onToggle: (key: string) => void;
+}) {
+  if (!skills.length) return null;
+  return (
+    <section className="skill-picker" aria-labelledby="skill-picker-title">
+      <header>
+        <div>
+          <span className="eyebrow">לא חובה</span>
+          <h2 id="skill-picker-title">מה תרצו לקבל מהסיכום?</h2>
+          <p>כל Skill מפעיל ניתוח נוסף על המידע שנאסף.</p>
+        </div>
+        <span>{selected.length}/3 נבחרו</span>
+      </header>
+      <div className="skill-grid">
+        {skills.map((skill) => {
+          const active = selected.includes(skill.content_key);
+          const Icon = skillIcon(skill.content_key);
+          return (
+            <button
+              key={skill.content_key}
+              type="button"
+              className={active ? "skill-card active" : "skill-card"}
+              onClick={() => onToggle(skill.content_key)}
+              aria-pressed={active}
+            >
+              <span className="skill-card-icon"><Icon size={20} /></span>
+              <span>
+                <strong>{skill.name}</strong>
+                <small>{skill.description}</small>
+              </span>
+              <span className="skill-check" aria-hidden="true">
+                {active && <Check size={15} />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SkillResults({ items }: { items: SkillResult[] }) {
+  if (!items.length) return null;
+  return (
+    <section className="skill-results" aria-labelledby="skill-results-title">
+      <header>
+        <span className="eyebrow">לפי הבחירה שלכם</span>
+        <h2 id="skill-results-title">תוצרי ה־Skills</h2>
+      </header>
+      <div className="skill-result-grid">
+        {items.map((item) => {
+          const Icon = skillIcon(item.skill_key);
+          return (
+            <article className="skill-result-card" key={item.skill_key}>
+              <header>
+                <span><Icon size={19} /></span>
+                <h3>{item.name}</h3>
+              </header>
+              <p>{item.summary}</p>
+              {!!item.items.length && (
+                <ul>{item.items.map((entry) => <li key={entry}>{entry}</li>)}</ul>
+              )}
+              {!!item.sources.length && (
+                <small>מבוסס על: {item.sources.join(" · ")}</small>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function SectionCard({ section }: { section: SummarySection }) {
   const [open, setOpen] = useState(false);
@@ -98,8 +189,14 @@ function EvidenceDrawer({
 
 export default function SummaryWorkspace({
   run,
+  skills,
+  selectedSkillKeys,
+  onToggleSkill,
 }: {
   run: SummaryRun | null;
+  skills: SummarySkill[];
+  selectedSkillKeys: string[];
+  onToggleSkill: (key: string) => void;
 }) {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
@@ -109,16 +206,20 @@ export default function SummaryWorkspace({
   if (!run) {
     return (
       <main className="workspace empty-workspace">
-        <div className="empty-illustration"><FileText size={36} /></div>
-        <h1>סיכום מלא לפי מזהה</h1>
-        <p>
-          הזינו מזהה כדי להפעיל את כל תהליכי הבסיס. כל חלק יופיע ברגע שהוא מוכן.
-        </p>
-        <div className="empty-steps">
-          <span>1</span><p>מזינים מזהה</p>
-          <span>2</span><p>התהליכים אוספים ראיות</p>
-          <span>3</span><p>מקבלים סיכום עברי מלא</p>
+        <div className="empty-intro">
+          <div className="empty-illustration"><FileText size={36} /></div>
+          <span className="welcome-pill"><Sparkles size={14} /> פשוט מתחילים ממזהה</span>
+          <h1>כל מה שחשוב לדעת, בסיכום אחד ברור</h1>
+          <p>
+            הזינו מזהה בתיבה למטה. נאסוף את המידע, נסביר אותו בעברית
+            ונראה על אילו מקורות הסתמכנו.
+          </p>
         </div>
+        <SkillPicker
+          skills={skills}
+          selected={selectedSkillKeys}
+          onToggle={onToggleSkill}
+        />
       </main>
     );
   }
@@ -174,6 +275,8 @@ export default function SummaryWorkspace({
           ))}
         </section>
       )}
+
+      <SkillResults items={run.result?.skill_results ?? []} />
 
       <section className="section-stack" aria-label="חלקי הסיכום">
         {liveSections.map((section) => (

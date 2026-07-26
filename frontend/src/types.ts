@@ -20,6 +20,7 @@ export interface SummaryResult {
   risks: string[];
   missing_data: string[];
   suggested_questions: string[];
+  skill_results: SkillResult[];
   sections: SummarySection[];
   partial: boolean;
   needs_clarification?: boolean;
@@ -30,6 +31,7 @@ export interface SummaryRun {
   conversation_id: string;
   kind: "full" | "follow_up";
   question: string;
+  skill_keys: string[];
   status: RunStatus;
   progress: {
     completed: number;
@@ -39,6 +41,20 @@ export interface SummaryRun {
   result: SummaryResult | null;
   error: string;
   created_at: string;
+}
+
+export interface SummarySkill {
+  content_key: string;
+  name: string;
+  description: string;
+}
+
+export interface SkillResult {
+  skill_key: string;
+  name: string;
+  summary: string;
+  items: string[];
+  sources: string[];
 }
 
 export interface Conversation {
@@ -127,6 +143,7 @@ export interface AgentContent {
   name: string;
   description: string;
   content: string;
+  user_selectable: boolean;
   status: "draft" | "published" | "archived";
 }
 
