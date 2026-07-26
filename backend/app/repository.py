@@ -406,6 +406,11 @@ class Repository:
                     raise ValueError("מקור הקלט חייב להיות שלב מוקדם יותר")
                 if not step.get("input_field", "").strip():
                     raise ValueError("נדרש שדה פלט למיפוי משלב קודם")
+                if parts[1] not in set(step.get("depends_on", [])):
+                    raise ValueError(
+                        "שלב הקורא מפלט שלב אחר חייב להצהיר עליו בתלויות: "
+                        + parts[1]
+                    )
             seen.add(step["key"])
 
     def _validate_for_publish(self, workflow: dict) -> None:

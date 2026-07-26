@@ -161,6 +161,7 @@ class SummaryService:
             "facts": generated["facts"],
             "warnings": warnings + generated["warnings"],
             "suggested_questions": generated["suggested_questions"],
+            "fields": generated.get("fields", {}),
             "evidence_ids": evidence_ids,
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -222,6 +223,34 @@ class SummaryService:
                 })
         return chunks
 
+    @staticmethod
+    def _merge_output_schema(output_schema) -> dict:
+        """Extend the section contract with the workflow's own fields.
+
+        The frontend renders summary/facts/warnings/suggested_questions, so an
+        FDE schema adds fields rather than replacing them. A malformed schema
+        degrades to the shared contract instead of failing the run.
+        """
+        if not isinstance(output_schema, dict):
+            return _SECTION_SCHEMA
+        extra = output_schema.get("properties")
+        if not isinstance(extra, dict) or not extra:
+            return _SECTION_SCHEMA
+        properties = dict(_SECTION_SCHEMA["properties"])
+        for name, definition in extra.items():
+            if name not in properties and isinstance(definition, dict):
+                properties[name] = definition
+        required = list(_SECTION_SCHEMA["required"])
+        for name in output_schema.get("required", []):
+            if name in properties and name not in required:
+                required.append(name)
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": False,
+        }
+
     def _section_summary(
         self, workflow: dict, facts: List[dict], warnings: List[str]
     ) -> dict:
@@ -232,8 +261,10 @@ class SummaryService:
             {"workflow": workflow["name"], "facts": facts, "warnings": warnings},
             ensure_ascii=False,
         )
+        schema = self._merge_output_schema(workflow.get("output_schema"))
         try:
-            result = self._llm.complete_json(system, user, _SECTION_SCHEMA)
+            result = self._llm.complete_json(system, user, schema)
+            contract = set(_SECTION_SCHEMA["properties"])
             return {
                 "summary": str(result.get("summary", "")),
                 "facts": list(result.get("facts", [])),
@@ -241,6 +272,11 @@ class SummaryService:
                 "suggested_questions": list(
                     result.get("suggested_questions", [])
                 ),
+                "fields": {
+                    key: value
+                    for key, value in result.items()
+                    if key not in contract
+                },
             }
         except AgentError:
             count = sum(item["row_count"] for item in facts)
@@ -254,6 +290,7 @@ class SummaryService:
                 ],
                 "warnings": [],
                 "suggested_questions": [],
+                "fields": {},
             }
 
     def _final_summary(

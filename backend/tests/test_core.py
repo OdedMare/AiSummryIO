@@ -1,10 +1,12 @@
 import json
 import sys
+import time
 from types import ModuleType
 
 import pandas as pd
 import pytest
 
+from app.common.errors import AgentError, ProviderError
 from app.common.runtime_settings.runtime_settings_store import (
     hash_password,
     verify_password,
@@ -12,7 +14,7 @@ from app.common.runtime_settings.runtime_settings_store import (
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.provider import FlapiProvider
 from app.repository import Repository
-from app.workflows import SummaryService
+from app.workflows import _SECTION_SCHEMA, SummaryService
 
 
 def _install_fake_flunks(monkeypatch):
@@ -138,6 +140,277 @@ def test_invalid_workflow_cannot_reference_a_future_step():
                 "depends_on": [],
             },
         ])
+
+
+def test_step_reading_earlier_output_must_declare_it_as_a_dependency():
+    with pytest.raises(ValueError, match="תלויות"):
+        Repository._validate_steps([
+            {"key": "first", "input_source": "workflow.id", "depends_on": []},
+            {
+                "key": "second",
+                "input_source": "steps.first",
+                "input_field": "home_id",
+                "depends_on": [],
+            },
+        ])
+
+    Repository._validate_steps([
+        {"key": "first", "input_source": "workflow.id", "depends_on": []},
+        {
+            "key": "second",
+            "input_source": "steps.first",
+            "input_field": "home_id",
+            "depends_on": ["first"],
+        },
+    ])
+
+
+def test_package_run_is_bounded_by_the_configured_timeout(monkeypatch):
+    _install_fake_flunks(monkeypatch)
+
+    class Settings:
+        flapi_username = "fde"
+        flapi_token = "token"
+        flapi_verify_tls = True
+        package_timeout_seconds = 120
+
+    class Store:
+        @staticmethod
+        def get():
+            return Settings()
+
+    class HangingRunner:
+        @staticmethod
+        def run():
+            time.sleep(30)
+            raise AssertionError("the timeout should have fired first")
+
+    provider = FlapiProvider(
+        Store(), runner_factory=lambda _s, _c: HangingRunner()
+    )
+    started = time.monotonic()
+    with pytest.raises(ProviderError, match="חרגה מזמן הריצה"):
+        provider.run({
+            "package_key": "slow",
+            "package_id": "PKG-1",
+            "input_cube_name": "root",
+            "input_cube_parameter": "identifier",
+            "output_cube_name": "facts",
+            "timeout_seconds": 1,
+        }, ["001"])
+
+    # Two attempts of a 1s bound must not approach the 120s global default.
+    assert time.monotonic() - started < 10
+
+
+def test_package_timeout_falls_back_to_the_global_setting(monkeypatch):
+    _install_fake_flunks(monkeypatch)
+
+    class Settings:
+        flapi_username = "fde"
+        flapi_token = "token"
+        flapi_verify_tls = True
+        package_timeout_seconds = 45
+
+    class Store:
+        @staticmethod
+        def get():
+            return Settings()
+
+    provider = FlapiProvider(Store())
+
+    assert provider._timeout({"timeout_seconds": 7}) == 7
+    assert provider._timeout({"timeout_seconds": None}) == 45
+    assert provider._timeout({}) == 45
+
+
+def test_verify_tls_reaches_flapi_config_only_when_the_field_exists():
+    class Settings:
+        flapi_username = "fde"
+        flapi_token = "token"
+        flapi_verify_tls = False
+
+    class Store:
+        @staticmethod
+        def get():
+            return Settings()
+
+    provider = FlapiProvider(Store())
+
+    class ModernConfig:
+        model_fields = {"username": None, "token": None, "verify_tls": None}
+
+        def __init__(self, **values):
+            self.__dict__.update(values)
+
+    class LegacyConfig:
+        model_fields = {"username": None, "token": None}
+
+        def __init__(self, **values):
+            self.__dict__.update(values)
+
+    modern = provider._flapi_config(ModernConfig, Settings())
+    assert modern.verify_tls is False
+
+    # An older wheel without the field must still build, not raise.
+    legacy = provider._flapi_config(LegacyConfig, Settings())
+    assert not hasattr(legacy, "verify_tls")
+    assert legacy.username == "fde"
+
+
+def test_failed_workflow_keeps_successful_sections_visible():
+    class FakeRepository:
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AgentError("llm unavailable")
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                max_parallel_workflows = 2
+            return Values()
+
+    service = SummaryService(FakeRepository(), None, FakeLlm(), FakeStore())
+
+    def execute(run, root_id, workflow, save_evidence=True):
+        if workflow["workflow_key"] == "broken":
+            raise RuntimeError("package exploded")
+        return {
+            "workflow_id": workflow["id"],
+            "workflow_key": workflow["workflow_key"],
+            "name": workflow["name"],
+            "status": "completed",
+            "summary": "סיכום",
+            "facts": ["עובדה"],
+            "warnings": [],
+            "suggested_questions": [],
+            "evidence_ids": ["ev-1"],
+        }
+
+    service._execute_workflow = execute
+    result = service._execute(
+        {"id": "run-1", "question": "מה קורה?"},
+        "ROOT-1",
+        "מה קורה?",
+        [
+            {"id": "w1", "workflow_key": "healthy", "name": "תקין"},
+            {"id": "w2", "workflow_key": "broken", "name": "שבור"},
+        ],
+        lambda *_args: None,
+    )
+
+    by_key = {s["workflow_key"]: s for s in result["sections"]}
+    assert by_key["healthy"]["status"] == "completed"
+    assert by_key["broken"]["status"] == "failed"
+    assert result["partial"] is True
+    # The successful section's facts survive the sibling failure.
+    assert "עובדה" in result["key_findings"]
+
+
+def test_progress_is_reported_for_every_completed_workflow():
+    class FakeRepository:
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AgentError("llm unavailable")
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                max_parallel_workflows = 2
+            return Values()
+
+    service = SummaryService(FakeRepository(), None, FakeLlm(), FakeStore())
+    service._execute_workflow = lambda run, root_id, workflow, **_kw: {
+        "workflow_id": workflow["id"],
+        "workflow_key": workflow["workflow_key"],
+        "name": workflow["name"],
+        "status": "completed",
+        "summary": "", "facts": [], "warnings": [],
+        "suggested_questions": [], "evidence_ids": [],
+    }
+
+    seen = []
+    service._execute(
+        {"id": "run-1", "question": "q"},
+        "ROOT-1",
+        "q",
+        [
+            {"id": "w1", "workflow_key": "a", "name": "A"},
+            {"id": "w2", "workflow_key": "b", "name": "B"},
+        ],
+        lambda completed, total, _sections: seen.append((completed, total)),
+    )
+
+    assert seen[0] == (0, 2)
+    assert seen[-1] == (2, 2)
+
+
+def test_workflow_output_schema_extends_the_shared_section_contract():
+    merged = SummaryService._merge_output_schema({
+        "properties": {
+            "owner_name": {"type": "string"},
+            "summary": {"type": "number"},
+        },
+        "required": ["owner_name"],
+    })
+
+    # The FDE field is added...
+    assert merged["properties"]["owner_name"] == {"type": "string"}
+    assert "owner_name" in merged["required"]
+    # ...but it cannot redefine a contract field the frontend renders.
+    assert merged["properties"]["summary"] == {"type": "string"}
+    assert set(merged["required"]) >= set(_SECTION_SCHEMA["required"])
+
+    # A malformed or empty schema degrades to the shared contract.
+    assert SummaryService._merge_output_schema({}) is _SECTION_SCHEMA
+    assert SummaryService._merge_output_schema(None) is _SECTION_SCHEMA
+    assert SummaryService._merge_output_schema(
+        {"properties": "nonsense"}
+    ) is _SECTION_SCHEMA
+
+
+def test_custom_output_schema_fields_are_captured_separately():
+    class FakeLlm:
+        received_schema = None
+
+        def complete_json(self, _system, _user, schema):
+            self.received_schema = schema
+            return {
+                "summary": "סיכום",
+                "facts": ["עובדה"],
+                "warnings": [],
+                "suggested_questions": [],
+                "owner_name": "דנה",
+            }
+
+    llm = FakeLlm()
+    service = SummaryService(None, None, llm, None)
+    generated = service._section_summary(
+        {
+            "name": "בעלות",
+            "system_prompt": "",
+            "output_schema": {"properties": {"owner_name": {"type": "string"}}},
+        },
+        [],
+        [],
+    )
+
+    assert "owner_name" in llm.received_schema["properties"]
+    assert generated["summary"] == "סיכום"
+    # The custom field is kept out of the rendered contract keys.
+    assert generated["fields"] == {"owner_name": "דנה"}
 
 
 def test_follow_up_router_can_choose_detail_workflow_despite_cached_evidence():
