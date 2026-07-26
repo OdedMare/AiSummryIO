@@ -60,10 +60,12 @@ their respective `CLAUDE.md` files.
 1. Sign in to **Agent Studio**.
 2. Add each FLAPI package as a tool, including when the agent may use it,
    example string input, and example output rows.
-3. Ask the planner for a draft or build one from tool steps, then map later
+3. Use **Fetch 1 ID** with a safe identifier to preview one tool run and infer
+   its output schema; review the schema before saving the tool version.
+4. Ask the planner for a draft or build one from tool steps, then map later
    inputs from earlier output fields.
-4. Run a live dry-run with a safe identifier.
-5. Publish the workflow. The server blocks workflows without valid mappings or
+5. Run a live dry-run with a safe identifier.
+6. Publish the workflow. The server blocks workflows without valid mappings or
    publishable examples.
 
 The studio is preloaded with Hebrew skills for building, testing, and

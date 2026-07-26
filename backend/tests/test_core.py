@@ -512,6 +512,9 @@ def test_fde_prompt_builds_a_draft_only_from_existing_tools():
         "agent_instructions": "סכם בעלים וקשרים.",
         "input_mode": "single",
         "input_cube_parameter": "identifier",
+        "output_schema": {
+            "properties": {"risk_level": {"type": "string"}}
+        },
         "example_output": [{"owner_id": "001", "owner_name": "דנה"}],
     }]
 
@@ -554,7 +557,7 @@ def test_fde_prompt_builds_a_draft_only_from_existing_tools():
     assert plan["can_build"] is True
     assert plan["steps"][0]["package_version_id"] == "tool-v1"
     assert llm.received["available_tools"][0]["output_fields"] == [
-        "owner_id", "owner_name",
+        "owner_id", "owner_name", "risk_level",
     ]
 
 

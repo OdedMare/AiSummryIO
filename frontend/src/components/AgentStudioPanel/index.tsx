@@ -70,7 +70,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
     <form className="admin-login" onSubmit={submit}>
       <span className="login-icon"><KeyRound size={24} /></span>
       <h3>כניסת FDE</h3>
-      <p>עריכת חבילות, תהליכים והנחיות מוגנת בסיסמה.</p>
+      <p>עריכת טולים, תהליכים והנחיות מוגנת בסיסמה.</p>
       <label>
         <span>סיסמה</span>
         <input
@@ -110,22 +110,26 @@ function PackageCatalog({
   ) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const edit = (item: PackageVersion) => setForm({
-    package_key: item.package_key,
-    name: item.name,
-    description: item.description,
-    package_id: item.package_id,
-    input_cube_name: item.input_cube_name,
-    input_cube_parameter: item.input_cube_parameter,
-    input_mode: item.input_mode,
-    output_cube_name: item.output_cube_name,
-    query_name: item.query_name,
-    agent_enabled: item.agent_enabled,
-    agent_instructions: item.agent_instructions,
-    output_schema: JSON.stringify(item.output_schema || {}, null, 2),
-    example_input: JSON.stringify(item.example_input, null, 2),
-    example_output: JSON.stringify(item.example_output, null, 2),
-  });
+  const edit = (item: PackageVersion) => {
+    setForm({
+      package_key: item.package_key,
+      name: item.name,
+      description: item.description,
+      package_id: item.package_id,
+      input_cube_name: item.input_cube_name,
+      input_cube_parameter: item.input_cube_parameter,
+      input_mode: item.input_mode,
+      output_cube_name: item.output_cube_name,
+      query_name: item.query_name,
+      agent_enabled: item.agent_enabled,
+      agent_instructions: item.agent_instructions,
+      output_schema: JSON.stringify(item.output_schema || {}, null, 2),
+      example_input: JSON.stringify(item.example_input, null, 2),
+      example_output: JSON.stringify(item.example_output, null, 2),
+    });
+    setInspection(null);
+    setMessage("");
+  };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -144,6 +148,7 @@ function PackageCatalog({
       });
       setMessage("נשמרה גרסת טול חדשה.");
       setForm(emptyPackage);
+      setInspection(null);
       await onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "השמירה נכשלה");
@@ -285,7 +290,7 @@ function PackageCatalog({
         {message && <p className="form-success"><CheckCircle2 size={16} /> {message}</p>}
         <div className="form-actions">
           {form.package_key && (
-            <button type="button" className="secondary-button" onClick={() => setForm(emptyPackage)}>ביטול עריכה</button>
+            <button type="button" className="secondary-button" onClick={() => { setForm(emptyPackage); setInspection(null); }}>ביטול עריכה</button>
           )}
           <button className="primary-button" type="submit" disabled={saving}>
             <Save size={17} /> {saving ? "שומר…" : "שמירת גרסה"}

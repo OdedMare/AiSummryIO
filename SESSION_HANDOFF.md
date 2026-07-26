@@ -88,6 +88,8 @@ git log -5 --oneline --decorate
   select an approved standalone tool, or ask for clarification.
 - Tool metadata for agent availability and summary instructions, plus an FDE
   prompt-to-workflow planner that never invents tool IDs or auto-publishes.
+- Fetch 1 ID tool inspection with a bounded output preview and inferred JSON
+  schema loaded into the unsaved FDE form for review.
 - Dedicated higher-priority executor for follow-up runs.
 - Startup recovery for queued jobs and cleanup of expired conversations.
 - Publish validation for step ordering/mappings and required examples.
@@ -108,6 +110,7 @@ git log -5 --oneline --decorate
   - tool/package catalog and version creation;
   - independent-agent availability and per-tool summary instructions;
   - AI-assisted workflow drafting and missing-tool proposals;
+  - Fetch 1 ID preview and output-schema inference;
   - single/many string input modes;
   - package input/output examples;
   - structured workflow step editor;

@@ -44,6 +44,8 @@ Follow-ups post to the same conversation and retain the original ID/evidence.
   “טיוטה”, “פורסם”.
 - AI workflow proposals are labeled as suggestions and loaded only as drafts
   for FDE review; missing tools show the required input and output contract.
+- Fetch 1 ID requires a visibly labeled safe test identifier, shows a bounded
+  preview, and loads only the inferred schema into the unsaved tool form.
 - Agent Studio uses structured forms and a read-only dependency preview,
   never an arbitrary code/SQL/HTTP editor.
 - Respect reduced motion and preserve visible focus rings.

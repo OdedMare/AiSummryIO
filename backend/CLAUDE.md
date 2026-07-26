@@ -42,7 +42,8 @@ uvicorn app.main:app --reload
   success, evidence retention, section summaries, and final synthesis. A
   workflow's `output_schema` extends the shared section contract; extras are
   returned under `section.fields`. It also owns standalone tool routing and FDE
-  workflow planning.
+  workflow planning. Tool inspection runs exactly one identifier, returns a
+  bounded preview, and infers a reviewable output schema without persistence.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
   have priority.
 - `main.py` — FastAPI routes and composition root.
