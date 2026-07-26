@@ -77,9 +77,9 @@ class Repository:
                     input_cube_name, input_cube_parameter, input_mode,
                     output_cube_name, query_name, timeout_seconds,
                     agent_enabled, agent_instructions,
-                    example_input, example_output
+                    output_schema, example_input, example_output
                 ) VALUES (
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                 )
             """, (
                 row_id, package_key, version, data["name"],
@@ -89,6 +89,7 @@ class Repository:
                 data.get("query_name", ""), data.get("timeout_seconds"),
                 data.get("agent_enabled", True),
                 data.get("agent_instructions", ""),
+                Jsonb(data.get("output_schema", {})),
                 Jsonb(data.get("example_input", [])),
                 Jsonb(data.get("example_output", [])),
             ))
@@ -464,6 +465,7 @@ CREATE TABLE IF NOT EXISTS summary_packages (
     example_output JSONB NOT NULL DEFAULT '[]',
     agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     agent_instructions TEXT NOT NULL DEFAULT '',
+    output_schema JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(package_key, version)
 );
@@ -472,6 +474,8 @@ ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS agent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS agent_instructions TEXT NOT NULL DEFAULT '';
+ALTER TABLE summary_packages
+    ADD COLUMN IF NOT EXISTS output_schema JSONB NOT NULL DEFAULT '{}';
 
 CREATE TABLE IF NOT EXISTS summary_workflows (
     id TEXT PRIMARY KEY,

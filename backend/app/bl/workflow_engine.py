@@ -166,7 +166,12 @@ class SummaryService:
             }
         catalog = []
         for tool in tools:
-            output_fields = sorted({
+            schema = tool.get("output_schema", {})
+            schema_fields = (
+                schema.get("properties", {})
+                if isinstance(schema, dict) else {}
+            )
+            output_fields = sorted(set(schema_fields) | {
                 str(field)
                 for row in tool.get("example_output", [])
                 if isinstance(row, dict)
@@ -194,6 +199,20 @@ class SummaryService:
             _WORKFLOW_PLAN_SCHEMA,
         )
         return self._validated_plan(plan, tools)
+
+    def inspect_tool(self, package: dict, root_id: str) -> dict:
+        package = dict(package)
+        package["package_key"] = (
+            package.get("package_key") or "fde-inspection"
+        )
+        records = self._run_package(package, [str(root_id)])
+        preview_limit = 20
+        return {
+            "row_count": len(records),
+            "records": records[:preview_limit],
+            "truncated": len(records) > preview_limit,
+            "output_schema": self._infer_output_schema(records),
+        }
 
     def dry_run(self, workflow_id: str, root_id: str) -> dict:
         workflow = self._repository.get_workflow(workflow_id)
@@ -642,6 +661,61 @@ class SummaryService:
             "steps": steps,
             "missing_tools": missing,
         }
+
+    @staticmethod
+    def _infer_output_schema(records: List[dict]) -> dict:
+        fields = sorted({
+            str(key)
+            for row in records if isinstance(row, dict)
+            for key in row if not str(key).startswith("_")
+        })
+        properties = {}
+        for field in fields:
+            types = {
+                SummaryService._json_type(row[field])
+                for row in records
+                if isinstance(row, dict) and field in row
+            }
+            if "number" in types:
+                types.discard("integer")
+            ordered = [
+                item for item in (
+                    "string", "number", "integer", "boolean",
+                    "array", "object", "null",
+                )
+                if item in types
+            ]
+            properties[field] = {
+                "type": ordered[0] if len(ordered) == 1 else ordered
+            }
+        required = [
+            field for field in fields
+            if records and all(
+                isinstance(row, dict) and field in row for row in records
+            )
+        ]
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": True,
+        }
+
+    @staticmethod
+    def _json_type(value) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return "boolean"
+        if isinstance(value, int):
+            return "integer"
+        if isinstance(value, float):
+            return "number"
+        if isinstance(value, list):
+            return "array"
+        if isinstance(value, dict):
+            return "object"
+        return "string"
 
     def _synthesize_cached(self, question: str, evidence: List[dict]) -> dict:
         records_by_step = {}

@@ -16,6 +16,7 @@ class PackageCreate(BaseModel):
     timeout_seconds: Optional[int] = None
     agent_enabled: bool = True
     agent_instructions: str = ""
+    output_schema: Dict[str, Any] = Field(default_factory=dict)
     example_input: List[str] = Field(default_factory=list)
     example_output: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -71,6 +72,20 @@ class WorkflowPlanCreate(BaseModel):
             raise ValueError("נדרשת הנחיה לתכנון")
         if len(cleaned) > 10000:
             raise ValueError("ההנחיה ארוכה מדי")
+        return cleaned
+
+
+class PackageInspect(PackageCreate):
+    root_id: str
+
+    @field_validator("root_id")
+    @classmethod
+    def inspection_id_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("נדרש מזהה בדיקה")
+        if len(cleaned) > 256:
+            raise ValueError("המזהה ארוך מדי")
         return cleaned
 
 
