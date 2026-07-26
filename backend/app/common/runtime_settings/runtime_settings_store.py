@@ -7,6 +7,8 @@ from pathlib import Path
 
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
+    extract_url_schema,
+    normalize_database_schema,
     normalize_database_url,
     normalize_llm_base_url,
 )
@@ -26,12 +28,17 @@ class RuntimeSettingsStore:
     def __init__(self, env: Settings):
         self._path = Path(env.runtime_settings_file)
         self._settings = RuntimeSettings(
-            database_url=env.database_url,
+            # Env values get the same normalization as UI edits, so a
+            # jdbc: URL works however it is supplied.
+            database_url=_safe_database_url(env.database_url),
             database_user=env.database_user,
             database_password=env.database_password,
             database_host=env.database_host,
             database_port=env.database_port,
             database_name=env.database_name,
+            database_schema=_safe_schema(
+                env.database_schema or extract_url_schema(env.database_url)
+            ),
             llm_model=env.llm_model,
             llm_diet_mode=env.llm_diet_mode,
             llm_base_url=env.llm_base_url,
@@ -91,7 +98,16 @@ class RuntimeSettingsStore:
                 continue
             try:
                 if key == "database_url":
+                    # A pasted jdbc:...?currentSchema=x sets the schema too,
+                    # unless the patch names one explicitly.
+                    in_url = extract_url_schema(value)
+                    if in_url and not patch.get("database_schema"):
+                        self._settings.database_schema = (
+                            normalize_database_schema(in_url)
+                        )
                     value = normalize_database_url(value)
+                elif key == "database_schema":
+                    value = normalize_database_schema(value)
                 elif key == "llm_base_url":
                     value = normalize_llm_base_url(value)
                 elif key in (
@@ -104,6 +120,25 @@ class RuntimeSettingsStore:
                     raise
                 continue
             setattr(self._settings, key, value)
+
+
+def _safe_database_url(value: str) -> str:
+    """Normalize an env URL, but never fail startup on a bad one.
+
+    Returning it unchanged lets the connection raise a real error naming the
+    URL, which is clearer than a crash during settings construction.
+    """
+    try:
+        return normalize_database_url(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def _safe_schema(value: str) -> str:
+    try:
+        return normalize_database_schema(value)
+    except (TypeError, ValueError):
+        return ""
 
 
 def hash_password(password: str, salt: bytes = None) -> str:

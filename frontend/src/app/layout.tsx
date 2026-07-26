@@ -11,8 +11,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="he" dir="rtl">
-      <body>{children}</body>
+      <body>
+        <a className="skip-link" href="#main-workspace">דלגו לתוכן הסיכום</a>
+        {children}
+      </body>
     </html>
   );
 }
-

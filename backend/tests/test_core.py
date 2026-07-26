@@ -9,6 +9,8 @@ import pytest
 from app.common.errors import AgentError, ProviderError
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
+    extract_url_schema,
+    normalize_database_schema,
     normalize_database_url,
     normalize_llm_base_url,
 )
@@ -697,7 +699,7 @@ def test_follow_up_can_select_an_approved_tool_without_a_workflow():
     }
     captured = {}
 
-    def execute(_run, _root_id, _question, workflows, _progress):
+    def execute(_run, _root_id, _question, workflows, _progress, _skills=None):
         captured["workflow"] = workflows[0]
         return {"summary": "ok"}
 
@@ -775,6 +777,79 @@ def test_database_url_accepts_and_converts_jdbc_prefix():
 def test_database_url_rejects_non_postgres_schemes():
     with pytest.raises(ValueError):
         normalize_database_url("mysql://db:3306/summaries")
+
+
+def test_jdbc_current_schema_is_translated_for_libpq():
+    """libpq rejects the currentSchema keyword outright, so a working JDBC
+    string would fail to connect at all unless it is rewritten."""
+    assert normalize_database_url(
+        "jdbc:postgresql://db:5432/summaries?currentSchema=aisummry"
+    ) == "postgresql://db:5432/summaries?options=-csearch_path%3Daisummry"
+
+
+def test_current_schema_is_translated_alongside_other_parameters():
+    converted = normalize_database_url(
+        "postgresql://db:5432/summaries?currentSchema=aisummry&sslmode=require"
+    )
+    assert "currentSchema" not in converted
+    assert "options=-csearch_path%3Daisummry" in converted
+    assert "sslmode=require" in converted
+    assert "?&" not in converted
+
+
+def test_url_schema_is_extracted_for_the_schema_setting():
+    assert extract_url_schema(
+        "jdbc:postgresql://db:5432/summaries?currentSchema=reporting"
+    ) == "reporting"
+    assert extract_url_schema("postgresql://db:5432/summaries") == ""
+
+
+def test_schema_name_must_be_a_plain_identifier():
+    """The schema is interpolated into SET search_path, so anything other
+    than an identifier must be refused."""
+    assert normalize_database_schema(" aisummry ") == "aisummry"
+    assert normalize_database_schema("") == ""
+    for bad in ("evil; DROP TABLE x", "a-b", "1abc", 'x"y'):
+        with pytest.raises(ValueError):
+            normalize_database_schema(bad)
+
+
+def test_jdbc_url_from_the_environment_is_normalized_at_boot(tmp_path):
+    """Normalization used to run only on UI edits, so a jdbc: URL supplied
+    through the environment reached libpq unconverted and failed."""
+    store = RuntimeSettingsStore(Settings(
+        runtime_settings_file=str(tmp_path / "runtime-settings.json"),
+        database_url="jdbc:postgresql://db:5432/summaries?currentSchema=aisummry",
+    ))
+    settings = store.get()
+    assert settings.database_url.startswith("postgresql://")
+    assert "currentSchema" not in settings.database_url
+    assert settings.database_schema == "aisummry"
+
+
+def test_a_pasted_jdbc_url_sets_the_schema_from_the_ui(tmp_path):
+    store = _store(tmp_path)
+    updated = store.update({
+        "database_url": "jdbc:postgresql://db:5432/summaries?currentSchema=reporting",
+    })
+    assert updated.database_schema == "reporting"
+
+
+def test_an_explicit_schema_wins_over_the_one_in_the_url(tmp_path):
+    store = _store(tmp_path)
+    updated = store.update({
+        "database_url": "postgresql://db:5432/summaries?currentSchema=fromurl",
+        "database_schema": "explicit",
+    })
+    assert updated.database_schema == "explicit"
+
+
+def test_an_invalid_environment_schema_does_not_prevent_boot(tmp_path):
+    store = RuntimeSettingsStore(Settings(
+        runtime_settings_file=str(tmp_path / "runtime-settings.json"),
+        database_schema="evil; DROP TABLE x",
+    ))
+    assert store.get().database_schema == ""
 
 
 def _store(tmp_path):

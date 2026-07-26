@@ -82,6 +82,28 @@ select {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  inset: 8px 8px auto auto;
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 9px;
+  transform: translateY(-150%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 button:focus-visible,
@@ -337,9 +359,16 @@ button:disabled {
 .empty-workspace {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   flex-direction: column;
+  gap: 28px;
   text-align: center;
+}
+
+.empty-intro {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
 }
 
 .empty-illustration {
@@ -355,8 +384,9 @@ button:disabled {
 }
 
 .empty-workspace h1 {
-  margin: 22px 0 8px;
-  font-size: clamp(25px, 4vw, 34px);
+  max-width: 650px;
+  margin: 14px 0 8px;
+  font-size: clamp(27px, 4vw, 38px);
   letter-spacing: -0.03em;
 }
 
@@ -368,29 +398,135 @@ button:disabled {
   line-height: 1.7;
 }
 
-.empty-steps {
-  display: grid;
-  grid-template-columns: 30px auto;
-  gap: 10px 12px;
-  margin-top: 28px;
-  text-align: right;
+.welcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-top: 16px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
-.empty-steps span {
+.skill-picker {
+  width: min(760px, 100%);
+  padding: 18px;
+  text-align: right;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(24, 30, 48, 0.07);
+}
+
+.skill-picker > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.skill-picker h2,
+.skill-picker p,
+.skill-results h2,
+.skill-results h3 {
+  margin: 0;
+}
+
+.skill-picker h2,
+.skill-results h2 {
+  margin-top: 3px;
+  font-size: 19px;
+}
+
+.skill-picker p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.skill-picker > header > span {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.skill-grid,
+.skill-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.skill-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  min-height: 82px;
+  padding: 11px 12px;
+  color: var(--text);
+  text-align: right;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.skill-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.skill-card.active {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.skill-card-icon,
+.skill-result-card > header > span {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 38px;
+  height: 38px;
   color: var(--primary);
-  font-weight: 800;
-  background: var(--primary-soft);
-  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
-.empty-steps p {
-  align-self: center;
-  margin: 0;
-  color: var(--text-soft);
+.skill-card > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.skill-card small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.skill-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+}
+
+.skill-card.active .skill-check {
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .workspace-header {
@@ -519,6 +655,48 @@ button:disabled {
   flex: 0 0 auto;
   margin-top: 2px;
   color: var(--success);
+}
+
+.skill-results {
+  margin: 24px 0 18px;
+}
+
+.skill-results > header {
+  margin-bottom: 10px;
+}
+
+.skill-result-card {
+  padding: 17px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: var(--radius);
+}
+
+.skill-result-card > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skill-result-card p {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  line-height: 1.7;
+}
+
+.skill-result-card ul {
+  padding-inline-start: 20px;
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  line-height: 1.75;
+}
+
+.skill-result-card > small {
+  display: block;
+  padding-top: 10px;
+  margin-top: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
 }
 
 .section-stack {
@@ -803,6 +981,37 @@ select:focus {
   color: var(--success);
   font-size: 0.82rem;
   margin: 0;
+}
+
+.optional-request {
+  min-width: 0;
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.optional-request summary {
+  min-height: 24px;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.optional-request[open] {
+  padding-bottom: 11px;
+}
+
+.optional-request .message-field {
+  margin-top: 10px;
+}
+
+.active-skills {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  color: var(--primary);
+  font-size: 11px;
 }
 
 .modal-backdrop {
@@ -1476,9 +1685,8 @@ select:focus {
 
 .content-editor {
   min-height: 300px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  direction: ltr;
-  text-align: left;
+  direction: rtl;
+  text-align: right;
 }
 
 .admin-login {
@@ -1632,6 +1840,19 @@ select:focus {
 
   .finding-grid {
     grid-template-columns: 1fr;
+  }
+
+  .skill-grid,
+  .skill-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-workspace {
+    gap: 20px;
+  }
+
+  .skill-picker {
+    padding: 14px;
   }
 
   .composer {

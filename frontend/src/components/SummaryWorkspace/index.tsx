@@ -205,7 +205,7 @@ export default function SummaryWorkspace({
 
   if (!run) {
     return (
-      <main className="workspace empty-workspace">
+      <main id="main-workspace" className="workspace empty-workspace">
         <div className="empty-intro">
           <div className="empty-illustration"><FileText size={36} /></div>
           <span className="welcome-pill"><Sparkles size={14} /> פשוט מתחילים ממזהה</span>
@@ -225,7 +225,7 @@ export default function SummaryWorkspace({
   }
 
   return (
-    <main className="workspace" aria-live="polite">
+    <main id="main-workspace" className="workspace" aria-live="polite">
       <header className="workspace-header">
         <div>
           <span className={`run-pill ${run.status}`}>

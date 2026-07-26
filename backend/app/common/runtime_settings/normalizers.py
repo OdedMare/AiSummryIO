@@ -39,7 +39,46 @@ def normalize_database_url(value: str) -> str:
             "database_url must start with postgresql:// "
             "(jdbc:postgresql://... is accepted and converted automatically)"
         )
+    return _translate_current_schema(cleaned)
+
+
+def extract_url_schema(value: str) -> str:
+    """The schema a JDBC-style URL asks for, or "" when it names none.
+
+    Lets a pasted JDBC string set the schema without also filling the
+    separate database_schema field.
+    """
+    match = _CURRENT_SCHEMA_RE.search(value or "")
+    return match.group(1).strip() if match else ""
+
+
+def normalize_database_schema(value: str) -> str:
+    """Validate a schema name. Empty means "use the server default"."""
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return ""
+    if not _SCHEMA_RE.match(cleaned):
+        raise ValueError(
+            "database_schema must be a plain identifier like 'aisummry'"
+        )
     return cleaned
+
+
+def _translate_current_schema(url: str) -> str:
+    """Rewrite JDBC's `currentSchema=x` into libpq's `options=-csearch_path=x`.
+
+    libpq rejects the unknown keyword outright, so a working JDBC connection
+    string would otherwise fail to connect at all.
+    """
+    match = _CURRENT_SCHEMA_RE.search(url)
+    if not match:
+        return url
+    schema = normalize_database_schema(match.group(1))
+    stripped = _CURRENT_SCHEMA_RE.sub("", url, count=1)
+    # Removing the first parameter can leave `&` where `?` belongs.
+    stripped = re.sub(r"\?&", "?", stripped, count=1)
+    separator = "&" if "?" in stripped else "?"
+    return "%s%soptions=-csearch_path%%3D%s" % (stripped, separator, schema)
 
 
 def _strip_suffixes(url: str, suffixes) -> str:

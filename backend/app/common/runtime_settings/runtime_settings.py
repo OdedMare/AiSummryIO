@@ -10,6 +10,7 @@ class RuntimeSettings:
     database_host: str
     database_port: Optional[int]
     database_name: str
+    database_schema: str
     llm_model: str
     llm_diet_mode: bool
     llm_base_url: Optional[str]

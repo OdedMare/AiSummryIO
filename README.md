@@ -16,6 +16,9 @@ examples; users provide one identifier and receive a progressive full summary.
   `00123`; they are never converted to integers.
 - Successful sections remain visible when another package fails, and raw
   evidence is available separately from the Hebrew summary.
+- Users can add up to three published summary Skills to a run. The built-in
+  Skills produce an executive brief, risk review, recommended actions, or a
+  timeline, and each result names the summary sections it used.
 
 There are no GIS providers or map dependencies.
 
@@ -68,5 +71,6 @@ their respective `CLAUDE.md` files.
 6. Publish the workflow. The server blocks workflows without valid mappings or
    publishable examples.
 
-The studio is preloaded with Hebrew skills for building, testing, and
-diagnosing summary workflows, plus the final-summary and follow-up prompts.
+The studio is preloaded with four user-facing summary Skills and separate
+operator guidance for building, testing, and diagnosing workflows. A manager
+can publish more Skills and choose which ones appear on the summary screen.

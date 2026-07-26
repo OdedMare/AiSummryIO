@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     database_name: str = ""
     """Optional explicit database name. Overrides the database in the URL."""
 
+    database_schema: str = ""
+    """Optional PostgreSQL schema owning every table. Empty means the server
+    default (normally `public`). Also settable as `?currentSchema=` in the
+    URL."""
+
     llm_model: str = "gemma4:31b-cloud"
     """The main model — Gemma 4 31B served through Ollama."""
 

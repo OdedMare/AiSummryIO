@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from psycopg.types.json import Jsonb
 
 from app.common.errors import NotFoundError
-from app.dal.database.postgres import connect
+from app.dal.database.postgres import connect, ensure_schema
 
 _KEY_RE = re.compile(r"[^a-z0-9_-]+")
 
@@ -28,6 +28,8 @@ class Repository:
         self._store = settings_store
 
     def initialize(self) -> None:
+        # The schema must exist before any CREATE TABLE resolves into it.
+        ensure_schema(self._store)
         with connect(self._store) as connection:
             for statement in _SCHEMA.split(";"):
                 if statement.strip():
