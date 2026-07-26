@@ -21,7 +21,7 @@ backend/app/
     ├── database/                   PostgreSQL connection setup
     ├── llm/                        OpenAI-compatible client
     ├── providers/flapi/            FLAPI/flunks adapter
-    └── repository/                 all application persistence and SQL
+    └── repository/                 focused persistence modules and all SQL
 ```
 
 Every implementation concern lives in a package. `main.py` is deliberately

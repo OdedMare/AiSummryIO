@@ -299,6 +299,7 @@ button:disabled {
 .conversation-shell {
   display: grid;
   grid-template-rows: 64px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   height: 100vh;
 }
@@ -864,10 +865,15 @@ button:disabled {
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(180px, 0.65fr) minmax(280px, 1.35fr) auto;
+  /* `minmax(0, …)` on the flexible tracks, not `minmax(180px, …)`: a grid
+     item's automatic minimum size is min-content, so fixed floors here made
+     the composer's min-content width exceed the viewport and stretch the
+     whole shell — `width: min(960px, …)` below could never take effect. */
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr) auto;
   align-items: end;
   gap: 10px;
   width: min(960px, calc(100% - 32px));
+  min-width: 0;
   padding: 14px;
   margin: 0 auto 16px;
   background: var(--surface);
@@ -973,13 +979,6 @@ button:disabled {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-}
-
-/* Leaflet's panes and controls are absolutely positioned against the map
-   container. `contain` makes this box their containing block and clips them,
-   so tiles and the layer switch cannot spill across the viewport. */
-.map-picker-canvas {
-  contain: layout paint;
 }
 
 .picker-leaflet-map,
