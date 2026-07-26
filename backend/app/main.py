@@ -20,8 +20,8 @@ from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.providers.flapi.provider import FlapiProvider
 from app.models import (
     AdminLogin, AgentContentCreate, FeedbackCreate, FollowUpCreate,
-    PackageCreate, PackageInspect, SummaryCreate, WorkflowCreate,
-    WorkflowPlanCreate,
+    PackageCreate, PackageInspect, SkillPreview, SummaryCreate,
+    WorkflowCreate, WorkflowPlanCreate,
 )
 from app.repository import Repository
 

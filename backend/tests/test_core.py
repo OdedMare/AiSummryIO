@@ -28,7 +28,7 @@ from app.dal.providers.flapi.runner_config import (
 )
 from app.repository import Repository
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.models import SummaryCreate
+from app.models import SkillPreview, SkillPreviewSection, SummaryCreate
 
 
 def _install_fake_flunks(monkeypatch):
@@ -618,6 +618,73 @@ def test_one_failing_skill_does_not_discard_another_skills_result():
     ]
     assert "המודל לא זמין" in result["skill_results"][0]["summary"]
     assert result["skill_results"][1]["summary"] == "עבד"
+
+
+def test_skill_preview_reports_invented_sources_without_persisting():
+    """An FDE testing a Skill must see which citations were rejected, which is
+    the signal a full summary run hides."""
+    class FakeLlm:
+        def complete_json(self, _system, _user, _schema):
+            return {
+                "summary": "טיוטה",
+                "items": ["נקודה"],
+                "sources": ["בעלות", "מקור מומצא"],
+            }
+
+    service = SummaryService(None, None, FakeLlm(), None)
+    preview = service.preview_skill(
+        "טיוטת Skill",
+        "הצע רק פעולות המבוססות על עובדות.",
+        "מה חשוב לדעת?",
+        [{
+            "workflow_key": "ownership",
+            "name": "בעלות",
+            "status": "completed",
+            "summary": "נמצאה בעלות",
+            "facts": ["דנה היא הבעלים"],
+            "warnings": [],
+        }],
+    )
+
+    assert preview["result"]["sources"] == ["בעלות"]
+    assert preview["dropped_sources"] == ["מקור מומצא"]
+    # The internal citation record never leaks to a caller.
+    assert "_raw_sources" not in preview["result"]
+
+
+def test_skill_results_never_expose_the_internal_citation_record():
+    class FakeLlm:
+        def complete_json(self, _system, _user, schema):
+            if "skill_results" in schema["properties"]:
+                return {
+                    "summary": "סיכום",
+                    "key_findings": [],
+                    "risks": [],
+                    "missing_data": [],
+                    "suggested_questions": [],
+                    "skill_results": [],
+                }
+            return {"summary": "עבד", "items": [], "sources": ["בדוי"]}
+
+    service = SummaryService(_SkillRepository(), None, FakeLlm(), None)
+    result = service._final_summary("", "", [_OWNERSHIP_SECTION], [{
+        "content_key": "working",
+        "name": "סקיל עובד",
+        "content": "הנחיות.",
+    }])
+
+    assert result["skill_results"][0]["sources"] == []
+    assert "_raw_sources" not in result["skill_results"][0]
+
+
+def test_skill_preview_requires_instructions_and_sections():
+    section = SkillPreviewSection(name="בעלות")
+
+    with pytest.raises(ValidationError, match="נדרשות הנחיות"):
+        SkillPreview(content="   ", sections=[section])
+
+    with pytest.raises(ValidationError, match="חלק סיכום אחד"):
+        SkillPreview(content="הנחיות", sections=[])
 
 
 def test_summary_request_limits_and_deduplicates_skills():
