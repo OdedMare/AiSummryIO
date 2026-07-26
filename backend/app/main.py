@@ -111,7 +111,7 @@ def create_summary(
         session_id, payload.root_id
     )
     run = repository.create_run(
-        conversation["id"], payload.question, "full"
+        conversation["id"], payload.question, "full", payload.skill_keys
     )
     jobs.submit(run["id"])
     set_session_cookie(response, session_id)
@@ -127,7 +127,7 @@ def follow_up(
 ):
     repository.get_conversation(conversation_id, session_id)
     run = repository.create_run(
-        conversation_id, payload.question, "follow_up"
+        conversation_id, payload.question, "follow_up", payload.skill_keys
     )
     jobs.submit(run["id"])
     set_session_cookie(response, session_id)
@@ -137,6 +137,11 @@ def follow_up(
 @app.get("/api/conversations")
 def conversations(session_id: str = Depends(user_session)):
     return repository.list_conversations(session_id)
+
+
+@app.get("/api/skills")
+def summary_skills():
+    return repository.list_summary_skills()
 
 
 @app.get("/api/conversations/{conversation_id}")

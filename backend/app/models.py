@@ -95,11 +95,13 @@ class AgentContentCreate(BaseModel):
     name: str
     description: str = ""
     content: str
+    user_selectable: bool = False
 
 
 class SummaryCreate(BaseModel):
     root_id: str
     question: str = ""
+    skill_keys: List[str] = Field(default_factory=list)
 
     @field_validator("root_id")
     @classmethod
@@ -111,9 +113,20 @@ class SummaryCreate(BaseModel):
             raise ValueError("המזהה ארוך מדי")
         return cleaned
 
+    @field_validator("skill_keys")
+    @classmethod
+    def valid_skill_keys(cls, values: List[str]) -> List[str]:
+        cleaned = list(dict.fromkeys(
+            value.strip() for value in values if value.strip()
+        ))
+        if len(cleaned) > 3:
+            raise ValueError("אפשר לבחור עד 3 Skills")
+        return cleaned
+
 
 class FollowUpCreate(BaseModel):
     question: str
+    skill_keys: List[str] = Field(default_factory=list)
 
     @field_validator("question")
     @classmethod
@@ -122,6 +135,11 @@ class FollowUpCreate(BaseModel):
         if not cleaned:
             raise ValueError("נדרשת שאלה")
         return cleaned
+
+    @field_validator("skill_keys")
+    @classmethod
+    def valid_skill_keys(cls, values: List[str]) -> List[str]:
+        return SummaryCreate.valid_skill_keys(values)
 
 
 class AdminLogin(BaseModel):
