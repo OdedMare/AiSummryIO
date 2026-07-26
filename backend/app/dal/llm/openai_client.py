@@ -1,4 +1,18 @@
-"""LocatoAI-compatible JSON client with live settings and degradation."""
+"""OpenAI-compatible JSON-mode LLM client.
+
+Model, API key, and base URL come from the runtime settings store on EVERY
+call, so changes saved in the UI settings panel apply immediately. Works
+against OpenAI itself and OpenAI-compatible servers (Ollama, vLLM, Groq...)
+— the main model is Gemma 4 31B served through Ollama.
+
+Robustness policy, matching LocatoAI:
+- no API key required when a custom base_url is set (local servers)
+- asks for JSON mode when the server supports it, falls back if not
+- merges the system prompt into the user turn for servers/models that
+  reject a system role (some Gemma deployments)
+- strips markdown fences from the reply
+- retries once with the parse error appended before giving up
+"""
 
 import json
 
@@ -11,7 +25,12 @@ from app.dal.llm.json_response_parser import extract_json
 from app.dal.llm.message_merger import merge_system_into_user
 from app.dal.llm.model_id_extractor import extract_model_ids
 
-_LOCAL_KEY = "null"
+# One initial attempt + one retry with the parse error appended.
+_MAX_JSON_ATTEMPTS = 2
+_DIET_MAX_COMPLETION_TOKENS = 1200
+# The SDK requires a non-empty key; local servers/gateways ignore it.
+_LOCAL_SERVER_KEY_PLACEHOLDER = "null"
+_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 
 class OpenAIJsonClient:
@@ -31,10 +50,12 @@ class OpenAIJsonClient:
         ]
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         last_error = "unknown"
-        for _attempt in range(2):
+        max_tokens = (
+            _DIET_MAX_COMPLETION_TOKENS if settings.llm_diet_mode else None
+        )
+        for _attempt in range(_MAX_JSON_ATTEMPTS):
             content, current = self._complete(
-                client, settings.llm_model, messages,
-                1200 if settings.llm_diet_mode else None, schema,
+                client, settings.llm_model, messages, max_tokens, schema,
             )
             for key in usage:
                 usage[key] += current.get(key, 0)

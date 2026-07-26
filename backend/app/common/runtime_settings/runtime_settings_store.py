@@ -8,7 +8,7 @@ from pathlib import Path
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
     normalize_database_url,
-    normalize_http_url,
+    normalize_llm_base_url,
 )
 from app.common.runtime_settings.runtime_settings import RuntimeSettings
 
@@ -16,6 +16,10 @@ _SECRET_FIELDS = {
     "database_password", "openai_api_key", "flapi_token",
     "admin_password_hash", "cookie_secret",
 }
+
+# Fields where None/empty means "clear the value", not "keep current".
+# Without this, an emptied base URL or port could never be unset from the UI.
+_NULLABLE = ("database_port", "llm_base_url", "flapi_username")
 
 
 class RuntimeSettingsStore:
@@ -78,13 +82,18 @@ class RuntimeSettingsStore:
     def _apply(self, patch: dict, strict: bool) -> None:
         known = {item.name for item in fields(RuntimeSettings)}
         for key, value in patch.items():
-            if key not in known or value == "********" or value is None:
+            if key not in known or value == "********":
+                continue
+            if key in _NULLABLE and (value is None or value == ""):
+                setattr(self._settings, key, None)
+                continue
+            if value is None:
                 continue
             try:
                 if key == "database_url":
                     value = normalize_database_url(value)
-                elif key == "llm_base_url" and value:
-                    value = normalize_http_url(value, key)
+                elif key == "llm_base_url":
+                    value = normalize_llm_base_url(value)
                 elif key in (
                     "max_parallel_workflows", "package_timeout_seconds",
                     "conversation_retention_days", "log_retention_days",
