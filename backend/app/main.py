@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 from app.auth import (
     login, require_admin_token, session_signature, verify_session,
 )
+from app.bl.jobs import JobRunner
+from app.bl.workflow_engine import SummaryService
 from app.common.config.settings import Settings
 from app.common.errors import AppError, AuthError
 from app.common.runtime_settings.runtime_settings_store import RuntimeSettingsStore
@@ -21,7 +23,6 @@ from app.models import (
     PackageCreate, SummaryCreate, WorkflowCreate,
 )
 from app.repository import Repository
-from app.workflows import JobRunner, SummaryService
 
 env = Settings()
 store = RuntimeSettingsStore(env)

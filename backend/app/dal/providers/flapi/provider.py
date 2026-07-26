@@ -1,12 +1,13 @@
 """FLAPI Flow Package provider using the same flunks seam as LocatoAI."""
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import List
 
 from app.common.errors import ProviderError
 from app.dal.providers.flapi.mapper import FlunksMapper
+from app.dal.providers.flapi.runner_config import (
+    build_flapi_config, resolve_timeout, run_bounded,
+)
 
 
 class FlapiProvider:
@@ -44,31 +45,6 @@ class FlapiProvider:
                         "חבילת FLAPI נכשלה: " + str(exc)
                     ) from exc
         return []
-
-    def _timeout(self, package: dict) -> int:
-        configured = package.get("timeout_seconds")
-        if configured is None:
-            configured = getattr(
-                self._store.get(), "package_timeout_seconds", 120
-            )
-        return max(1, int(configured))
-
-    def _run_with_timeout(self, runner, timeout: int, package: dict):
-        # flunks exposes no cancellation, so the worker thread may outlive the
-        # timeout. Bounding the wait is what keeps one slow package from
-        # stalling the whole run.
-        pool = ThreadPoolExecutor(max_workers=1)
-        try:
-            future = pool.submit(runner.run)
-            try:
-                return future.result(timeout=timeout)
-            except FutureTimeoutError:
-                raise ProviderError(
-                    "חבילת FLAPI חרגה מזמן הריצה (%d שניות): %s"
-                    % (timeout, package["package_key"])
-                )
-        finally:
-            pool.shutdown(wait=False)
 
     def _runner(self, package_config):
         settings = self._store.get()

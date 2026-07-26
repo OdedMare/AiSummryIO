@@ -14,7 +14,7 @@ from app.common.runtime_settings.runtime_settings_store import (
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.provider import FlapiProvider
 from app.repository import Repository
-from app.workflows import _SECTION_SCHEMA, SummaryService
+from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
 
 
 def _install_fake_flunks(monkeypatch):
