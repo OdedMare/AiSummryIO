@@ -92,53 +92,68 @@ class OpenAIJsonClient:
             raise AgentError("לא ניתן לטעון מודלים: " + str(exc))
 
     def _client_for(self, api_key, base_url):
+        """Reuse one OpenAI client (and its underlying httpx connection pool)
+        across calls — a fresh client per call paid a TCP/TLS handshake on
+        every one of a workflow's LLM round-trips. Re-keyed automatically when
+        settings change mid-session, since the store is read per call."""
         cache_key = (api_key, base_url)
         if self._cached_client is None or self._cached_key != cache_key:
             self._cached_client = OpenAI(
-                api_key=api_key or _LOCAL_SERVER_KEY_PLACEHOLDER, base_url=base_url or None
+                api_key=api_key or _LOCAL_SERVER_KEY_PLACEHOLDER,
+                base_url=base_url or None,
             )
             self._cached_key = cache_key
         return self._cached_client
 
     @staticmethod
     def _complete(client, model, messages, max_tokens, schema):
+        # Degradation ladder for OpenAI-compatible servers:
+        # schema → JSON mode → plain → plain with the system prompt merged
+        # into the user turn (some Gemma deployments reject a system role).
+        last_bad_request = None
+        for kwargs in OpenAIJsonClient._attempts(messages, max_tokens, schema):
+            try:
+                response = create_with_retry(client, model, kwargs)
+            except BadRequestError as exc:
+                last_bad_request = exc
+                continue
+            except Exception as exc:
+                raise AgentError("שגיאת מודל: " + str(exc))
+            return OpenAIJsonClient._response_data(response)
+        raise AgentError("שגיאת מודל: " + str(last_bad_request))
+
+    @staticmethod
+    def _attempts(messages, max_tokens, schema) -> list:
         attempts = []
-        if schema:
+        if schema is not None:
             attempts.append({
                 "messages": messages,
                 "response_format": {
                     "type": "json_schema",
-                    "json_schema": {"name": "summary_response", "schema": schema},
+                    "json_schema": {
+                        "name": "summary_response",
+                        "schema": schema,
+                    },
                 },
             })
-        attempts += [
+        attempts.extend([
             {"messages": messages, "response_format": {"type": "json_object"}},
             {"messages": messages},
             {"messages": merge_system_into_user(messages)},
-        ]
-        if max_tokens:
-            attempts = [
-                dict(item, max_tokens=max_tokens) for item in attempts
-            ]
-        last_error = None
-        for kwargs in attempts:
-            try:
-                response = create_with_retry(client, model, kwargs)
-                content = response.choices[0].message.content
-                if not content:
-                    raise AgentError("המודל החזיר תשובה ריקה")
-                raw = response.usage
-                usage = {
-                    "prompt_tokens": raw.prompt_tokens if raw else 0,
-                    "completion_tokens": raw.completion_tokens if raw else 0,
-                    "total_tokens": raw.total_tokens if raw else 0,
-                }
-                return content, usage
-            except BadRequestError as exc:
-                last_error = exc
-            except AgentError:
-                raise
-            except Exception as exc:
-                raise AgentError("שגיאת מודל: " + str(exc))
-        raise AgentError("שגיאת מודל: " + str(last_error))
+        ])
+        if max_tokens is None:
+            return attempts
+        return [dict(kwargs, max_tokens=max_tokens) for kwargs in attempts]
+
+    @staticmethod
+    def _response_data(response):
+        content = response.choices[0].message.content
+        if not content:
+            raise AgentError("המודל החזיר תשובה ריקה")
+        usage = response.usage
+        return content, {
+            "prompt_tokens": usage.prompt_tokens if usage else 0,
+            "completion_tokens": usage.completion_tokens if usage else 0,
+            "total_tokens": usage.total_tokens if usage else 0,
+        }
 
