@@ -13,6 +13,9 @@ from app.common.runtime_settings.runtime_settings_store import (
 )
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.provider import FlapiProvider
+from app.dal.providers.flapi.runner_config import (
+    build_flapi_config, resolve_timeout,
+)
 from app.repository import Repository
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
 
@@ -230,13 +233,6 @@ def test_verify_tls_reaches_flapi_config_only_when_the_field_exists():
         flapi_token = "token"
         flapi_verify_tls = False
 
-    class Store:
-        @staticmethod
-        def get():
-            return Settings()
-
-    provider = FlapiProvider(Store())
-
     class ModernConfig:
         model_fields = {"username": None, "token": None, "verify_tls": None}
 
@@ -249,11 +245,11 @@ def test_verify_tls_reaches_flapi_config_only_when_the_field_exists():
         def __init__(self, **values):
             self.__dict__.update(values)
 
-    modern = provider._flapi_config(ModernConfig, Settings())
+    modern = build_flapi_config(ModernConfig, Settings())
     assert modern.verify_tls is False
 
     # An older wheel without the field must still build, not raise.
-    legacy = provider._flapi_config(LegacyConfig, Settings())
+    legacy = build_flapi_config(LegacyConfig, Settings())
     assert not hasattr(legacy, "verify_tls")
     assert legacy.username == "fde"
 

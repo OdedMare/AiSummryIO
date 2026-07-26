@@ -188,6 +188,31 @@ dev machine. See "Environment reality" below.
 - Tests went from 6 to 14. Each new test covering a fix was confirmed to fail
   against the pre-session code, so they are real regression guards.
 
+### Fixed: broken flunks import
+
+`provider.py` imported `FlapiConfig`, but the real class is **`FlApiConfig`**
+(capital A), as used by
+`locatoAi/backend/app/dal/providers/flapi/provider.py:9`. This would have
+raised `ImportError` against the real wheel on the very first package call.
+The tests did not catch it because the fake `flunks` stub never defines that
+class. **A FLAPI contract test against the real wheel is still needed** - it is
+already on the "automated delivery" list and this bug is the argument for it.
+
+### Structure now matches the documented architecture
+
+`backend/CLAUDE.md` described `workflow_engine.py` and `jobs.py`, but both
+classes lived in one 484-line `app/workflows.py`. Code and docs now agree, and
+the layering mirrors LocatoAI's `bl/` vs `dal/` split:
+
+- `app/workflows.py` → `app/bl/workflow_engine.py` (`SummaryService`)
+- `JobRunner` extracted → `app/bl/jobs.py`
+- Timeout policy and `FlApiConfig` construction extracted out of
+  `FlapiProvider` → `app/dal/providers/flapi/runner_config.py`, so the
+  provider is back to one job (run, normalize, retry once).
+
+`backend/CLAUDE.md` was updated to match, including the `dal/database.py` →
+`dal/database/postgres.py` path that was already stale.
+
 ### Environment reality on a normal dev machine
 
 - No Python 3.8.10 available; the suite was run on 3.13.9. **The 3.8.10
@@ -330,6 +355,9 @@ repeatable verification.
 - [ ] Add frontend component tests and browser end-to-end tests for the user
   flow, Settings, and Agent Studio.
 - [ ] Add a FLAPI contract test using the exact internal `flunks` wheel.
+  **Raised in priority**: a wrong class name (`FlapiConfig` vs `FlApiConfig`)
+  reached the repo undetected because the tests stub `flunks`. Nothing
+  currently verifies the real API surface.
 - [ ] Add GitHub Actions or the air-gapped CI equivalent for Python 3.8 tests,
   lint/typecheck/build, dependency scanning, Docker builds, and integration
   tests.
@@ -339,6 +367,18 @@ repeatable verification.
 ```bash
 cd /Users/odedmarellie/Desktop/repos/AiSummryIO/backend
 PYTHONPATH=. python -m pytest -q
+```
+
+If `python -m pytest` reports no module named pytest, `flunks` is blocking
+`pip install -e '.[dev]'`. The tests stub `flunks`, so install only the real
+third-party deps into a scratch venv:
+
+```bash
+python3 -m venv /tmp/aisummry-venv
+/tmp/aisummry-venv/bin/pip install pytest pandas psycopg pydantic \
+  pydantic-settings fastapi httpx openai
+cd /Users/odedmarellie/Desktop/repos/AiSummryIO/backend
+PYTHONPATH=. /tmp/aisummry-venv/bin/python -m pytest -q
 ```
 
 ```bash
