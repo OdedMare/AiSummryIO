@@ -19,11 +19,11 @@ class FlapiProvider:
 
     def run(self, package: dict, identifiers: List[str]) -> List[dict]:
         config = self._mapper.package_config(package, identifiers)
-        timeout = self._timeout(package)
+        timeout = resolve_timeout(package, self._store.get())
         for attempt in range(2):
             try:
                 runner = self._runner(config)
-                result = self._run_with_timeout(runner, timeout, package)
+                result = run_bounded(runner, timeout, package["package_key"])
                 records = self._mapper.normalize(result)
                 if package.get("query_name"):
                     for record in records:
@@ -60,38 +60,7 @@ class FlapiProvider:
                 "flunks אינו מותקן. יש להוסיף אותו ל-wheelhouse הפנימי."
             ) from exc
         return FlunksRunner(
-            flapi_config=self._flapi_config(FlApiConfig, settings),
+            flapi_config=build_flapi_config(FlApiConfig, settings),
             package_config=package_config,
             flunks_config=FlunksConfig(),
         )
-
-    def _flapi_config(self, config_class, settings):
-        # verify_tls is an operator-facing setting, but the internal flunks
-        # version may predate the field. Only pass what the model accepts so an
-        # older wheel keeps working instead of failing on an unexpected kwarg.
-        values = {
-            "username": settings.flapi_username,
-            "token": settings.flapi_token,
-        }
-        for field in ("verify_tls", "verify", "verify_ssl"):
-            if self._accepts(config_class, field):
-                values[field] = settings.flapi_verify_tls
-                break
-        else:
-            if not settings.flapi_verify_tls:
-                self._logger.warning(
-                    "flapi_verify_tls=False requested but this flunks version "
-                    "exposes no TLS-verification field; the setting is ignored."
-                )
-        return config_class(**values)
-
-    @staticmethod
-    def _accepts(config_class, field: str) -> bool:
-        fields = getattr(config_class, "model_fields", None)
-        if isinstance(fields, dict):
-            return field in fields
-        fields = getattr(config_class, "__fields__", None)
-        if isinstance(fields, dict):
-            return field in fields
-        annotations = getattr(config_class, "__annotations__", None)
-        return bool(annotations) and field in annotations
