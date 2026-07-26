@@ -1,6 +1,4 @@
 import { Send } from "lucide-react";
-import MapWorkspace from "@/components/MapWorkspace";
-import type { GeoJSONPolygon } from "@/types/geo";
 import type { AppShellController } from "./useAppShell";
 import { isActive } from "./useAppShell";
 
@@ -8,7 +6,6 @@ export default function Composer({ app }: { app: AppShellController }) {
   return (
     <form className="composer" onSubmit={app.submit}>
       {!app.conversation && <IdentifierField app={app} />}
-      {!app.conversation && <MapField app={app} />}
       <MessageField app={app} />
       <ActiveSkills app={app} />
       {app.error && <p className="composer-error" role="alert">{app.error}</p>}
@@ -28,21 +25,6 @@ function IdentifierField({ app }: { app: AppShellController }) {
         placeholder="לדוגמה: HOME-ABC-001" dir="ltr" autoComplete="off"
         maxLength={256} disabled={app.submitting} />
     </label>
-  );
-}
-
-function MapField({ app }: { app: AppShellController }) {
-  const clear = () => { app.setGeometry(null); app.setGeoMode("none"); };
-  const drawn = (geometry: GeoJSONPolygon) => {
-    app.setGeometry(geometry); app.setGeoMode("none");
-  };
-  return (
-    <div className="map-field">
-      <span className="map-field-label">אזור על המפה (לא חובה)</span>
-      <MapWorkspace mode={app.geoMode} geometry={app.geometry}
-        onModeChange={app.setGeoMode} onGeometryDrawn={drawn}
-        onClear={clear} disabled={app.submitting} />
-    </div>
   );
 }
 

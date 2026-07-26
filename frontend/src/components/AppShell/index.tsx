@@ -4,6 +4,7 @@ import AgentStudioPanel from "@/components/AgentStudioPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import SummaryWorkspace from "@/components/SummaryWorkspace";
 import Composer from "./Composer";
+import MapPanel from "./MapPanel";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { useAppShell } from "./useAppShell";
@@ -11,7 +12,7 @@ import { useAppShell } from "./useAppShell";
 export default function AppShell() {
   const app = useAppShell();
   return (
-    <div className="app-shell">
+    <div className={`app-shell${app.conversation ? "" : " has-map"}`}>
       <Sidebar app={app} />
       <section className="conversation-shell">
         <Topbar app={app} />
