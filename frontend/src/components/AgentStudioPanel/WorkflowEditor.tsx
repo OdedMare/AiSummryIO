@@ -325,14 +325,49 @@ function StepCard({
 }
 
 function GraphPreview({ steps }: { steps: WorkflowStep[] }) {
+  const levels = stepLevels(steps);
   return (
     <div className="graph-preview" aria-label="תצוגה מקדימה של התהליך">
-      {steps.map((step, index) =>
-        <span key={step.key}><b>{step.name}</b>
-          {index < steps.length - 1 && <GitFork size={15} />}
-        </span>)}
+      {levels.map((level, index) =>
+        <div className="graph-level" key={index}>
+          <span className="graph-level-label">
+            {level.length > 1 ? `שלב ${index + 1} · ${level.length} במקביל`
+              : `שלב ${index + 1}`}
+          </span>
+          <div className="graph-level-steps">
+            {level.map((step) => <b key={step.key}>{step.name}</b>)}
+          </div>
+          {index < levels.length - 1 && <GitFork size={15} />}
+        </div>)}
     </div>
   );
+}
+
+// Mirrors the backend's step_levels: steps whose dependencies are all
+// satisfied by earlier levels share a level and run concurrently.
+function stepLevels(steps: WorkflowStep[]) {
+  const levels: WorkflowStep[][] = [];
+  const placed = new Set<string>();
+  let remaining = [...steps];
+  while (remaining.length) {
+    const level = remaining.filter((step) =>
+      dependencies(step).every((key) => placed.has(key)));
+    if (!level.length) {
+      levels.push(remaining);
+      break;
+    }
+    level.forEach((step) => placed.add(step.key));
+    levels.push(level);
+    remaining = remaining.filter((step) => !level.includes(step));
+  }
+  return levels;
+}
+
+function dependencies(step: WorkflowStep) {
+  const declared = new Set(step.depends_on ?? []);
+  const parts = (step.input_source || "workflow.id").split(".");
+  if (parts.length >= 2 && parts[0] === "steps") declared.add(parts[1]);
+  return [...declared];
 }
 
 function AdvancedWorkflowFields({ editor }: { editor: Editor }) {
@@ -397,12 +432,14 @@ function workflowPayload(form: typeof emptyWorkflow, steps: WorkflowStep[]) {
   };
 }
 
+// A new step reads the main identifier, so steps stay independent and run in
+// parallel until an FDE deliberately maps one onto an earlier step's output.
 function newStep(steps: WorkflowStep[], packages: PackageVersion[]) {
   const index = steps.length + 1;
   return {
     key: `step-${index}`, name: `שלב ${index}`,
     package_version_id: packages[0]?.id ?? "", depends_on: [],
-    input_source: index === 1 ? "workflow.id" : `steps.${steps.at(-1)?.key}`,
+    input_source: "workflow.id",
     input_field: "", summary_prompt: "",
   };
 }
