@@ -1,9 +1,13 @@
 """Multi-turn FDE planning for one tool or one workflow.
 
-``planning.py`` answers a single prompt with a single draft. Here the FDE and
-the agent converse: the agent asks what it still needs, the FDE answers in
-Hebrew, and every turn returns the draft built so far so the form fills in as
-the discussion proceeds.
+``planning.py`` answers a single prompt with a single draft. Here the agent
+interviews the FDE instead: one question per turn, each carrying a recommended
+answer, until both sides agree the plan holds. Every turn returns the draft so
+far, so the form fills in as the interview proceeds.
+
+The interview never acts on its own conclusion. A turn that still asks
+something — or that is presenting its summary for approval — is not ready, and
+``is_ready`` enforces that here rather than trusting the prompt to.
 
 The conversation is stateless. The caller replays the whole history on each
 turn, which keeps the server free of session storage and matches how
@@ -213,7 +217,10 @@ class _WorkflowPlanner(_Planner):
                 "אין עדיין טולים בקטלוג, ותהליך יכול להצביע רק על טולים "
                 "קיימים. נתחיל בהגדרת טול אחד ואז נחזור לכאן."
             ),
-            "questions": [],
+            "question": None,
+            "resolved": [],
+            "open_points": ["אין טולים בקטלוג להרכיב מהם תהליך."],
+            "awaiting_confirmation": False,
             "ready": False,
             "draft": validated_plan({}, []),
         }
@@ -234,6 +241,21 @@ class _WorkflowPlanner(_Planner):
             ready=is_ready(answer, common) and plan["can_build"],
             draft=plan,
         )
+
+
+def is_ready(answer: dict, common: dict) -> bool:
+    """Whether a draft may be offered to the form.
+
+    The interview does not act before the FDE confirms, so a turn that still
+    asks something, or that is only now presenting its summary for approval,
+    is never ready however the model labelled itself. Enforced here rather
+    than trusted to the prompt: `ready` is what unlocks loading the draft.
+    """
+    return (
+        bool(answer.get("ready"))
+        and common["question"] is None
+        and not common["awaiting_confirmation"]
+    )
 
 
 def bounded_text(value, limit: int = _MAX_MESSAGE_CHARS) -> str:

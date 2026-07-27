@@ -1231,14 +1231,46 @@ def test_invalid_saved_value_does_not_prevent_boot(tmp_path):
     assert _store(tmp_path).get().database_url == store.get().database_url
 
 
+_TOOL_DRAFT_KEYS = (
+    "name", "package_id", "input_cube_name", "input_cube_parameter",
+    "output_cube_name", "input_mode", "description", "agent_instructions",
+)
+
+
+def _tool_answer(**overrides):
+    answer = {
+        "reply": "", "question": None, "resolved": [], "open_points": [],
+        "awaiting_confirmation": False, "ready": False,
+        "needs_inspection": False,
+        "draft": {key: "" for key in _TOOL_DRAFT_KEYS},
+    }
+    answer.update(overrides)
+    return answer
+
+
+def _workflow_answer(**overrides):
+    answer = {
+        "reply": "", "question": None, "resolved": [], "open_points": [],
+        "awaiting_confirmation": False, "ready": False,
+        "draft": {
+            "name": "", "description": "", "role": "detail", "rationale": "",
+            "system_prompt": "", "steps": [], "missing_tools": [],
+        },
+    }
+    answer.update(overrides)
+    return answer
+
+
 def _chat_service(answer, tools=None):
-    """A service whose model returns one canned planning turn."""
+    """A service whose model returns one canned interview turn."""
     class FakeRepository:
         @staticmethod
         def list_packages():
             return list(tools or [])
 
     class FakeLlm:
+        payload = None
+
         @staticmethod
         def complete_json(_system, user, _schema):
             FakeLlm.payload = json.loads(user)
@@ -1247,20 +1279,64 @@ def _chat_service(answer, tools=None):
     return SummaryService(FakeRepository(), None, FakeLlm(), None), FakeLlm
 
 
+def test_an_open_question_keeps_the_draft_out_of_the_form():
+    """The interview does not act before the FDE answers, so a turn that
+    still asks something is never ready however the model labelled it."""
+    service, _llm = _chat_service(_tool_answer(
+        reply="נשאר דבר אחד",
+        question={
+            "question": "החבילה מקבלת מזהה אחד או רשימה?",
+            "recommendation": "single",
+            "why": "many על חבילה שמצפה למזהה בודד נכשלת בשקט.",
+        },
+        ready=True,
+    ))
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "יש לי נתוני בעלות"}], {}, {},
+    )
+
+    assert result["ready"] is False
+    assert result["question"]["recommendation"] == "single"
+
+
+def test_a_summary_awaiting_confirmation_is_not_yet_ready():
+    """Presenting the agreed summary is the ask for confirmation, not the
+    confirmation itself; the draft unlocks only on the turn after."""
+    service, _llm = _chat_service(_tool_answer(
+        reply="סיכמנו: …", awaiting_confirmation=True, ready=True,
+    ))
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "סיימנו"}], {}, {},
+    )
+
+    assert result["awaiting_confirmation"] is True
+    assert result["ready"] is False
+
+
+def test_a_turn_that_both_asks_and_claims_confirmation_is_still_asking():
+    service, _llm = _chat_service(_tool_answer(
+        question={
+            "question": "מה שם הקובייה היוצאת?",
+            "recommendation": "", "why": "",
+        },
+        awaiting_confirmation=True,
+    ))
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "נמשיך"}], {}, {},
+    )
+
+    assert result["awaiting_confirmation"] is False
+    assert result["question"] is not None
+
+
 def test_tool_chat_carries_earlier_answers_into_the_next_draft():
     # The model returns only what it learned this turn; everything the FDE
     # already supplied must survive rather than reset to empty.
-    service, _llm = _chat_service({
-        "reply": "מה שם הקובייה היוצאת?",
-        "questions": ["שם הקובייה היוצאת?"],
-        "ready": False,
-        "needs_inspection": False,
-        "draft": {
-            "name": "", "package_id": "", "input_cube_name": "",
-            "input_cube_parameter": "", "output_cube_name": "OUT",
-            "input_mode": "", "description": "", "agent_instructions": "",
-        },
-    })
+    service, _llm = _chat_service(_tool_answer(
+        draft=dict(
+            {key: "" for key in _TOOL_DRAFT_KEYS}, output_cube_name="OUT",
+        ),
+    ))
     result = service.plan_tool_chat(
         [{"role": "fde", "text": "יש לי נתוני בעלות"}],
         {"name": "בעלות", "package_id": "PKG-1", "input_mode": "single"},
@@ -1271,19 +1347,10 @@ def test_tool_chat_carries_earlier_answers_into_the_next_draft():
     assert result["draft"]["package_id"] == "PKG-1"
     assert result["draft"]["input_mode"] == "single"
     assert result["draft"]["output_cube_name"] == "OUT"
-    assert result["ready"] is False
 
 
 def test_tool_chat_passes_only_bounded_sample_data_to_the_model():
-    service, llm = _chat_service({
-        "reply": "ראיתי את השדות", "questions": [], "ready": False,
-        "needs_inspection": False,
-        "draft": {
-            "name": "", "package_id": "", "input_cube_name": "",
-            "input_cube_parameter": "", "output_cube_name": "",
-            "input_mode": "single", "description": "", "agent_instructions": "",
-        },
-    })
+    service, llm = _chat_service(_tool_answer())
     service.plan_tool_chat(
         [{"role": "fde", "text": "הרצתי Fetch 1 ID"}],
         {},
@@ -1301,14 +1368,32 @@ def test_tool_chat_passes_only_bounded_sample_data_to_the_model():
     assert len(sample) == 10
     # Underscore-prefixed internals never reach the model.
     assert all("_internal" not in row for row in sample)
+    # A leading zero survives the trip to the model as a string.
     assert sample[0]["parcel_id"] == "00123"
+
+
+def test_the_interview_never_re_asks_what_the_history_already_answered():
+    """Facts are looked up, not asked: the whole history reaches the model so
+    it can read prior answers instead of repeating the question."""
+    service, llm = _chat_service(_tool_answer())
+    service.plan_tool_chat(
+        [
+            {"role": "fde", "text": "החבילה היא OWN-1"},
+            {"role": "agent", "text": "מה מצב הקלט?"},
+            {"role": "fde", "text": "single"},
+        ],
+        {}, {},
+    )
+
+    said = [turn["text"] for turn in llm.payload["conversation"]]
+    assert said == ["החבילה היא OWN-1", "מה מצב הקלט?", "single"]
 
 
 def test_workflow_chat_rejects_a_draft_naming_a_tool_outside_the_catalog():
     service, _llm = _chat_service(
-        {
-            "reply": "הנה טיוטה", "questions": [], "ready": True,
-            "draft": {
+        _workflow_answer(
+            ready=True,
+            draft={
                 "name": "תמונת בעלות", "description": "", "role": "baseline",
                 "rationale": "", "system_prompt": "",
                 "steps": [{
@@ -1319,7 +1404,7 @@ def test_workflow_chat_rejects_a_draft_naming_a_tool_outside_the_catalog():
                 }],
                 "missing_tools": [],
             },
-        },
+        ),
         tools=[{
             "id": "pkg-real", "name": "בעלות", "input_mode": "single",
             "input_cube_parameter": "id", "output_schema": {},
@@ -1338,9 +1423,9 @@ def test_workflow_chat_rejects_a_draft_naming_a_tool_outside_the_catalog():
 
 def test_workflow_chat_rejects_a_step_reading_an_undeclared_dependency():
     service, _llm = _chat_service(
-        {
-            "reply": "טיוטה", "questions": [], "ready": True,
-            "draft": {
+        _workflow_answer(
+            ready=True,
+            draft={
                 "name": "שרשרת", "description": "", "role": "detail",
                 "rationale": "", "system_prompt": "",
                 "steps": [
@@ -1352,15 +1437,14 @@ def test_workflow_chat_rejects_a_step_reading_an_undeclared_dependency():
                     },
                     {
                         "key": "second", "name": "שני",
-                        "package_version_id": "pkg-real",
-                        "depends_on": [],
+                        "package_version_id": "pkg-real", "depends_on": [],
                         "input_source": "steps.first",
                         "input_field": "parcel_id", "summary_prompt": "",
                     },
                 ],
                 "missing_tools": [],
             },
-        },
+        ),
         tools=[{
             "id": "pkg-real", "name": "בעלות", "input_mode": "single",
             "input_cube_parameter": "id", "output_schema": {},
@@ -1372,6 +1456,26 @@ def test_workflow_chat_rejects_a_step_reading_an_undeclared_dependency():
 
     assert result["ready"] is False
     assert result["draft"]["can_build"] is False
+
+
+def test_the_interview_shows_the_output_fields_it_can_ask_about():
+    """The wiring question names real fields, so the catalog must carry the
+    fields of every tool the agent may propose."""
+    service, llm = _chat_service(
+        _workflow_answer(),
+        tools=[{
+            "id": "pkg-real", "name": "בעלות", "input_mode": "single",
+            "input_cube_parameter": "id",
+            "output_schema": {"properties": {
+                "parcel_id": {"type": "string"},
+                "owner_name": {"type": "string"},
+            }},
+        }],
+    )
+    service.plan_workflow_chat([{"role": "fde", "text": "בנה תהליך"}], {})
+
+    catalog = llm.payload["available_tools"][0]
+    assert catalog["output_fields"] == ["owner_name", "parcel_id"]
 
 
 def test_workflow_chat_explains_an_empty_catalog_without_calling_the_model():
@@ -1391,7 +1495,9 @@ def test_workflow_chat_explains_an_empty_catalog_without_calling_the_model():
     )
 
     assert result["ready"] is False
+    assert result["question"] is None
     assert "טולים" in result["reply"]
+    assert result["open_points"]
 
 
 def test_plan_chat_requires_at_least_one_message():
