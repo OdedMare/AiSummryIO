@@ -130,11 +130,33 @@ WORKFLOW_PLAN_SCHEMA = {
     "additionalProperties": False,
 }
 
+# One question per turn, and it carries its own recommended answer. Several
+# questions at once is bewildering to answer, and a question without a
+# recommendation makes the FDE do the thinking the agent should have done.
+_PLAN_QUESTION_SCHEMA = {
+    "type": ["object", "null"],
+    "properties": {
+        "question": {"type": "string"},
+        "recommendation": {"type": "string"},
+        "why": {"type": "string"},
+    },
+    "required": ["question", "recommendation", "why"],
+    "additionalProperties": False,
+}
+
 _PLAN_CHAT_BASE_PROPERTIES = {
     "reply": {"type": "string"},
-    "questions": {"type": "array", "items": {"type": "string"}},
+    "question": _PLAN_QUESTION_SCHEMA,
+    "resolved": {"type": "array", "items": {"type": "string"}},
+    "open_points": {"type": "array", "items": {"type": "string"}},
+    "awaiting_confirmation": {"type": "boolean"},
     "ready": {"type": "boolean"},
 }
+
+_PLAN_CHAT_BASE_REQUIRED = [
+    "reply", "question", "resolved", "open_points",
+    "awaiting_confirmation", "ready",
+]
 
 TOOL_PLAN_CHAT_SCHEMA = {
     "type": "object",
@@ -163,9 +185,7 @@ TOOL_PLAN_CHAT_SCHEMA = {
             "additionalProperties": False,
         },
     ),
-    "required": [
-        "reply", "questions", "ready", "needs_inspection", "draft",
-    ],
+    "required": _PLAN_CHAT_BASE_REQUIRED + ["needs_inspection", "draft"],
     "additionalProperties": False,
 }
 
@@ -175,7 +195,7 @@ WORKFLOW_PLAN_CHAT_SCHEMA = {
         _PLAN_CHAT_BASE_PROPERTIES,
         draft=WORKFLOW_PLAN_SCHEMA,
     ),
-    "required": ["reply", "questions", "ready", "draft"],
+    "required": _PLAN_CHAT_BASE_REQUIRED + ["draft"],
     "additionalProperties": False,
 }
 

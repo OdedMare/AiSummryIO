@@ -90,9 +90,29 @@ class _Planner:
         raise NotImplementedError
 
     def _common(self, answer: dict) -> dict:
+        question = self._question(answer.get("question"))
         return {
             "reply": bounded_text(answer.get("reply")),
-            "questions": self._questions(answer.get("questions")),
+            "question": question,
+            "resolved": self._lines(answer.get("resolved")),
+            "open_points": self._lines(answer.get("open_points")),
+            # An open question means the interview is still running, whatever
+            # the model claimed, so it cannot also be awaiting confirmation.
+            "awaiting_confirmation":
+                bool(answer.get("awaiting_confirmation")) and question is None,
+        }
+
+    @staticmethod
+    def _question(value) -> Optional[dict]:
+        """The single question for this turn, or None when none is asked."""
+        value = as_dict(value)
+        asked = bounded_text(value.get("question"))
+        if not asked:
+            return None
+        return {
+            "question": asked,
+            "recommendation": bounded_text(value.get("recommendation")),
+            "why": bounded_text(value.get("why")),
         }
 
     @staticmethod
@@ -108,11 +128,11 @@ class _Planner:
         return [item for item in items if item["text"]][-_MAX_MESSAGES:]
 
     @staticmethod
-    def _questions(value) -> List[str]:
+    def _lines(value) -> List[str]:
         if not isinstance(value, list):
             return []
-        asked = [bounded_text(item) for item in value]
-        return [item for item in asked if item]
+        lines = [bounded_text(item) for item in value]
+        return [line for line in lines if line]
 
 
 class _ToolPlanner(_Planner):
