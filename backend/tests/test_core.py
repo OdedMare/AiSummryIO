@@ -269,6 +269,8 @@ def _service_for_step_outcome(package, records):
 
     class Service:
         _repository = Repository()
+        # The real resolver, so the step genuinely produces WKT here.
+        _identifiers = SummaryService._identifiers
 
         def _run_package(self, _package, _identifiers):
             return records
