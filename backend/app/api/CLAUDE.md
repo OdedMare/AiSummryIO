@@ -5,7 +5,7 @@ Code used directly by FastAPI routes, without business logic or persistence.
 | File | Owns |
 |---|---|
 | `models.py` | Pydantic request and response contracts |
-| `auth.py` | Signed admin tokens, session cookies, and password verification |
+| `auth.py` | API-token comparison and signed session cookies |
 
 `main.py` is the only composition root and imports this package. Business
 decisions stay under `bl/`; SQL stays under `dal/repository/`.

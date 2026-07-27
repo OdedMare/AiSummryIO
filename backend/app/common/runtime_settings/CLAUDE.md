@@ -7,7 +7,7 @@ override env defaults and take effect immediately, without a restart, because
 | File | Lines | Role |
 |---|---|---|
 | `runtime_settings.py` | 27 | `RuntimeSettings` — a plain dataclass of the live values |
-| `runtime_settings_store.py` | 161 | `RuntimeSettingsStore` — load, override, mask, persist; password hashing |
+| `runtime_settings_store.py` | 131 | `RuntimeSettingsStore` — load, override, mask, persist |
 | `normalizers.py` | 90 | Cleaning and validating URLs and schema names |
 
 ## How a value is resolved
@@ -19,9 +19,8 @@ override env defaults and take effect immediately, without a restart, because
    however it arrives.
 3. If `runtime-settings.json` exists, it is applied on top (non-strict: bad
    values are skipped rather than blocking startup).
-4. Startup fills two gaps and persists if either fired: a random
-   `cookie_secret` when unset, and hashing a bootstrap `admin_password` into
-   `admin_password_hash`.
+4. Startup fills one gap and persists if it fired: a random `cookie_secret`
+   when unset.
 
 ## The store's API
 
@@ -63,14 +62,6 @@ than rejected:
 - `normalize_llm_base_url` — strips `/chat/completions`, `/completions`, and
   `/models` suffixes, because the OpenAI SDK appends the path itself and would
   otherwise 404.
-
-## Password hashing
-
-`hash_password` / `verify_password` live here (imported by
-[api/auth.py](../../api/auth.py)). **scrypt**, `n=16384, r=8, p=1`, 32-byte digest, a
-random 16-byte salt, encoded as `scrypt$n$r$p$salt$digest`. Verification uses
-`hmac.compare_digest` and returns `False` on any malformed input rather than
-raising.
 
 ## Rules
 
