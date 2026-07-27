@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Send } from "lucide-react";
 import type { SummarySkill } from "@/types";
 import type { AppShellController } from "./useAppShell";
@@ -147,8 +148,9 @@ function MessageInput({
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder={placeholder} rows={2}
         disabled={app.submitting || isActive(app.run)} />
-      {showMenu && !!anchor &&
-        <SkillMenu matches={matches} anchor={anchor} onPick={complete} />}
+      {showMenu && !!anchor && createPortal(
+        <SkillMenu matches={matches} anchor={anchor} onPick={complete} />,
+        document.body)}
     </div>
   );
 }
