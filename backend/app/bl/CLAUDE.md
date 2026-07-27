@@ -27,7 +27,7 @@ a model, or a flunks wheel.
 | `full_summary` | A new question | Runs **all** published `baseline`/`both` workflows |
 | `follow_up` | A message in an existing conversation | Reuses prior evidence; runs **one** `detail`/`both` workflow or one FDE-approved tool, or answers from cache |
 | `plan_workflow` | FDE asks for a workflow | Drafts one from catalog tools; never publishes |
-| `plan_tool_chat` | FDE discusses a tool | One conversational turn; returns the tool draft so far |
+| `plan_tool_chat` | FDE discusses a tool | One conversational turn; opens on a sample the FDE already ran and proposes only the summary-facing fields |
 | `plan_workflow_chat` | FDE discusses a workflow | One conversational turn; draft passes the same validation gate |
 | `inspect_tool` | FDE previews a package | One identifier, bounded preview, inferred schema, no persistence |
 | `dry_run` | FDE tests a workflow | Executes with `save_evidence=False` |

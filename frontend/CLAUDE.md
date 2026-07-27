@@ -57,4 +57,12 @@ ID/evidence, and reuse the conversation's stored boundaries.
   summary facts, never from raw evidence.
 - Agent Studio uses structured forms and a read-only dependency preview,
   never an arbitrary code/SQL/HTTP editor.
+- The tool interview ("שאלו את הסוכן") opens only after Fetch 1 ID has
+  returned rows, and the disabled button carries a visible reason. The FDE owns
+  the connection: it is seeded into every turn as fact, and the interview
+  proposes only `name`, `description`, `agent_instructions`, `output_schema`,
+  and the two examples, which the FDE then edits before saving.
+- The interview drawer is portalled to `document.body`, but a portal still
+  propagates events through the React tree — it must stop `submit` and `Enter`
+  at its own boundary, or sending a message saves the editor's form.
 - Respect reduced motion and preserve visible focus rings.

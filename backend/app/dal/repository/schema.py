@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS summary_packages (
     input_cube_name TEXT NOT NULL,
     input_cube_parameter TEXT NOT NULL,
     input_mode TEXT NOT NULL CHECK (input_mode IN ('single','many')),
+    input_kind TEXT NOT NULL DEFAULT 'both'
+        CHECK (input_kind IN ('id','geometry','both')),
     output_cube_name TEXT NOT NULL,
     query_name TEXT NOT NULL DEFAULT '',
     timeout_seconds INTEGER,
@@ -29,6 +31,10 @@ ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS agent_instructions TEXT NOT NULL DEFAULT '';
 ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS output_schema JSONB NOT NULL DEFAULT '{}';
+-- 'both' keeps every already-published tool accepting what it accepted
+-- before this column existed; narrowing one is an explicit FDE decision.
+ALTER TABLE summary_packages
+    ADD COLUMN IF NOT EXISTS input_kind TEXT NOT NULL DEFAULT 'both';
 
 CREATE TABLE IF NOT EXISTS summary_workflows (
     id TEXT PRIMARY KEY,

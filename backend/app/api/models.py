@@ -15,6 +15,9 @@ class PackageCreate(BaseModel):
     input_cube_name: str
     input_cube_parameter: str
     input_mode: Literal["single", "many"] = "single"
+    # What the cube parameter actually expects. "both" is the default so a
+    # tool saved before this field existed keeps accepting either shape.
+    input_kind: Literal["id", "geometry", "both"] = "both"
     output_cube_name: str
     query_name: str = ""
     timeout_seconds: Optional[int] = None
