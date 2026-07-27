@@ -25,6 +25,8 @@ from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
 from app.dal.repository import Repository
+from app.dal.repository.validation import step_levels
+from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
 from app.api.models import (
     ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
@@ -240,6 +242,95 @@ def test_step_reading_earlier_output_must_declare_it_as_a_dependency():
             "depends_on": ["first"],
         },
     ])
+
+
+def test_a_step_scoped_to_the_drawn_area_is_a_valid_input_source():
+    """workflow.boundaries used to fall through to the steps.<key> branch,
+    so every workflow reading the map was rejected when it was saved."""
+    Repository._validate_steps([
+        {"key": "area", "input_source": "workflow.boundaries", "depends_on": []},
+    ])
+
+
+def test_steps_without_dependencies_share_one_parallel_level():
+    steps = [
+        {"key": "owners", "input_source": "workflow.id", "depends_on": []},
+        {"key": "risks", "input_source": "workflow.id", "depends_on": []},
+        {"key": "area", "input_source": "workflow.boundaries", "depends_on": []},
+    ]
+    Repository._validate_steps(steps)
+    levels = step_levels(steps)
+    assert [[step["key"] for step in level] for level in levels] == [
+        ["owners", "risks", "area"]
+    ]
+
+
+def test_a_dependent_step_waits_for_the_level_that_feeds_it():
+    levels = step_levels([
+        {"key": "owners", "input_source": "workflow.id", "depends_on": []},
+        {"key": "risks", "input_source": "workflow.id", "depends_on": []},
+        {
+            "key": "detail",
+            "input_source": "steps.owners",
+            "input_field": "owner_id",
+            "depends_on": ["owners"],
+        },
+    ])
+    assert [[step["key"] for step in level] for level in levels] == [
+        ["owners", "risks"], ["detail"]
+    ]
+
+
+def test_a_fully_chained_workflow_still_runs_one_step_at_a_time():
+    levels = step_levels([
+        {"key": "first", "input_source": "workflow.id", "depends_on": []},
+        {
+            "key": "second", "input_source": "steps.first",
+            "input_field": "id", "depends_on": ["first"],
+        },
+    ])
+    assert [[step["key"] for step in level] for level in levels] == [
+        ["first"], ["second"]
+    ]
+
+
+def test_circular_step_dependencies_are_reported_not_hung():
+    with pytest.raises(ValueError, match="מעגלית"):
+        step_levels([
+            {"key": "a", "input_source": "steps.b", "depends_on": ["b"]},
+            {"key": "b", "input_source": "steps.a", "depends_on": ["a"]},
+        ])
+
+
+def test_rejected_request_returns_one_readable_sentence_not_error_objects():
+    class Rejected:
+        @staticmethod
+        def errors():
+            return [{
+                "loc": ("body", "steps", 0, "package_version_id"),
+                "msg": "Field required",
+                "type": "missing",
+            }]
+
+    detail = format_validation_error(Rejected())
+    assert isinstance(detail, str)
+    assert "טול" in detail
+    assert "object" not in detail
+
+
+def test_validation_detail_keeps_our_hebrew_message_without_pydantic_prefix():
+    class Rejected:
+        @staticmethod
+        def errors():
+            return [{
+                "loc": ("body", "steps", 1, "key"),
+                "msg": "Value error, מפתח שלב חייב להכיל אותיות, מספרים, _ או -",
+                "type": "value_error",
+            }]
+
+    detail = format_validation_error(Rejected())
+    assert detail.startswith("שלבים → פריט 2 → מפתח שלב:")
+    assert "Value error" not in detail
 
 
 def test_package_run_is_bounded_by_the_configured_timeout(monkeypatch):
