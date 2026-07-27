@@ -16,27 +16,20 @@ takes an **input cube** (a named parameter plus a list of values) and produces
 an **output cube** (a table of results). The app never writes SQL or HTTP
 against FLAPI; it can only invoke packages that already exist there.
 
-**`flunks`** is the internal Python client for FLAPI. It is **not on PyPI**, so
-it is supplied either as a wheel dropped into `backend/wheelhouse/` (wheels are
-gitignored — only the README and pin file are tracked) or from the internal
-index at build time. See [wheelhouse/README.md](../../../../wheelhouse/README.md).
+**`flunks`** is the internal Python client for FLAPI. It is **not on PyPI**: it
+is declared as a plain `flunks` dependency in `pyproject.toml` and resolved
+from the internal index, exactly as LocatoAI does it.
 
-It is imported **lazily — inside functions, never at module top level** — so
-the app boots, tests run, and the admin UI works on a machine with no wheel
-installed. A missing wheel surfaces as a Hebrew `ProviderError` on the first
-package call, not an `ImportError` traceback at startup.
-
-> The image build runs `import flunks` right after install, so a broken wheel
-> fails the build. That check exists because the `FlapiConfig` / `FlApiConfig`
-> capitalization typo once reached `main` — hence the emphasis on the capital
-> `A` below.
+It is imported **at module top level, like any other library**. A machine
+without `flunks` installed cannot import the provider or the mapper at all, so
+a missing install fails loudly at startup instead of on the first package call.
 
 The flunks objects used here:
 
 | Object | Module | Role |
 |---|---|---|
 | `FlunksRunner` | `flunks` | Executes a package. Only method used: `.run()` |
-| `FlApiConfig` | `flunks.config` | Credentials + TLS. **Capital `A`** — matches LocatoAI |
+| `FlapiConfig` | `flunks.config` | Credentials + TLS |
 | `FlunksConfig` | `flunks.config` | Runner-level options; constructed empty |
 | `FlunksPackageConfig` | `flunks.config` | One package invocation |
 | `PackageInputCube` | `flunks.flow_models` | `cube_name`, `cube_parameter`, `values` |
@@ -57,7 +50,7 @@ provider.FlapiProvider.run(package, identifiers)     ← retry policy
         ├── mapper.package_config(package, ids)      → FlunksPackageConfig
         ├── runner_config.resolve_timeout(pkg, cfg)  → int seconds
         ├── provider._runner(config)                 → FlunksRunner
-        │       └── runner_config.build_flapi_config(FlApiConfig, settings)
+        │       └── runner_config.build_flapi_config(FlapiConfig, settings)
         ├── runner_config.run_bounded(runner, t, key) → DataFrame
         └── mapper.normalize(result)                 → List[dict]
 ```
@@ -77,7 +70,7 @@ provider.FlapiProvider.run(package, identifiers)     ← retry policy
 - `_failure` — logs the exhausted package and builds the Hebrew error.
 - `_runner` — picks the injected `runner_factory` (tests) or a real runner.
 - `_require_credentials` — username + token must both be present.
-- `_flunks_runner` — the lazy `flunks` import and `FlunksRunner` construction.
+- `_flunks_runner` — `FlunksRunner` construction.
 
 The `raise AssertionError("unreachable...")` after the loop is deliberate: the
 last attempt always returns or raises, and the line documents that instead of
@@ -137,7 +130,7 @@ warning that the setting is being ignored rather than failing.
   carry `package_key`, row counts, and exception *type* only.
 - All user-facing errors are `ProviderError` in **Hebrew**. Tests match on
   these strings — changing the wording breaks them.
-- Keep `flunks` imports lazy and inside functions.
+- Import `flunks` at module top level, like any other library.
 
 ## The package dict
 
@@ -162,12 +155,13 @@ receives a ready list.
 
 ## Testing without flunks
 
-`_install_fake_flunks(monkeypatch)` in
-[tests/test_core.py:34](../../../../tests/test_core.py#L34) injects stub
-modules into `sys.modules`, so every flunks model becomes a permissive
-attribute bag. Combined with `FlapiProvider(store, runner_factory=...)`, the
-whole provider is testable with no wheel present. Prefer `runner_factory` over
-patching internals.
+[tests/conftest.py](../../../../tests/conftest.py) injects stub modules into
+`sys.modules` when `flunks` is not installed, so every flunks model becomes a
+permissive attribute bag. Because the imports here are top-level, the stubs
+must be in place before these modules are imported — that is why this lives in
+`conftest.py` rather than in a fixture. Combined with
+`FlapiProvider(store, runner_factory=...)`, the whole provider is testable with
+no `flunks` installed. Prefer `runner_factory` over patching internals.
 
 Relevant tests: retry + provenance (`test_flapi_provider_retries_once...`),
 timeout bounding (`test_package_run_is_bounded_by_the_configured_timeout`),

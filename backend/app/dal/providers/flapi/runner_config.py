@@ -51,7 +51,7 @@ def run_bounded(runner, timeout: int, package_key: str):
 
 
 def build_flapi_config(config_class, settings):
-    """Build FlApiConfig, passing verify_tls only if this version accepts it.
+    """Build FlapiConfig, passing verify_tls only if this version accepts it.
 
     The internal flunks version may predate the field, so an older wheel keeps
     working instead of failing on an unexpected keyword argument.

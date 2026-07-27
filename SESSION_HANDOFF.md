@@ -185,7 +185,7 @@ dev machine. See "Environment reality" below.
   call by the package's `timeout_seconds`, falling back to the global
   `package_timeout_seconds`. Previously both were stored and ignored, so one
   hung package could stall a whole run indefinitely.
-- `flapi_verify_tls` now reaches `FlApiConfig`, passed only when the installed
+- `flapi_verify_tls` now reaches `FlapiConfig`, passed only when the installed
   `flunks` exposes such a field (`verify_tls`/`verify`/`verify_ssl`). An older
   wheel keeps working; if the setting cannot be honored it is logged rather
   than silently dropped.
@@ -199,7 +199,7 @@ dev machine. See "Environment reality" below.
 
 ### Fixed: broken flunks import
 
-`provider.py` imported `FlapiConfig`, but the real class is **`FlApiConfig`**
+`provider.py` imported `FlapiConfig`, but the real class is **`FlapiConfig`**
 (capital A), as used by
 `locatoAi/backend/app/dal/providers/flapi/provider.py:9`. This would have
 raised `ImportError` against the real wheel on the very first package call.
@@ -215,7 +215,7 @@ the layering mirrors LocatoAI's `bl/` vs `dal/` split:
 
 - `app/workflows.py` → `app/bl/workflow_engine.py` (`SummaryService`)
 - `JobRunner` extracted → `app/bl/jobs.py`
-- Timeout policy and `FlApiConfig` construction extracted out of
+- Timeout policy and `FlapiConfig` construction extracted out of
   `FlapiProvider` → `app/dal/providers/flapi/runner_config.py`, so the
   provider is back to one job (run, normalize, retry once).
 
@@ -281,20 +281,15 @@ with that frame is on the critical path to real evidence. Tests went 17 → 22.
 public index. Every P0 item downstream was blocked by this. Two independent
 blockers, both fixed and verified by an actual `docker build`:
 
-1. **No source for `flunks`.** The Dockerfile now installs from
-   `backend/wheelhouse/*.whl` when a wheel is present, else from the index
-   given by the `PIP_INDEX_URL` build arg. An `import flunks` step runs right
-   after install, so a missing or broken wheel fails the *build* instead of
-   surfacing on the first package call — which is exactly how the
-   `FlapiConfig`/`FlApiConfig` typo reached `main`.
+1. **No source for `flunks`.** It is declared as a plain `flunks` dependency
+   in `pyproject.toml` and resolved from the internal index at build time,
+   exactly as LocatoAI does it. The Dockerfile carries no special handling.
 2. **`backports.zoneinfo` needs a compiler** (no arm64 wheel, pulled in by
    pydantic on 3.8) and `python:3.8.10-slim` is Debian 10 **buster, now EOL**,
-   so `apt-get update` 404s. apt is repointed at `archive.debian.org`; `gcc` is
-   installed for the build and purged afterwards.
+   so `apt-get update` 404s. Build for `linux/amd64` on Apple Silicon.
 
-Verified with a stand-in wheel: `Installing flunks from the local wheelhouse`
-→ `flunks OK` → image tagged. The real wheel is still required for a genuine
-run; this only proves the mechanism.
+A build on a machine that can reach the internal index is still required for a
+genuine run.
 
 ### DataFrame normalization bugs (found by probing realistic frames)
 
@@ -333,16 +328,10 @@ repeatable verification.
 
 ### P0 — real environment and end-to-end summary
 
-- [~] Make the internal `flunks` wheel/index available to the backend Docker
-  build and pin the exact tested version/checksum. **Mechanism done
-  2026-07-26**, pin still open. `backend/Dockerfile` now installs from
-  `backend/wheelhouse/*.whl` when present and otherwise falls back to the
-  configured index (`PIP_INDEX_URL` build arg); see
-  `backend/wheelhouse/README.md`. Verified by building the image with a
-  stand-in `flunks` wheel: install succeeded and the new `import flunks`
-  build step printed `flunks OK`. Wheels are gitignored. **Still open**: drop
-  the real wheel in, then pin version + sha256 in `pyproject.toml`.
-- [ ] Verify that the air-gapped `flunks` build accepts arbitrary string values
+- [ ] Build the backend image on a machine that can reach the internal index so
+  `flunks` resolves, and pin the exact tested version in `pyproject.toml`,
+  which currently requires bare `flunks` with no version.
+- [ ] Verify that the internal `flunks` build accepts arbitrary string values
   in `PackageInputCube.values`; patch that internal library if its model still
   restricts identifiers.
 - [ ] Configure a real PostgreSQL database, FLAPI credentials, OpenAI-compatible
@@ -455,11 +444,11 @@ repeatable verification.
 - [ ] Add frontend component tests and browser end-to-end tests for the user
   flow, Settings, and Agent Studio.
 - [ ] Add a FLAPI contract test using the exact internal `flunks` wheel.
-  **Raised in priority**: a wrong class name (`FlapiConfig` vs `FlApiConfig`)
+  **Raised in priority**: a wrong class name (`FlapiConfig` vs `FlapiConfig`)
   reached the repo undetected because the tests stub `flunks`. Nothing
   currently verifies the real API surface. The Docker `import flunks` step
   (2026-07-26) now catches a missing/broken wheel at build time, but it does
-  **not** check the API surface — `FlApiConfig`, `FlunksRunner`,
+  **not** check the API surface — `FlapiConfig`, `FlunksRunner`,
   `PackageInputCube.values` accepting arbitrary strings, and the returned
   DataFrame's dtypes all still need a real contract test.
 - [ ] Add GitHub Actions or the air-gapped CI equivalent for Python 3.8 tests,

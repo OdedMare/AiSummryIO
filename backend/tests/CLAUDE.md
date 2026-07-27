@@ -13,7 +13,7 @@ python -m pytest -q
 |---|---|
 | FLAPI mapper | String identifiers survive; generic rows; duplicate columns rejected; empty frames |
 | FLAPI provider | Retries exactly once; `_package_query` provenance; timeout bounds the run |
-| `runner_config` | Timeout precedence; `FlApiConfig` built for both modern and legacy classes |
+| `runner_config` | Timeout precedence; `FlapiConfig` built for both modern and legacy classes |
 | Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed |
 | Workflow validation | No forward step references; `depends_on` must be declared |
 | Identifier mapping | Fan-out over list values plus deduplication |

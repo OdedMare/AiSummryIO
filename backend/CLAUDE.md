@@ -39,9 +39,9 @@ uvicorn app.main:app --reload
   geometry is optional and rows must never be dropped for lacking it.
   - `provider.py` — run one package, normalize, retry once. Nothing else.
   - `mapper.py` — translate package definitions to/from `flunks` models.
-  - `runner_config.py` — timeout policy and `FlApiConfig` construction. The
-    class is `FlApiConfig` (capital A), matching LocatoAI; `verify_tls` is
-    passed only when the installed `flunks` exposes such a field.
+  - `runner_config.py` — timeout policy and `FlapiConfig` construction.
+    `verify_tls` is passed only when the installed `flunks` exposes such a
+    field.
 - `dal/repository/` — the only SQL owner.
 - `bl/workflow_engine.py` — `SummaryService`: execution, one retry, partial
   success, evidence retention, section summaries, and final synthesis. A

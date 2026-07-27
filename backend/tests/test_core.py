@@ -31,25 +31,7 @@ from app.api.models import (
 )
 
 
-def _install_fake_flunks(monkeypatch):
-    config = ModuleType("flunks.config")
-    flow_models = ModuleType("flunks.flow_models")
-    root = ModuleType("flunks")
-
-    class Model:
-        def __init__(self, **values):
-            self.__dict__.update(values)
-
-    config.FlunksPackageConfig = Model
-    flow_models.PackageInputCube = Model
-    flow_models.PackageOutputCube = Model
-    monkeypatch.setitem(sys.modules, "flunks", root)
-    monkeypatch.setitem(sys.modules, "flunks.config", config)
-    monkeypatch.setitem(sys.modules, "flunks.flow_models", flow_models)
-
-
-def test_flunks_mapper_preserves_string_identifiers_and_generic_rows(monkeypatch):
-    _install_fake_flunks(monkeypatch)
+def test_flunks_mapper_preserves_string_identifiers_and_generic_rows():
     mapper = FlunksMapper()
     package = {
         "package_id": "007",
@@ -79,8 +61,6 @@ def test_normalized_records_are_json_serializable(monkeypatch):
     an unconverted cell aborts the whole evidence write - the run loses every
     row of that step, not just the one column.
     """
-    _install_fake_flunks(monkeypatch)
-
     records = FlunksMapper().normalize(pd.DataFrame([
         {"id": "001", "eventTime": pd.Timestamp("2026-07-24T10:00:00Z")},
         {"id": "002", "eventTime": pd.NaT},
@@ -99,8 +79,6 @@ def test_normalize_does_not_coerce_identifier_strings_to_numbers(monkeypatch):
     this pins that, and pins that a genuine int64 cell stays an int rather than
     being stringified into a fake identifier.
     """
-    _install_fake_flunks(monkeypatch)
-
     records = FlunksMapper().normalize(pd.DataFrame([
         {"id": "00123", "count": 7},
         {"id": "456", "count": 8},
@@ -119,7 +97,6 @@ def test_normalize_rejects_duplicate_columns_instead_of_dropping_them(
     duplicate name and warns. Losing a column of evidence without an error
     would make the summary quietly incomplete.
     """
-    _install_fake_flunks(monkeypatch)
     frame = pd.DataFrame([["x", "y"]], columns=["id", "id"])
 
     with pytest.raises(ProviderError, match="עמודות כפולות"):
@@ -128,14 +105,10 @@ def test_normalize_rejects_duplicate_columns_instead_of_dropping_them(
 
 def test_normalize_accepts_an_empty_dataframe(monkeypatch):
     """A package that legitimately matched nothing must not look like a failure."""
-    _install_fake_flunks(monkeypatch)
-
     assert FlunksMapper().normalize(pd.DataFrame(columns=["id"])) == []
 
 
 def test_flapi_provider_retries_once_and_adds_query_provenance(monkeypatch):
-    _install_fake_flunks(monkeypatch)
-
     class Settings:
         flapi_username = "fde"
         flapi_token = "token"
@@ -270,8 +243,6 @@ def test_step_reading_earlier_output_must_declare_it_as_a_dependency():
 
 
 def test_package_run_is_bounded_by_the_configured_timeout(monkeypatch):
-    _install_fake_flunks(monkeypatch)
-
     class Settings:
         flapi_username = "fde"
         flapi_token = "token"
@@ -308,8 +279,6 @@ def test_package_run_is_bounded_by_the_configured_timeout(monkeypatch):
 
 
 def test_package_timeout_falls_back_to_the_global_setting(monkeypatch):
-    _install_fake_flunks(monkeypatch)
-
     class Settings:
         flapi_username = "fde"
         flapi_token = "token"

@@ -37,7 +37,7 @@ drawn on the map travels into `PackageInputCube.values` exactly like an
 identifier does. See
 [dal/providers/flapi/CLAUDE.md](../dal/providers/flapi/CLAUDE.md).
 
-Deliberately **dependency-free** — shapely is not in the backend wheelhouse.
+Deliberately **dependency-free** — shapely is not a backend dependency.
 `_format` trims coordinates to 7 decimals and strips trailing zeros, which is
 what makes the WKT output stable enough to assert on in tests.
 

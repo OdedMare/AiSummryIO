@@ -2,7 +2,7 @@
 
 FLAPI cube parameters take opaque strings, so a drawn area travels as WKT
 in ``PackageInputCube.values`` exactly like an identifier does. Kept
-dependency-free: shapely is not in the backend wheelhouse.
+dependency-free: shapely is not a backend dependency.
 """
 
 from typing import Any, Dict, Optional

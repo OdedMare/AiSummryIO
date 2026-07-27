@@ -8,6 +8,9 @@ to/from flunks models lives in `mapper`.
 import logging
 from typing import Any, Dict, List
 
+from flunks import FlunksRunner
+from flunks.config import FlapiConfig, FlunksConfig
+
 from app.common.errors import ProviderError
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.runner_config import (
@@ -83,15 +86,8 @@ class FlapiProvider:
 
     @staticmethod
     def _flunks_runner(settings, package_config):
-        try:
-            from flunks import FlunksRunner
-            from flunks.config import FlApiConfig, FlunksConfig
-        except ImportError as exc:
-            raise ProviderError(
-                "flunks אינו מותקן. יש להוסיף אותו ל-wheelhouse הפנימי."
-            ) from exc
         return FlunksRunner(
-            flapi_config=build_flapi_config(FlApiConfig, settings),
+            flapi_config=build_flapi_config(FlapiConfig, settings),
             package_config=package_config,
             flunks_config=FlunksConfig(),
         )
