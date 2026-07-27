@@ -130,6 +130,55 @@ WORKFLOW_PLAN_SCHEMA = {
     "additionalProperties": False,
 }
 
+_PLAN_CHAT_BASE_PROPERTIES = {
+    "reply": {"type": "string"},
+    "questions": {"type": "array", "items": {"type": "string"}},
+    "ready": {"type": "boolean"},
+}
+
+TOOL_PLAN_CHAT_SCHEMA = {
+    "type": "object",
+    "properties": dict(
+        _PLAN_CHAT_BASE_PROPERTIES,
+        needs_inspection={"type": "boolean"},
+        draft={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "package_id": {"type": "string"},
+                "input_cube_name": {"type": "string"},
+                "input_cube_parameter": {"type": "string"},
+                "output_cube_name": {"type": "string"},
+                "input_mode": {
+                    "type": "string", "enum": ["single", "many"],
+                },
+                "description": {"type": "string"},
+                "agent_instructions": {"type": "string"},
+            },
+            "required": [
+                "name", "package_id", "input_cube_name",
+                "input_cube_parameter", "output_cube_name", "input_mode",
+                "description", "agent_instructions",
+            ],
+            "additionalProperties": False,
+        },
+    ),
+    "required": [
+        "reply", "questions", "ready", "needs_inspection", "draft",
+    ],
+    "additionalProperties": False,
+}
+
+WORKFLOW_PLAN_CHAT_SCHEMA = {
+    "type": "object",
+    "properties": dict(
+        _PLAN_CHAT_BASE_PROPERTIES,
+        draft=WORKFLOW_PLAN_SCHEMA,
+    ),
+    "required": ["reply", "questions", "ready", "draft"],
+    "additionalProperties": False,
+}
+
 TOOL_METADATA_SCHEMA = {
     "type": "object",
     "properties": {

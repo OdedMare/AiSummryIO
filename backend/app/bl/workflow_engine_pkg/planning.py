@@ -174,6 +174,12 @@ def _merge_field_metadata(schema, previous, descriptions) -> None:
 def summary_fields(tool: dict) -> List[str]:
     schema = tool.get("output_schema", {})
     properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    if not any(
+        isinstance(definition, dict)
+        and isinstance(definition.get("x-summary"), bool)
+        for definition in properties.values()
+    ):
+        return _output_fields(tool)
     return [
         str(field) for field, definition in properties.items()
         if not isinstance(definition, dict)

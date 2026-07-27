@@ -952,6 +952,132 @@ def test_fetch_one_id_infers_the_tool_output_schema():
     assert schema["required"] == ["owner_id", "score"]
 
 
+def test_fetch_one_id_generates_editable_tool_metadata_from_bounded_sample():
+    class FakeProvider:
+        @staticmethod
+        def run(_package, _identifiers):
+            return [
+                {"owner_id": "001", "owner_name": "דנה"},
+                {"owner_id": "002", "owner_name": "יוסי"},
+            ]
+
+    class FakeLlm:
+        payload = None
+
+        def complete_json(self, _system, user, _schema):
+            self.payload = json.loads(user)
+            return {
+                "description": "מידע על בעלי הנכס ומזהיהם.",
+                "agent_instructions": "סכם את שמות הבעלים.",
+                "field_descriptions": {
+                    "owner_id": "מזהה בעלים",
+                    "owner_name": "שם הבעלים",
+                    "invented": "לא קיים",
+                },
+            }
+
+    llm = FakeLlm()
+    service = SummaryService(None, FakeProvider(), llm, None)
+    result = service.inspect_tool({
+        "name": "בעלות",
+        "package_id": "ownership",
+        "input_cube_parameter": "identifier",
+        "output_cube_name": "owners",
+        "input_mode": "single",
+        "output_schema": {
+            "properties": {
+                "owner_id": {
+                    "type": "string",
+                    "description": "תיאור ידני",
+                    "x-summary": False,
+                },
+            },
+        },
+    }, "001")
+
+    assert llm.payload["sample_data"] == [
+        {"owner_id": "001", "owner_name": "דנה"},
+        {"owner_id": "002", "owner_name": "יוסי"},
+    ]
+    assert result["metadata_suggestions"] == {
+        "description": "מידע על בעלי הנכס ומזהיהם.",
+        "agent_instructions": "סכם את שמות הבעלים.",
+    }
+    fields = result["output_schema"]["properties"]
+    assert fields["owner_id"]["description"] == "תיאור ידני"
+    assert fields["owner_id"]["x-summary"] is False
+    assert fields["owner_name"]["description"] == "שם הבעלים"
+    assert fields["owner_name"]["x-summary"] is True
+    assert "invented" not in fields
+
+
+def test_ignored_tool_fields_stay_in_evidence_but_not_summary_prompt():
+    captured = {"evidence": None, "summary_payload": None}
+    package = {
+        "id": "tool-v1",
+        "input_mode": "single",
+        "output_schema": {
+            "properties": {
+                "owner_name": {"type": "string", "x-summary": True},
+                "internal_code": {"type": "string", "x-summary": False},
+            },
+        },
+    }
+
+    class FakeRepository:
+        @staticmethod
+        def get_package(_version_id):
+            return package
+
+        @staticmethod
+        def save_evidence(_run_id, _workflow_id, _step_key, records):
+            captured["evidence"] = records
+            return "evidence-1"
+
+    class FakeProvider:
+        @staticmethod
+        def run(_package, _identifiers):
+            return [{"owner_name": "דנה", "internal_code": "SECRET"}]
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, user, _schema):
+            captured["summary_payload"] = json.loads(user)
+            return {
+                "summary": "דנה היא הבעלים.",
+                "facts": ["דנה היא הבעלים"],
+                "warnings": [],
+                "suggested_questions": [],
+            }
+
+    service = SummaryService(
+        FakeRepository(), FakeProvider(), FakeLlm(), None
+    )
+    result = service._execute_workflow(
+        {"id": "run-1"}, "001", {
+            "id": "workflow-v1",
+            "workflow_key": "ownership",
+            "name": "בעלות",
+            "system_prompt": "",
+            "output_schema": {},
+            "steps": [{
+                "key": "owners", "name": "בעלים",
+                "package_version_id": "tool-v1", "depends_on": [],
+                "input_source": "workflow.id", "input_field": "",
+                "summary_prompt": "",
+            }],
+        },
+    )
+
+    assert captured["evidence"] == [{
+        "owner_name": "דנה", "internal_code": "SECRET",
+    }]
+    fact = captured["summary_payload"]["facts"][0]
+    assert fact["fields"] == ["owner_name"]
+    assert fact["samples"] == {"owner_name": ["דנה"]}
+    assert result["summary"] == "דנה היא הבעלים."
+
+
 @pytest.mark.parametrize("pasted", [
     "http://ollama:11434/v1/chat/completions",
     "http://ollama:11434/v1/completions",

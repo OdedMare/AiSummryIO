@@ -154,7 +154,7 @@ def _run_level(
 
 
 def _level_outcomes(service, context, level) -> Dict[str, tuple]:
-    """Map each step key in the level to its ``(records, warnings)``."""
+    """Map each step to records, warnings, and its summary-field policy."""
     if len(level) == 1:
         step = level[0]
         return {step["key"]: _step_outcome(service, step, context)}
@@ -188,7 +188,11 @@ def _step_outcome(service, step, context) -> tuple:
 def _summary_fields(package):
     schema = package.get("output_schema", {})
     properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
-    if not properties:
+    if not any(
+        isinstance(definition, dict)
+        and isinstance(definition.get("x-summary"), bool)
+        for definition in properties.values()
+    ):
         return None
     return [
         str(field) for field, definition in properties.items()

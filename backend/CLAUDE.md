@@ -48,7 +48,10 @@ uvicorn app.main:app --reload
   workflow's `output_schema` extends the shared section contract; extras are
   returned under `section.fields`. It also owns standalone tool routing and FDE
   workflow planning. Tool inspection runs exactly one identifier, returns a
-  bounded preview, and infers a reviewable output schema without persistence.
+  bounded preview, infers a reviewable output schema, and asks the model for
+  bounded editable metadata suggestions without persistence. A package field
+  marked `x-summary: false` in that schema stays in raw evidence but is omitted
+  from the facts sent to summary synthesis.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
   have priority.
 - `api/` — Pydantic HTTP contracts and signed authentication.

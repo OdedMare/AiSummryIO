@@ -50,7 +50,11 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - AI workflow proposals are labeled as suggestions and loaded only as drafts
   for FDE review; missing tools show the required input and output contract.
 - Fetch 1 ID requires a visibly labeled safe test identifier, shows a bounded
-  preview, and loads only the inferred schema into the unsaved tool form.
+  preview, loads the inferred schema and empty examples into the unsaved tool
+  form, and may fill empty description/instruction fields with editable model
+  suggestions. Schema field chips support drag/drop plus a keyboard/touch click
+  alternative; `x-summary: false` excludes a field only from model-facing
+  summary facts, never from raw evidence.
 - Agent Studio uses structured forms and a read-only dependency preview,
   never an arbitrary code/SQL/HTTP editor.
 - Respect reduced motion and preserve visible focus rings.
