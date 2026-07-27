@@ -131,23 +131,3 @@ def _safe_schema(value: str) -> str:
         return normalize_database_schema(value)
     except (TypeError, ValueError):
         return ""
-
-
-def hash_password(password: str, salt: bytes = None) -> str:
-    salt = salt or os.urandom(16)
-    digest = hashlib.scrypt(
-        password.encode("utf-8"), salt=salt, n=16384, r=8, p=1, dklen=32
-    )
-    return "scrypt$16384$8$1$%s$%s" % (salt.hex(), digest.hex())
-
-
-def verify_password(password: str, encoded: str) -> bool:
-    try:
-        _, n, r, p, salt, expected = encoded.split("$")
-        actual = hashlib.scrypt(
-            password.encode("utf-8"), salt=bytes.fromhex(salt),
-            n=int(n), r=int(r), p=int(p), dklen=32,
-        )
-        return hmac.compare_digest(actual.hex(), expected)
-    except (TypeError, ValueError):
-        return False

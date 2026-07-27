@@ -62,12 +62,6 @@ export const api = {
       body: JSON.stringify({ run_id: runId, rating, comment }),
     }),
   adminSession: () => request<{ authenticated: boolean }>("/api/admin/session"),
-  login: (password: string) =>
-    request<{ authenticated: boolean }>("/api/admin/login", {
-      method: "POST",
-      body: JSON.stringify({ password }),
-    }),
-  logout: () => request("/api/admin/session", { method: "DELETE" }),
   settings: () => request<Record<string, unknown>>("/api/settings"),
   models: () => request<{ models: string[] }>("/api/models"),
   updateSettings: (data: Record<string, unknown>) =>

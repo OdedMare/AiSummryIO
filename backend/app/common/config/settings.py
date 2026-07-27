@@ -60,8 +60,6 @@ class Settings(BaseSettings):
     conversation_retention_days: int = 30
     log_retention_days: int = 90
 
-    admin_password: str = ""
-    admin_password_hash: str = ""
     cookie_secret: str = ""
 
     api_token: str = "oded2002"

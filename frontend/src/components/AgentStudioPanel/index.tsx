@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, BookOpen, LoaderCircle, LogOut, RefreshCw, Workflow, Wrench, X,
+  AlertTriangle, BookOpen, LoaderCircle, RefreshCw, Workflow, Wrench, X,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
@@ -10,7 +10,7 @@ import type {
 } from "@/types";
 import ContentStudio from "./ContentStudio";
 import PackageCatalog from "./PackageCatalog";
-import { ReviewQueue, StudioLogin } from "./StudioCommon";
+import { ReviewQueue } from "./StudioCommon";
 import WorkflowEditor from "./WorkflowEditor";
 
 type Tab = "packages" | "workflows" | "content" | "review";
@@ -29,7 +29,7 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
 }
 
 function useStudio() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("workflows");
   const [packages, setPackages] = useState<PackageVersion[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowVersion[]>([]);

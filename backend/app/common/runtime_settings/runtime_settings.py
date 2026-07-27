@@ -22,7 +22,6 @@ class RuntimeSettings:
     package_timeout_seconds: int
     conversation_retention_days: int
     log_retention_days: int
-    admin_password_hash: str
     cookie_secret: str
     api_token: str
 

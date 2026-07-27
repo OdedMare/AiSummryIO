@@ -18,8 +18,6 @@ from app.common.runtime_settings.normalizers import (
 )
 from app.common.runtime_settings.runtime_settings_store import (
     RuntimeSettingsStore,
-    hash_password,
-    verify_password,
 )
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.provider import FlapiProvider
@@ -131,14 +129,6 @@ def test_normalize_accepts_an_empty_dataframe(monkeypatch):
     _install_fake_flunks(monkeypatch)
 
     assert FlunksMapper().normalize(pd.DataFrame(columns=["id"])) == []
-
-
-def test_password_is_hashed_and_verified():
-    encoded = hash_password("private value", salt=b"0123456789abcdef")
-
-    assert "private value" not in encoded
-    assert verify_password("private value", encoded)
-    assert not verify_password("wrong", encoded)
 
 
 def test_flapi_provider_retries_once_and_adds_query_provenance(monkeypatch):

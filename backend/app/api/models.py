@@ -254,10 +254,6 @@ class FollowUpCreate(BaseModel):
         return SummaryCreate.valid_skill_keys(values)
 
 
-class AdminLogin(BaseModel):
-    password: str
-
-
 class FeedbackCreate(BaseModel):
     run_id: str
     rating: Literal[-1, 1]
