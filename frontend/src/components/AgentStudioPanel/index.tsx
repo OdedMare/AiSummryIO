@@ -69,8 +69,8 @@ function StudioHeader({ onClose }: { onClose: () => void }) {
   return (
     <header className="modal-header studio-header">
       <span className="modal-icon"><Workflow size={20} /></span>
-      <div><span className="studio-kicker">FDE Workspace</span>
-        <h2 id="studio-title">FDE Studio</h2>
+      <div><span className="studio-kicker">SumOrAI Workspace</span>
+        <h2 id="studio-title" dir="ltr">SumOrAI Agent Studio</h2>
         <p>מתכננים, בודקים ומפרסמים טולים, Workflows ו־Skills.</p>
       </div>
       <button type="button" onClick={onClose} aria-label="סגירה"><X /></button>
