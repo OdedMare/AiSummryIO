@@ -50,18 +50,16 @@ function useStudio() {
   }, []);
   useEffect(() => {
     api.adminSession()
-      .then(() => { setAuthenticated(true); void refresh(); })
-      .catch(() => setAuthenticated(false));
+      .then(() => { setAuthorized(true); void refresh(); })
+      .catch(() => setAuthorized(false));
   }, [refresh]);
   const counts = useMemo(() => ({
     packages: packages.length, workflows: workflows.length,
     content: content.length, review: review.length,
   }), [packages, workflows, content, review]);
-  const login = () => { setAuthenticated(true); void refresh(); };
-  const logout = () => { void api.logout(); setAuthenticated(false); };
   return {
-    authenticated, tab, setTab, packages, workflows, content, review, error,
-    refresh, counts, login, logout,
+    authorized, tab, setTab, packages, workflows, content, review, error,
+    refresh, counts,
   };
 }
 
@@ -79,9 +77,6 @@ function StudioHeader({
       <div><h2 id="studio-title">מרכז ניהול</h2>
         <p>מקורות מידע, תהליכי סיכום, Skills ובקרת איכות.</p>
       </div>
-      {studio.authenticated &&
-        <button type="button" onClick={studio.logout}
-          aria-label="יציאה מהסטודיו"><LogOut size={19} /></button>}
       <button type="button" onClick={onClose} aria-label="סגירה"><X /></button>
     </header>
   );
