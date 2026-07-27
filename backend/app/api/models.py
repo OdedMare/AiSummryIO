@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.common.runtime_settings.runtime_settings_store import MASKED_SECRET
+from app.common.runtime_settings.normalizers import MASKED_SECRET
 
 
 class PackageCreate(BaseModel):

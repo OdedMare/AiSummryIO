@@ -26,7 +26,9 @@ from app.dal.providers.flapi.runner_config import (
 )
 from app.dal.repository import Repository
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.api.models import SkillPreview, SkillPreviewSection, SummaryCreate
+from app.api.models import (
+    ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
+)
 
 
 def _install_fake_flunks(monkeypatch):
@@ -1011,6 +1013,22 @@ def test_masked_secret_does_not_overwrite_the_stored_value(tmp_path):
     store.update({"openai_api_key": "real-key"})
     assert store.update({"openai_api_key": "********"}).openai_api_key == "real-key"
     assert store.public()["openai_api_key"] == "********"
+
+
+def test_model_probe_prefers_typed_values_over_saved_ones():
+    """The settings panel checks a connection BEFORE saving it, so what the
+    user typed must reach list_models. A secret left masked is not a typed
+    value — it has to fall back to the stored key."""
+    body = ModelsProbeRequest(
+        llm_base_url=" http://ollama:11434/v1 ", openai_api_key="sk-typed",
+    )
+    assert body.override("llm_base_url") == "http://ollama:11434/v1"
+    assert body.override("openai_api_key") == "sk-typed"
+
+    masked = ModelsProbeRequest(llm_base_url="", openai_api_key="********")
+    assert masked.override("llm_base_url") is None
+    assert masked.override("openai_api_key") is None
+    assert ModelsProbeRequest().override("llm_base_url") is None
 
 
 def test_saved_settings_survive_a_restart(tmp_path):

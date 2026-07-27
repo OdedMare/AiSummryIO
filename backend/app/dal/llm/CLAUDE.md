@@ -63,7 +63,11 @@ settings change mid-session, because the store is still read per call.
   `_LOCAL_SERVER_KEY_PLACEHOLDER = "null"` is sent.
 - `list_models()` calls `/models` over raw `httpx` rather than the SDK, so the
   admin UI can probe a candidate endpoint before saving it — it accepts
-  `base_url_override` / `api_key_override` for exactly that.
+  `base_url_override` / `api_key_override` for exactly that. The overrides
+  arrive from `POST /api/models` (`ModelsProbeRequest`), which the settings
+  panel calls with the values currently typed in the form; `GET /api/models`
+  uses the saved settings. A secret the user did not retype comes back masked
+  and is treated as absent, so the stored key is used.
 - Base URLs are normalized before storage: a pasted
   `.../chat/completions` has the operation suffix stripped, because the SDK
   appends the path itself and would otherwise 404. See

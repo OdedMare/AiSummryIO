@@ -1,5 +1,11 @@
 import re
 
+# What `RuntimeSettingsStore.public()` returns in place of a stored secret,
+# and what the UI sends back for a secret the user did not retype. Lives here
+# rather than in the store so the HTTP boundary can recognize it without
+# importing the settings stack.
+MASKED_SECRET = "********"
+
 _JDBC_PREFIX = re.compile(r"^jdbc:", re.IGNORECASE)
 _PG_SCHEMES = ("postgresql://", "postgres://")
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
+    MASKED_SECRET,
     extract_url_schema,
     normalize_database_schema,
     normalize_database_url,
@@ -15,10 +16,6 @@ from app.common.runtime_settings.runtime_settings import RuntimeSettings
 _SECRET_FIELDS = {
     "database_password", "openai_api_key", "flapi_token", "cookie_secret",
 }
-
-# What `public()` returns in place of a stored secret, and what the UI sends
-# back for a secret the user did not retype.
-MASKED_SECRET = "********"
 
 # Fields where None/empty means "clear the value", not "keep current".
 # Without this, an emptied base URL or port could never be unset from the UI.
