@@ -83,6 +83,7 @@ export interface PackageVersion {
   input_cube_name: string;
   input_cube_parameter: string;
   input_mode: "single" | "many";
+  input_kind: "id" | "geometry" | "both";
   output_cube_name: string;
   query_name: string;
   timeout_seconds?: number | null;
@@ -159,6 +160,7 @@ export interface ToolPlanDraft {
   input_cube_parameter: string;
   output_cube_name: string;
   input_mode: "single" | "many" | "";
+  input_kind: "id" | "geometry" | "both" | "";
   description: string;
   agent_instructions: string;
   package_key: string;

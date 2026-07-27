@@ -151,6 +151,12 @@ class _ToolPlanner(_Planner):
     # separately because "" is a meaningful "not decided yet" for every other
     # field, but would read as False here.
     _BOOL_FIELDS = ("agent_enabled",)
+    # Closed vocabularies. The database enforces both with a CHECK, so a
+    # model-invented value has to be caught before the draft is saved.
+    _ENUM_FIELDS = {
+        "input_mode": ("single", "many"),
+        "input_kind": ("id", "geometry", "both"),
+    }
     # JSON arrives from the model as a string so the FDE can edit it in the
     # same textarea they always could; it is only checked for shape here.
     _JSON_FIELDS = {
@@ -201,14 +207,14 @@ class _ToolPlanner(_Planner):
             if field not in cls._BOOL_FIELDS
         }
         # An unusable value falls back to what was already agreed rather than
-        # blanking it: clearing here would drop a mode the FDE already set on
-        # the form, and `single`/`many` is exactly the field that fails
-        # silently when it is wrong.
-        if merged["input_mode"] not in ("single", "many"):
-            previous_mode = bounded_text(previous.get("input_mode"))
-            merged["input_mode"] = (
-                previous_mode if previous_mode in ("single", "many") else ""
-            )
+        # blanking it: clearing here would drop a choice the FDE already set
+        # on the form, and these are exactly the fields that fail silently
+        # when they are wrong.
+        for field, allowed in cls._ENUM_FIELDS.items():
+            if merged[field] in allowed:
+                continue
+            agreed = bounded_text(previous.get(field))
+            merged[field] = agreed if agreed in allowed else ""
         for field in cls._BOOL_FIELDS:
             value = draft.get(field, previous.get(field))
             merged[field] = True if value is None else bool(value)

@@ -1358,18 +1358,52 @@ def test_tool_chat_passes_only_bounded_sample_data_to_the_model():
             "row_count": 3,
             "records": [
                 {"parcel_id": "00123", "_internal": "secret", "owner": "דנה"}
-                for _index in range(25)
+                for _index in range(40)
             ],
             "output_schema": {"properties": {"parcel_id": {}}},
         },
     )
 
     sample = llm.payload["inspection_result"]["sample_data"]
-    assert len(sample) == 10
+    assert len(sample) == 25
     # Underscore-prefixed internals never reach the model.
     assert all("_internal" not in row for row in sample)
     # A leading zero survives the trip to the model as a string.
     assert sample[0]["parcel_id"] == "00123"
+
+
+def test_an_unusable_input_mode_falls_back_to_the_one_already_agreed():
+    """`single`/`many` is the field that fails silently when wrong, and the FDE
+    sets it on the form before the interview opens. A junk value from the model
+    must not blank what they chose."""
+    service, _llm = _chat_service(_tool_answer(
+        draft=dict({key: "" for key in _TOOL_DRAFT_KEYS}, input_mode="batch"),
+    ))
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "נמשיך"}], {"input_mode": "many"}, {},
+    )
+
+    assert result["draft"]["input_mode"] == "many"
+
+
+def test_the_connection_the_fde_supplied_survives_a_turn_that_omits_it():
+    """The FDE fills the connection and proves it with a real run before the
+    interview starts, so it is carried, never re-proposed."""
+    service, _llm = _chat_service(_tool_answer(
+        draft={key: "" for key in _TOOL_DRAFT_KEYS},
+    ))
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "ראית את הפלט"}],
+        {
+            "package_id": "PKG-7", "input_cube_name": "IN",
+            "input_cube_parameter": "parcel_id", "output_cube_name": "OUT",
+        },
+        {},
+    )
+
+    assert result["draft"]["package_id"] == "PKG-7"
+    assert result["draft"]["input_cube_parameter"] == "parcel_id"
+    assert result["draft"]["output_cube_name"] == "OUT"
 
 
 def test_the_interview_never_re_asks_what_the_history_already_answered():

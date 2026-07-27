@@ -1,6 +1,7 @@
 export const emptyPackage = {
   package_key: "", name: "", description: "", package_id: "",
   input_cube_name: "", input_cube_parameter: "", input_mode: "single",
+  input_kind: "both",
   output_cube_name: "", query_name: "", agent_enabled: true,
   agent_instructions: "", output_schema: "{}", example_input: "[]",
   example_output: "[]",
