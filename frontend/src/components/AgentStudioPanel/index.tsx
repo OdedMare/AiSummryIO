@@ -21,7 +21,7 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
     <div className="modal-backdrop studio-backdrop" role="presentation">
       <section className="modal studio-modal" role="dialog" aria-modal="true"
         aria-labelledby="studio-title">
-        <StudioHeader studio={studio} onClose={onClose} />
+        <StudioHeader onClose={onClose} />
         <StudioContent studio={studio} />
       </section>
     </div>
@@ -65,12 +65,7 @@ function useStudio() {
 
 type Studio = ReturnType<typeof useStudio>;
 
-function StudioHeader({
-  studio, onClose,
-}: {
-  studio: Studio;
-  onClose: () => void;
-}) {
+function StudioHeader({ onClose }: { onClose: () => void }) {
   return (
     <header className="modal-header studio-header">
       <span className="modal-icon"><Workflow size={20} /></span>
@@ -83,12 +78,16 @@ function StudioHeader({
 }
 
 function StudioContent({ studio }: { studio: Studio }) {
-  if (studio.authenticated === null) {
+  if (studio.authorized === null) {
     return <p className="loading-line">
       <LoaderCircle className="spin" /> בודק הרשאה…
     </p>;
   }
-  if (!studio.authenticated) return <StudioLogin onLogin={studio.login} />;
+  if (!studio.authorized) {
+    return <p className="studio-global-error" role="alert">
+      <AlertTriangle size={18} /> אין הרשאת FDE. יש להגדיר טוקן API תקין בשרת.
+    </p>;
+  }
   return (
     <>
       <StudioTabs studio={studio} />
