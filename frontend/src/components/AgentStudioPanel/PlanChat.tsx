@@ -108,6 +108,12 @@ export function PlanChat<TDraft>({
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    // A portal moves the DOM node but not the React tree, so this submit still
+    // bubbles into whichever `<form>` mounted the drawer — saving the package
+    // or workflow being edited and resetting the editor out from under the
+    // interview. `preventDefault` alone does not stop that; the outer handler
+    // runs regardless.
+    event.stopPropagation();
     say(text);
   };
   // Enter sends, Shift+Enter breaks the line — as in the main composer.
@@ -242,6 +248,12 @@ function ConfirmCard({ onAnswer }: { onAnswer: (text: string) => void }) {
  * submit the package or workflow being edited instead of talking to the agent.
  * `position: fixed` moves the drawer visually but not in the DOM, so only the
  * portal actually takes it out of the surrounding form.
+ *
+ * The portal fixes the DOM nesting but *not* the React tree: events still
+ * propagate to the React parent, so a submit inside the drawer would reach the
+ * editor's `onSubmit` and save the very draft under discussion. That is why
+ * the drawer stops submit and Enter at its own boundary rather than relying on
+ * the portal alone.
  */
 export function PlanChatDrawer({
   open, onOpen, onClose, label, busy, disabled, disabledHint, children,
@@ -276,8 +288,16 @@ export function PlanChatDrawer({
           <p id={hintId} className="agent-chat-hint">{disabledHint}</p>}
       </div>
       {open && createPortal(
+        // Everything inside the drawer is contained here. The portal escapes
+        // the DOM nesting but not the React tree, so without these guards a
+        // submit or an Enter keypress in the interview reaches the editor
+        // `<form>` that mounted it and saves the draft being discussed.
         <div className="agent-chat-drawer" role="dialog"
-          aria-modal="false" aria-label={label}>
+          aria-modal="false" aria-label={label}
+          onSubmit={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.stopPropagation();
+          }}>
           <button type="button" className="agent-chat-close" onClick={onClose}
             aria-label="סגירת השיחה">
             <X size={17} aria-hidden="true" />
