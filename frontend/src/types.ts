@@ -146,6 +146,39 @@ export interface WorkflowPlan {
   missing_tools: MissingTool[];
 }
 
+export interface PlanChatMessage {
+  role: "fde" | "agent";
+  text: string;
+}
+
+/** Fields the tool planner fills while discussing the data with the FDE. */
+export interface ToolPlanDraft {
+  name: string;
+  package_id: string;
+  input_cube_name: string;
+  input_cube_parameter: string;
+  output_cube_name: string;
+  input_mode: "single" | "many" | "";
+  description: string;
+  agent_instructions: string;
+}
+
+interface PlanChatTurn {
+  reply: string;
+  questions: string[];
+  ready: boolean;
+}
+
+export interface ToolPlanChatTurn extends PlanChatTurn {
+  /** The agent has what it needs to ask for a Fetch 1 ID run. */
+  needs_inspection: boolean;
+  draft: ToolPlanDraft;
+}
+
+export interface WorkflowPlanChatTurn extends PlanChatTurn {
+  draft: WorkflowPlan;
+}
+
 export interface AgentContent {
   id: string;
   content_key: string;

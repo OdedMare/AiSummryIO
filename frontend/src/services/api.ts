@@ -1,6 +1,8 @@
 import type {
   AgentContent, Conversation, Evidence, PackageInspection, PackageVersion,
-  SkillPreviewResult, SummaryRun, SummarySkill, WorkflowPlan, WorkflowVersion,
+  PlanChatMessage, SkillPreviewResult, SummaryRun, SummarySkill,
+  ToolPlanChatTurn, ToolPlanDraft, WorkflowPlan, WorkflowPlanChatTurn,
+  WorkflowVersion,
 } from "@/types";
 import type { GeoJSONMultiPolygon } from "@/types/geo";
 
@@ -111,6 +113,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  planToolChat: (
+    messages: PlanChatMessage[], draft: Partial<ToolPlanDraft>,
+    inspection: PackageInspection | null,
+  ) =>
+    request<ToolPlanChatTurn>("/api/packages/plan-chat", {
+      method: "POST",
+      body: JSON.stringify({ messages, draft, inspection: inspection ?? {} }),
+    }),
   workflows: () => request<WorkflowVersion[]>("/api/workflows"),
   createWorkflow: (data: Record<string, unknown>) =>
     request<WorkflowVersion>("/api/workflows", {
@@ -121,6 +131,13 @@ export const api = {
     request<WorkflowPlan>("/api/workflows/plan", {
       method: "POST",
       body: JSON.stringify({ prompt }),
+    }),
+  planWorkflowChat: (
+    messages: PlanChatMessage[], draft: WorkflowPlan | null,
+  ) =>
+    request<WorkflowPlanChatTurn>("/api/workflows/plan-chat", {
+      method: "POST",
+      body: JSON.stringify({ messages, draft: draft ?? {} }),
     }),
   publishWorkflow: (id: string) =>
     request<WorkflowVersion>(`/api/workflows/${id}/publish`, { method: "POST" }),
