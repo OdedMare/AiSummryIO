@@ -62,11 +62,6 @@ class Settings(BaseSettings):
 
     cookie_secret: str = ""
 
-    api_token: str = "oded2002"
-    """Shared token for programmatic clients, sent as `X-API-Key` or
-    `Authorization: Bearer`. Grants the same access as an admin cookie, so it
-    is masked by the settings API like any other credential."""
-
     runtime_settings_file: str = "runtime-settings.json"
     request_log_path: str = "logs/requests.jsonl"
 

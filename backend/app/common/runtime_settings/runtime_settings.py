@@ -23,5 +23,4 @@ class RuntimeSettings:
     conversation_retention_days: int
     log_retention_days: int
     cookie_secret: str
-    api_token: str
 

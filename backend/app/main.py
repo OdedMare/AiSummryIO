@@ -32,8 +32,8 @@ app = FastAPI(
     version="0.1.0",
     description=(
         "Evidence-backed Hebrew summaries by identifier or map area. "
-        "Programmatic clients authenticate with the API token as "
-        "`X-API-Key` or `Authorization: Bearer`."
+        "The service is unauthenticated and expects to be reachable only "
+        "from a trusted network."
     ),
 )
 

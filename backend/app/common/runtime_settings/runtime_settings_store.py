@@ -13,8 +13,7 @@ from app.common.runtime_settings.normalizers import (
 from app.common.runtime_settings.runtime_settings import RuntimeSettings
 
 _SECRET_FIELDS = {
-    "database_password", "openai_api_key", "flapi_token",
-    "cookie_secret", "api_token",
+    "database_password", "openai_api_key", "flapi_token", "cookie_secret",
 }
 
 # Fields where None/empty means "clear the value", not "keep current".
@@ -49,7 +48,6 @@ class RuntimeSettingsStore:
             conversation_retention_days=env.conversation_retention_days,
             log_retention_days=env.log_retention_days,
             cookie_secret=env.cookie_secret,
-            api_token=env.api_token,
         )
         if self._path.exists():
             self._apply(json.loads(self._path.read_text("utf-8")), False)

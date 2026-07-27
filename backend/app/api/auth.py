@@ -1,32 +1,15 @@
-"""API-token and anonymous-session authentication."""
+"""Anonymous-session signing.
+
+The service carries no caller credential: FDE routes are unauthenticated and
+rely on the deployment only being reachable from a trusted network. What
+remains here signs the conversation cookie, which identifies a chat history
+but grants no privileges.
+"""
 
 import hashlib
 import hmac
 
 from app.common.errors import AuthError
-
-
-def api_token_matches(store, token: str) -> bool:
-    """True when a programmatic client presented the configured API token.
-
-    Compared with ``compare_digest`` so a wrong token cannot be recovered by
-    timing. An unset token never matches, otherwise clearing the setting
-    would silently open every route to an empty header.
-    """
-    expected = store.get().api_token
-    if not expected or not token:
-        return False
-    return hmac.compare_digest(token, expected)
-
-
-def bearer_token(header: str) -> str:
-    """Extract the credential from an ``Authorization: Bearer <token>``."""
-    if not header:
-        return ""
-    parts = header.split(None, 1)
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1].strip()
-    return ""
 
 
 def session_signature(store, session_id: str) -> str:

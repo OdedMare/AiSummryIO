@@ -24,7 +24,7 @@ everything the user saved in the settings panel.
 | LLM | `llm_model`, `llm_diet_mode`, `llm_base_url`, `openai_api_key` |
 | FLAPI | `flapi_username`, `flapi_token`, `flapi_verify_tls` |
 | Limits | `max_parallel_workflows`, `package_timeout_seconds`, `conversation_retention_days`, `log_retention_days` |
-| Admin | `api_token`, `cookie_secret` |
+| Session | `cookie_secret` |
 | Paths | `runtime_settings_file`, `request_log_path` |
 
 Notable defaults: the LLM is `gemma4:31b-cloud` at `http://localhost:11434/v1`
@@ -38,10 +38,11 @@ URL — see the runtime-settings docs for that translation.
 `openai_api_key` uses `validation_alias="OPENAI_API_KEY"`, so it reads the
 conventional unprefixed variable rather than `AISUMMRY_OPENAI_API_KEY`.
 
-There is no password login. `api_token` is the **only** FDE credential: it is
-sent as `X-API-Key` or `Authorization: Bearer` and guards every admin route.
-`cookie_secret` no longer signs an admin cookie — it signs the anonymous
-conversation session cookie only.
+The service holds **no caller credential**: there is no password login and no
+API token, so every FDE route is unauthenticated and the deployment must be
+reachable only from a trusted network. `cookie_secret` signs the anonymous
+conversation session cookie, which identifies a chat history but grants no
+privileges.
 
 ## Rules
 

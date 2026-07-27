@@ -73,8 +73,9 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - Claims require evidence references. Package failures stay visible and do
   not discard successful sections.
 - Never log API keys, tokens, raw package bodies, or full user IDs.
-- FDE routes are guarded by `api_token` alone; there is no password login.
-  Anonymous conversation sessions still use an HttpOnly signed cookie.
+- There is no authentication: FDE routes are open and the service must be
+  deployed on a trusted network only. Anonymous conversation sessions still
+  use an HttpOnly signed cookie.
 - FDE edits create drafts. Publishing is blocked by invalid mappings or
   failing mandatory examples.
 - Keep the design simple: add a module only when it owns a distinct boundary.

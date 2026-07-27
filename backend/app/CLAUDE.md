@@ -26,7 +26,7 @@ Settings
 - Starts the repository schema and recovers queued jobs.
 - Converts `AppError` to its declared HTTP status and Hebrew message.
 - Logs method, path, and status only—never bodies or credentials.
-- Guards admin routes with the configured API token.
+- Leaves admin routes unauthenticated; `admin_dependency` is a no-op seam.
 - Gives anonymous users a stable signed conversation session.
 
 Route handlers stay short: validate through `api/models.py`, call one service
