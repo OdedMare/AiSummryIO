@@ -7,13 +7,17 @@
   --sidebar-2: #171c29;
   --text: #161923;
   --text-soft: #4c5568;
-  --text-muted: #737e93;
+  --text-muted: #687287;
   --text-on-dark: #f7f8fc;
   --border: #dce2eb;
   --border-strong: #c2cad8;
-  --primary: #7056e8;
-  --primary-hover: #6045d5;
+  --primary: #6548dc;
+  --primary-hover: #593dcc;
   --primary-soft: #ede9fe;
+  --primary-action: #6548dc;
+  --primary-action-end: #4269ca;
+  --primary-action-hover: #593dcc;
+  --primary-action-hover-end: #375ab4;
   --accent: #078aa2;
   --success: #087b57;
   --success-soft: #e5f7f0;
@@ -43,6 +47,10 @@
   --primary: #9a87f7;
   --primary-hover: #ad9df9;
   --primary-soft: #27223f;
+  --primary-action: #7056d9;
+  --primary-action-end: #4565bd;
+  --primary-action-hover: #6348c9;
+  --primary-action-hover-end: #3957a7;
   --accent: #3bc5d6;
   --success: #62d1aa;
   --success-soft: #12372e;
@@ -213,7 +221,8 @@ button:disabled {
   margin: 6px 0 24px;
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(135deg, #7557e8, #557ce4);
+  background: linear-gradient(135deg,
+    var(--primary-action), var(--primary-action-end));
   border: 0;
   border-radius: 14px;
   box-shadow: 0 12px 28px rgba(82, 68, 187, 0.28);
@@ -221,9 +230,10 @@ button:disabled {
 }
 
 .new-summary:hover {
-  filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow: 0 16px 34px rgba(82, 68, 187, 0.34);
+  background: linear-gradient(135deg,
+    var(--primary-action-hover), var(--primary-action-hover-end));
 }
 
 .history-title {
@@ -1217,14 +1227,16 @@ select:focus {
 .submit-button,
 .primary-button {
   color: #fff;
-  background: linear-gradient(135deg, var(--primary), #557ce4);
-  border: 1px solid var(--primary);
+  background: linear-gradient(135deg,
+    var(--primary-action), var(--primary-action-end));
+  border: 1px solid var(--primary-action);
   box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .submit-button:hover:not(:disabled),
 .primary-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--primary-hover), #6288eb);
+  background: linear-gradient(135deg,
+    var(--primary-action-hover), var(--primary-action-hover-end));
 }
 
 .secondary-button {
