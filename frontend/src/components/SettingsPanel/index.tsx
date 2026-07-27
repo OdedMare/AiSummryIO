@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  CheckCircle2, KeyRound, LoaderCircle, Save, Send, Settings2, X,
+  AlertTriangle, CheckCircle2, LoaderCircle, Save, Settings2, X,
 } from "lucide-react";
 import { SettingsContent, SettingsNavigation } from "./SettingsSections";
 import type { SettingsController } from "./useSettings";
@@ -11,7 +11,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <section className={`modal ${settings.authenticated ?
+      <section className={`modal ${settings.authorized ?
         "settings-workspace-modal" : "settings-modal"}`}
         role="dialog" aria-modal="true" aria-labelledby="settings-title"
         onClick={(event) => event.stopPropagation()}>
@@ -42,31 +42,12 @@ function PanelContent({ settings }: { settings: SettingsController }) {
       <LoaderCircle className="spin" /> טוען…
     </p>;
   }
-  if (settings.authenticated === false) {
-    return <Login settings={settings} />;
+  if (settings.authorized === false) {
+    return <p className="form-error" role="alert">
+      <AlertTriangle size={18} /> אין הרשאת FDE. יש להגדיר טוקן API תקין בשרת.
+    </p>;
   }
   return <SettingsWorkspace settings={settings} />;
-}
-
-function Login({ settings }: { settings: SettingsController }) {
-  return (
-    <form className="admin-login" onSubmit={settings.authenticate}>
-      <span className="login-icon"><KeyRound size={24} /></span>
-      <h3>כניסת FDE</h3>
-      <p>הגדרות המערכת מוגנות באותה הרשאה של Agent Studio.</p>
-      <label><span>סיסמה</span>
-        <input type="password" value={settings.password}
-          onChange={(event) => settings.setPassword(event.target.value)}
-          autoComplete="current-password" autoFocus />
-      </label>
-      {settings.error &&
-        <p className="form-error" role="alert">{settings.error}</p>}
-      <button className="primary-button" type="submit"
-        disabled={settings.saving || !settings.password}>
-        <Send size={17} /> {settings.saving ? "מתחבר…" : "כניסה להגדרות"}
-      </button>
-    </form>
-  );
 }
 
 function SettingsWorkspace({ settings }: { settings: SettingsController }) {

@@ -15,8 +15,7 @@ export function useSettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [password, setPassword] = useState("");
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -24,23 +23,10 @@ export function useSettings() {
   useEffect(() => {
     api.adminSession()
       .then(() => api.settings())
-      .then((next) => { setValues(next); setAuthenticated(true); })
-      .catch(() => setAuthenticated(false))
+      .then((next) => { setValues(next); setAuthorized(true); })
+      .catch(() => setAuthorized(false))
       .finally(() => setLoading(false));
   }, []);
-
-  const authenticate = async (event: FormEvent) => {
-    event.preventDefault(); setSaving(true); setError("");
-    try {
-      await api.login(password);
-      setValues(await api.settings());
-      setPassword(""); setAuthenticated(true);
-    } catch (reason) {
-      setError(errorMessage(reason, "ההתחברות נכשלה"));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
@@ -73,8 +59,8 @@ export function useSettings() {
 
   return {
     activeSection, setActiveSection, loading, saving, message, error,
-    authenticated, password, setPassword, models, loadingModels, modelsError,
-    authenticate, save, loadModels, set, text, checked, secretSaved,
+    authorized, models, loadingModels, modelsError,
+    save, loadModels, set, text, checked, secretSaved,
   };
 }
 
