@@ -28,6 +28,8 @@ export const api = {
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
+  // Either rootId or boundaries must be present; the backend rejects a
+  // request carrying neither.
   start: (
     rootId: string,
     question: string,
@@ -37,7 +39,7 @@ export const api = {
     request<{ conversation: Conversation; run: SummaryRun }>("/api/summaries", {
       method: "POST",
       body: JSON.stringify({
-        root_id: rootId,
+        root_id: rootId || null,
         question,
         skill_keys: skillKeys,
         boundaries,

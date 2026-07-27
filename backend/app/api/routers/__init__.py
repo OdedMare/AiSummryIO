@@ -22,22 +22,23 @@ API_PREFIX = "/api"
 VERSIONED_PREFIX = "/api/v1"
 
 
-def api_router(context) -> APIRouter:
-    """One router holding every resource router, without a prefix."""
-    router = APIRouter()
-    for module in _BUILDERS:
-        router.include_router(module.build(context))
-    return router
+def resource_routers(context):
+    """A freshly built router per resource module."""
+    return [module.build(context) for module in _BUILDERS]
 
 
 def register(app, context) -> None:
     """Mount the API twice: unversioned for the UI, /v1 for API clients.
 
-    Each prefix gets its own freshly built routers. Including one router
-    object under two prefixes would register the same route objects twice and
-    duplicate them in the OpenAPI schema.
+    Each resource router is included directly on the app rather than nested
+    inside one parent router — FastAPI resolves a router included into
+    another router lazily, and mounting that parent under a prefix drops the
+    nested routes. Each prefix also gets its own freshly built routers, since
+    including one router object twice would duplicate its routes.
     """
-    app.include_router(api_router(context), prefix=VERSIONED_PREFIX)
-    app.include_router(
-        api_router(context), prefix=API_PREFIX, include_in_schema=False
-    )
+    for router in resource_routers(context):
+        app.include_router(router, prefix=VERSIONED_PREFIX)
+    for router in resource_routers(context):
+        app.include_router(
+            router, prefix=API_PREFIX, include_in_schema=False
+        )

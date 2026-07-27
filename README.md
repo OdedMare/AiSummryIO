@@ -26,6 +26,11 @@ There are no GIS providers or map dependencies.
 
 ## Run with Docker
 
+### Full stack (Compose)
+
+Builds the backend and frontend images and starts them with a local
+PostgreSQL container:
+
 ```bash
 export AISUMMRY_ADMIN_PASSWORD='your-fde-password'
 docker compose up --build
@@ -38,6 +43,111 @@ docker compose up --build
 The password is hashed on first start and persisted in the settings volume; it
 is never committed. In an air-gapped environment, make the internal `flunks`
 package available through the network's Python package source before building.
+
+Everyday Compose commands:
+
+```bash
+docker compose up --build -d          # rebuild and run detached
+docker compose up --build -d backend  # rebuild one service only
+docker compose logs -f backend        # tail a service
+docker compose ps                     # what is running
+docker compose down                   # stop, keep the data volumes
+docker compose down -v                # stop and DELETE the database volume
+```
+
+`down -v` destroys the `summaries-db` volume and every conversation, workflow,
+and piece of evidence in it. Use plain `down` unless a clean database is the
+goal.
+
+### Backend image against the shared database
+
+Compose runs its own throwaway PostgreSQL. To point the backend at the shared
+server instead, build and run the image directly:
+
+```bash
+docker build -t aisummryio-backend:latest ./backend
+
+docker run --rm -p 8000:8000 \
+  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
+  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
+  -e AISUMMRY_ADMIN_PASSWORD='your-fde-password' \
+  aisummryio-backend:latest
+```
+
+The URL carries host, port, user, password, and database in one value; the
+schema is separate. A password containing `@`, `:`, `/`, or `#` must be
+percent-encoded in the URL.
+
+`backend/.dockerignore` excludes `runtime-settings.json` and `.env`, so a
+container never inherits local settings — it starts from these variables
+alone. To keep settings and the hashed password across restarts, mount a
+volume:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
+  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
+  -e AISUMMRY_RUNTIME_SETTINGS_FILE=/data/runtime-settings.json \
+  -v aisummry-settings:/data \
+  aisummryio-backend:latest
+```
+
+Detached, with logs:
+
+```bash
+docker run -d --name aisummry-backend -p 8000:8000 \
+  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
+  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
+  aisummryio-backend:latest
+
+docker logs -f aisummry-backend
+docker stop aisummry-backend && docker rm aisummry-backend
+```
+
+The frontend image builds the same way and needs the backend's address:
+
+```bash
+docker build -t aisummryio-frontend:latest ./frontend
+
+docker run --rm -p 3000:3000 \
+  -e BACKEND_URL=http://host.docker.internal:8000 \
+  aisummryio-frontend:latest
+```
+
+### Connection notes
+
+`rnd619-nv-prd01` is an internal hostname. It resolves only on the corporate
+network or VPN — off it, DNS returns `NXDOMAIN` and the backend cannot start a
+run. Verify before launching:
+
+```bash
+nslookup rnd619-nv-prd01
+```
+
+If the host resolves on the machine but not inside the container, which some
+VPN clients cause, pin the address:
+
+```bash
+docker run --rm -p 8000:8000 \
+  --add-host rnd619-nv-prd01:<ip-address> \
+  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
+  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
+  aisummryio-backend:latest
+```
+
+Never use `localhost` in a container's database URL. Inside the container it
+resolves to the container's own loopback — `::1` first on most hosts — which
+fails as `connection refused` or `network is unreachable`. Use the real
+hostname, or `host.docker.internal` for a database running on the host.
+
+Building on Apple Silicon for an x86 server needs an explicit platform:
+
+```bash
+docker build --platform linux/amd64 -t aisummryio-backend:latest ./backend
+```
+
+The backend Dockerfile copies the source before `pip install`, so any source
+edit reinstalls every dependency. Backend rebuilds are slow by design.
 
 ## Local development
 
@@ -57,8 +167,19 @@ npm run dev
 ```
 
 Start PostgreSQL first and configure values through `backend/.env` or the FDE
-Settings screen. Backend and frontend implementation rules are documented in
-their respective `CLAUDE.md` files.
+Settings screen. For the shared database:
+
+```bash
+AISUMMRY_DATABASE_URL=postgresql://spear:spear@rnd619-nv-prd01:5432/spear
+AISUMMRY_DATABASE_SCHEMA=mosaic_magen
+```
+
+Settings saved in the UI are written to `backend/runtime-settings.json` and
+are applied **on top of** `.env`, so a stale file silently overrides an
+environment change. Delete it to fall back to the environment.
+
+Backend and frontend implementation rules are documented in their respective
+`CLAUDE.md` files.
 
 ## First FDE setup
 
