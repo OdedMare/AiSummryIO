@@ -1,41 +1,9 @@
-"""Signed admin and anonymous-session authentication."""
+"""API-token and anonymous-session authentication."""
 
 import hashlib
 import hmac
-import time
 
 from app.common.errors import AuthError
-from app.common.runtime_settings.runtime_settings_store import verify_password
-
-_ADMIN_TTL_SECONDS = 12 * 60 * 60
-
-
-def admin_token(store) -> str:
-    timestamp = str(int(time.time()))
-    signature = _sign(store, "admin:" + timestamp)
-    return timestamp + "." + signature
-
-
-def require_admin_token(store, token: str) -> None:
-    try:
-        timestamp, signature = token.split(".", 1)
-        age = time.time() - int(timestamp)
-    except (AttributeError, TypeError, ValueError):
-        raise AuthError("נדרשת התחברות FDE")
-    expected = _sign(store, "admin:" + timestamp)
-    if age < 0 or age > _ADMIN_TTL_SECONDS or not hmac.compare_digest(
-        signature, expected
-    ):
-        raise AuthError("פג תוקף ההתחברות")
-
-
-def login(store, password: str) -> str:
-    encoded = store.get().admin_password_hash
-    if not encoded:
-        raise AuthError("סיסמת FDE טרם הוגדרה בשרת")
-    if not verify_password(password, encoded):
-        raise AuthError("סיסמה שגויה")
-    return admin_token(store)
 
 
 def api_token_matches(store, token: str) -> bool:

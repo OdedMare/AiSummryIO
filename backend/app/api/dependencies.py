@@ -1,9 +1,9 @@
 """Shared FastAPI dependencies for cookie and API-token callers.
 
-Browsers authenticate with the signed HttpOnly cookies they already had.
-Scripts send the configured token as ``X-API-Key`` or
-``Authorization: Bearer``. Both paths resolve to the same identities here, so
-a route never needs to know which kind of client it is serving.
+FDE routes are guarded by the configured API token alone, sent as
+``X-API-Key`` or ``Authorization: Bearer``. Conversation identity still comes
+from the signed HttpOnly session cookie a browser already had, so a route
+never needs to know which kind of client it is serving.
 """
 
 import uuid
@@ -11,8 +11,7 @@ import uuid
 from fastapi import Cookie, Header, Response
 
 from app.api.auth import (
-    api_token_matches, bearer_token, require_admin_token, session_signature,
-    verify_session,
+    api_token_matches, bearer_token, session_signature, verify_session,
 )
 from app.common.errors import AuthError
 
@@ -33,16 +32,14 @@ def make_dependencies(store):
     """Build the dependency callables bound to one settings store."""
 
     def admin_dependency(
-        aisummry_admin: str = Cookie(default=""),
         x_api_key: str = Header(default=""),
         authorization: str = Header(default=""),
     ) -> None:
-        """Allow FDE routes for an admin cookie or the API token."""
-        if api_token_matches(
+        """Allow FDE routes only for the configured API token."""
+        if not api_token_matches(
             store, _presented_token(x_api_key, authorization)
         ):
-            return
-        require_admin_token(store, aisummry_admin)
+            raise AuthError("נדרש טוקן FDE")
 
     def user_session(
         aisummry_session: str = Cookie(default=""),

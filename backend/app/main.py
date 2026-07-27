@@ -67,7 +67,7 @@ async def app_error_handler(_request, exc):
 @app.exception_handler(ValueError)
 async def value_error_handler(_request, exc):
     return JSONResponse(status_code=422, content={"detail": str(exc)})
-y
+
 
 @app.middleware("http")
 async def request_log(request: Request, call_next):
