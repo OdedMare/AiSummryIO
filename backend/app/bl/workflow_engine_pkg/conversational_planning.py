@@ -149,9 +149,10 @@ class _ToolPlanner(_Planner):
         return payload
 
     def _result(self, answer: dict, draft) -> dict:
+        common = self._common(answer)
         return dict(
-            self._common(answer),
-            ready=bool(answer.get("ready")),
+            common,
+            ready=is_ready(answer, common),
             needs_inspection=bool(answer.get("needs_inspection")),
             draft=self._merged_draft(answer.get("draft"), draft),
         )
@@ -225,11 +226,12 @@ class _WorkflowPlanner(_Planner):
 
     def _result(self, answer: dict, _draft) -> dict:
         plan = validated_plan(as_dict(answer.get("draft")), self._tools)
+        common = self._common(answer)
         return dict(
-            self._common(answer),
+            common,
             # A draft the shared gate rejected is not ready however the model
             # labelled it; `rationale` already carries the reason to the FDE.
-            ready=bool(answer.get("ready")) and plan["can_build"],
+            ready=is_ready(answer, common) and plan["can_build"],
             draft=plan,
         )
 
