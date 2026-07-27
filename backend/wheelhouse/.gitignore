@@ -1,5 +1,0 @@
-# The internal flunks wheel must never be committed to this repository.
-*.whl
-*.tar.gz
-!README.md
-!PINNED.md
