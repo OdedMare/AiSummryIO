@@ -34,7 +34,9 @@ from app.bl.workflow_engine_pkg.planning_prompts import (
 
 _MAX_MESSAGES = 40
 _MAX_MESSAGE_CHARS = 4000
-_MAX_SAMPLE_ROWS = 10
+# The interview now always opens on a real sample, and reading it is the whole
+# point: sparse fields and empty-versus-zero only show up across enough rows.
+_MAX_SAMPLE_ROWS = 25
 _MAX_SAMPLE_FIELDS = 20
 _MAX_VALUE_CHARS = 200
 
@@ -198,8 +200,15 @@ class _ToolPlanner(_Planner):
             for field in cls._DRAFT_FIELDS
             if field not in cls._BOOL_FIELDS
         }
+        # An unusable value falls back to what was already agreed rather than
+        # blanking it: clearing here would drop a mode the FDE already set on
+        # the form, and `single`/`many` is exactly the field that fails
+        # silently when it is wrong.
         if merged["input_mode"] not in ("single", "many"):
-            merged["input_mode"] = ""
+            previous_mode = bounded_text(previous.get("input_mode"))
+            merged["input_mode"] = (
+                previous_mode if previous_mode in ("single", "many") else ""
+            )
         for field in cls._BOOL_FIELDS:
             value = draft.get(field, previous.get(field))
             merged[field] = True if value is None else bool(value)

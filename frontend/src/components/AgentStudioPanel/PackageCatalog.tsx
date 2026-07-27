@@ -195,33 +195,38 @@ const DRAFT_LABELS: Array<[keyof ToolPlanDraft, string, "rtl" | "ltr"]> = [
 ];
 
 function ToolPlanChat({
-  inspection, onApply,
+  form, inspection, onApply,
 }: {
+  form: PackageForm;
   inspection: PackageInspection | null;
   onApply: (draft: ToolPlanDraft) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // The live inspection travels with every turn, so once the FDE runs
-  // Fetch 1 ID the agent names real fields instead of guessing at them.
+  // The connection the FDE typed and the run it produced both travel with
+  // every turn, so the agent opens on real field names and never spends a
+  // question on something the form already answers.
   const chat = usePlanChat<ToolPlanDraft>(
-    (messages, draft) => api.planToolChat(messages, draft ?? {}, inspection),
+    (messages, draft) => api.planToolChat(
+      messages, { ...connectionDraft(form), ...(draft ?? {}) }, inspection,
+    ),
   );
   const draft = chat.draft;
   const filled = draft
-    ? DRAFT_LABELS.filter(([field]) => draft[field]).length : 0;
+    ? AUTHORED_LABELS.filter(([field]) => draft[field]).length : 0;
   return (
     <PlanChatDrawer open={open} busy={chat.pending}
       onOpen={() => setOpen(true)} onClose={() => setOpen(false)}
-      label="שאלו את הסוכן">
+      label="שאלו את הסוכן" disabled={!inspection}
+      disabledHint="הריצו Fetch 1 ID כדי שהסוכן יראה את הנתונים האמיתיים">
       <PlanChat chat={chat}
         title="תשאול על הטול"
-        hint="ספרו איזה מידע החבילה מחזירה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, וימלא את הטופס.">
+        hint="הסוכן ראה את הפלט של ההרצה. הוא ישאל שאלה אחת בכל פעם, עם המלצה, ויציע את הניסוח שהמודל יקרא בזמן הסיכום.">
         {draft && <div className="planner-result" aria-live="polite">
           <p className="plan-chat-count">
-            מולאו {filled} מתוך {DRAFT_LABELS.length} שדות
+            נוסחו {filled} מתוך {AUTHORED_LABELS.length} שדות
           </p>
           <dl className="plan-chat-draft">
-            {DRAFT_LABELS.map(([field, label, dir]) => (
+            {AUTHORED_LABELS.map(([field, label, dir]) => (
               <div key={field} className={draft[field] ? "filled" : "empty"}>
                 <dt>{label}</dt>
                 <dd dir={dir}>{fieldPreview(draft[field])}</dd>
@@ -232,18 +237,33 @@ function ToolPlanChat({
               <dd>{draft.agent_enabled ? "כן" : "ל-workflow בלבד"}</dd>
             </div>
           </dl>
-          {!inspection && !chat.ready &&
-            <p className="plan-chat-note">
-              כדי שהסוכן יראה את שמות השדות האמיתיים, הריצו Fetch 1 ID בטופס.
-            </p>}
           {chat.ready && <button type="button" className="planner-button"
             onClick={() => { onApply(draft); setOpen(false); }}>
-            <Beaker size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
+            <Beaker size={17} aria-hidden="true" /> טעינה לטופס לעריכה
           </button>}
         </div>}
       </PlanChat>
     </PlanChatDrawer>
   );
+}
+
+/**
+ * The connection as the interview receives it: settled fact, not a question.
+ *
+ * The FDE typed these and proved them with a run that returned rows, so they
+ * are seeded into every turn's draft. The prompt tells the agent to carry them
+ * through untouched; sending them is what lets it skip straight to meaning.
+ */
+function connectionDraft(form: PackageForm): Partial<ToolPlanDraft> {
+  return {
+    package_key: form.package_key,
+    package_id: form.package_id,
+    input_cube_name: form.input_cube_name,
+    input_cube_parameter: form.input_cube_parameter,
+    output_cube_name: form.output_cube_name,
+    input_mode: form.input_mode,
+    query_name: form.query_name,
+  };
 }
 
 /** Long JSON and prose are summarized; the form is where they get read. */
