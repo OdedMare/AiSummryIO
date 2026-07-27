@@ -698,8 +698,13 @@ button:disabled {
 /* `position: fixed`, not `absolute`: `.composer` sets `overflow-y: auto` so it
    can scroll inside its capped shell row, which makes it a clipping context an
    absolutely positioned child cannot escape — the menu was clipped and scrolled
-   away from its textarea instead of floating above the composer. Fixed takes it
-   out of that context; `MessageInput` measures the textarea to place it. */
+   away from its textarea instead of floating above the composer.
+
+   Fixed alone is not enough: `.composer` also sets `backdrop-filter`, which
+   makes it the containing block for fixed descendants, so the menu stayed
+   clipped AND its viewport coordinates were offset by the composer's position.
+   `MessageInput` portals the menu to `document.body` so the viewport really is
+   the containing block, then measures the textarea to place it. */
 .skill-menu {
   position: fixed;
   z-index: 60;

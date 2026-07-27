@@ -59,8 +59,10 @@ type MenuAnchor = { left: number; width: number; bottom: number };
 
 /**
  * Viewport rect for the skill menu, anchored above `element`. The menu is
- * `position: fixed` to escape the composer's scroll clipping, so it has to
- * track the textarea itself while the composer scrolls or the window resizes.
+ * `position: fixed` and portalled to `document.body` — `.composer` sets
+ * `backdrop-filter`, which would otherwise make it the containing block and
+ * these viewport coordinates wrong — so it has to track the textarea itself
+ * while the composer scrolls or the window resizes.
  */
 function useMenuAnchor(
   element: HTMLTextAreaElement | null, active: boolean,
@@ -68,7 +70,9 @@ function useMenuAnchor(
   const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
 
   useLayoutEffect(() => {
-    if (!element || !active) { setAnchor(null); return; }
+    // No reset when inactive: the menu is unmounted then, and re-measuring on
+    // every open keeps the stale value from ever being read.
+    if (!element || !active) return;
     const measure = () => {
       const rect = element.getBoundingClientRect();
       setAnchor({
