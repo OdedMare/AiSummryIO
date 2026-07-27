@@ -16,6 +16,7 @@ python -m pytest -q
 | `runner_config` | Timeout precedence; `FlapiConfig` built for both modern and legacy classes |
 | Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed |
 | Workflow validation | No forward step references; `depends_on` must be declared |
+| Conversational planning | Draft carries forward between turns; sample data stays bounded and drops internals; a chat draft still passes the shared validation gate |
 | Identifier mapping | Fan-out over list values plus deduplication |
 | Settings | URL/schema normalization, JDBC translation, secret masking |
 | Auth | scrypt hashing and verification |

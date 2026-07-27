@@ -10,6 +10,10 @@ client, and the provider it was constructed with.
 | `workflow_engine.py` | 857 | `SummaryService` — execution, synthesis, planning |
 | `jobs.py` | 72 | `JobRunner` — the bounded background queue |
 
+`workflow_engine_pkg/` holds the behavior modules the facade delegates to,
+including `conversational_planning.py` and its prompts in
+`planning_prompts.py`.
+
 ## `SummaryService` (`workflow_engine.py`)
 
 Constructed with `(repository, provider, llm, settings_store)` — all four are
@@ -23,6 +27,8 @@ a model, or a flunks wheel.
 | `full_summary` | A new question | Runs **all** published `baseline`/`both` workflows |
 | `follow_up` | A message in an existing conversation | Reuses prior evidence; runs **one** `detail`/`both` workflow or one FDE-approved tool, or answers from cache |
 | `plan_workflow` | FDE asks for a workflow | Drafts one from catalog tools; never publishes |
+| `plan_tool_chat` | FDE discusses a tool | One conversational turn; returns the tool draft so far |
+| `plan_workflow_chat` | FDE discusses a workflow | One conversational turn; draft passes the same validation gate |
 | `inspect_tool` | FDE previews a package | One identifier, bounded preview, inferred schema, no persistence |
 | `dry_run` | FDE tests a workflow | Executes with `save_evidence=False` |
 | `preview_skill` | FDE tests Skill wording | Runs one Skill against sample sections; no packages, no persistence |
