@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import {
   CheckCircle2, CircleDot, LoaderCircle, MessagesSquare, Send, Sparkles,
@@ -234,6 +235,13 @@ function ConfirmCard({ onAnswer }: { onAnswer: (text: string) => void }) {
  * Filling the form by hand is the default path and stays untouched behind
  * this. The interview is one button away for an FDE who wants it, and closing
  * the drawer keeps the conversation — reopening resumes rather than restarts.
+ *
+ * The drawer is portalled to the body because both studio editors mount this
+ * inside their own `<form>`, and the interview composer is a form too. Nested
+ * forms are invalid HTML: the browser drops the inner one, so every send would
+ * submit the package or workflow being edited instead of talking to the agent.
+ * `position: fixed` moves the drawer visually but not in the DOM, so only the
+ * portal actually takes it out of the surrounding form.
  */
 export function PlanChatDrawer({
   open, onOpen, onClose, label, busy, children,
@@ -255,14 +263,16 @@ export function PlanChatDrawer({
           : <Sparkles size={16} aria-hidden="true" />}
         <span>{label}</span>
       </button>
-      {open && <div className="agent-chat-drawer" role="dialog"
-        aria-modal="false" aria-label={label}>
-        <button type="button" className="agent-chat-close" onClick={onClose}
-          aria-label="סגירת השיחה">
-          <X size={17} aria-hidden="true" />
-        </button>
-        {children}
-      </div>}
+      {open && createPortal(
+        <div className="agent-chat-drawer" role="dialog"
+          aria-modal="false" aria-label={label}>
+          <button type="button" className="agent-chat-close" onClick={onClose}
+            aria-label="סגירת השיחה">
+            <X size={17} aria-hidden="true" />
+          </button>
+          {children}
+        </div>,
+        document.body)}
     </>
   );
 }

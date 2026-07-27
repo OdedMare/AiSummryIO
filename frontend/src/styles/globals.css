@@ -1980,49 +1980,6 @@ select:focus {
   padding: clamp(22px, 3vw, 34px);
 }
 
-.workflow-planner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
-  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
-  border-radius: 17px;
-}
-
-.workflow-planner > header,
-.workflow-planner > label,
-.planner-result {
-  grid-column: 1 / -1;
-}
-
-.workflow-planner > header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.workflow-planner > header > span {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  color: var(--primary);
-  background: var(--surface);
-  border-radius: 9px;
-}
-
-.workflow-planner h3,
-.workflow-planner p {
-  margin: 0;
-}
-
-.workflow-planner header p {
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
 .planner-button {
   display: inline-flex;
   align-items: center;
@@ -2472,11 +2429,21 @@ select:focus {
 }
 
 .graph-preview b {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 7px 9px;
   color: var(--primary);
   background: var(--primary-soft);
   border-radius: 7px;
   font-size: 11px;
+}
+
+/* The mapping a step reads through, under its name. */
+.graph-preview b small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
 }
 
 /* One dependency level: its steps stack vertically because they run in
@@ -2650,7 +2617,8 @@ select:focus {
   font-size: 11px;
 }
 
-.skill-tester label > small {
+.skill-tester label > small,
+.field-hint {
   display: block;
   margin-top: 4px;
   color: var(--text-muted);

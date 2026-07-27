@@ -81,21 +81,34 @@ class WorkflowRepository:
         if not workflow["steps"]:
             raise ValueError("אי אפשר לפרסם תהליך ללא שלבים")
         validate_steps(workflow["steps"])
-        if workflow.get("examples") or self._packages_have_examples(workflow):
+        if workflow.get("examples"):
             return
+        incomplete = self._packages_missing_examples(workflow)
+        if not incomplete:
+            return
+        # Naming the packages is the whole point: the generic form of this
+        # message left the FDE to open every tool in the workflow to find
+        # which one was unfinished.
         raise ValueError(
-            "נדרשת דוגמת תהליך או דוגמאות קלט ופלט לכל חבילה לפני פרסום"
+            "נדרשת דוגמת תהליך, או דוגמאות קלט ופלט לכל חבילה, לפני פרסום. "
+            "חסרות דוגמאות ב: %s" % "; ".join(incomplete)
         )
 
-    def _packages_have_examples(self, workflow: dict) -> bool:
-        packages = (
-            self.get_package(step["package_version_id"])
-            for step in workflow["steps"]
-        )
-        return all(
-            bool(item.get("example_input")) and bool(item.get("example_output"))
-            for item in packages
-        )
+    def _packages_missing_examples(self, workflow: dict) -> List[str]:
+        """Names of step packages lacking an input or output example."""
+        missing = []
+        for step in workflow["steps"]:
+            item = self.get_package(step["package_version_id"])
+            gaps = []
+            if not item.get("example_input"):
+                gaps.append("דוגמת קלט")
+            if not item.get("example_output"):
+                gaps.append("דוגמת פלט")
+            if gaps:
+                missing.append(
+                    "%s (%s)" % (item.get("name", step["name"]), " ו".join(gaps))
+                )
+        return missing
 
 
 def _workflow_values(row_id, workflow_key, version, data):

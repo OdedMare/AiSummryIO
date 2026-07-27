@@ -127,11 +127,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  planWorkflow: (prompt: string) =>
-    request<WorkflowPlan>("/api/workflows/plan", {
-      method: "POST",
-      body: JSON.stringify({ prompt }),
-    }),
   planWorkflowChat: (
     messages: PlanChatMessage[], draft: WorkflowPlan | null,
   ) =>

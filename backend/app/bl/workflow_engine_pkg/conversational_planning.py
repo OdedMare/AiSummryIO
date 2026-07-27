@@ -161,18 +161,36 @@ class _ToolPlanner(_Planner):
             payload["inspection_result"] = self._inspection(inspection)
         return payload
 
+    # What the FDE is told when a JSON field had to be dropped. Named in
+    # Hebrew because `open_points` is read straight off the screen.
+    _JSON_LABELS = {
+        "output_schema": "חוזה הפלט",
+        "example_input": "דוגמת הקלט",
+        "example_output": "דוגמת הפלט",
+    }
+
     def _result(self, answer: dict, draft) -> dict:
         common = self._common(answer)
+        merged, dropped = self._merged_draft(answer.get("draft"), draft)
+        if dropped:
+            common["open_points"] = common["open_points"] + dropped
         return dict(
             common,
-            ready=is_ready(answer, common),
+            # A field the interview still owes cannot be a finished draft,
+            # whatever the model claimed — the form would open with it blank.
+            ready=is_ready(answer, common) and not dropped,
             needs_inspection=bool(answer.get("needs_inspection")),
-            draft=self._merged_draft(answer.get("draft"), draft),
+            draft=merged,
         )
 
     @classmethod
-    def _merged_draft(cls, draft, previous) -> Dict[str, Any]:
-        """This turn over the last, so nothing agreed is silently dropped."""
+    def _merged_draft(cls, draft, previous):
+        """This turn over the last, so nothing agreed is silently dropped.
+
+        Returns the draft plus a line per JSON field that had to be discarded,
+        so a malformed suggestion resurfaces as an open point instead of an
+        empty field the FDE has to notice on their own.
+        """
         draft, previous = as_dict(draft), as_dict(previous)
         merged = {
             field: bounded_text(draft.get(field))
@@ -185,9 +203,16 @@ class _ToolPlanner(_Planner):
         for field in cls._BOOL_FIELDS:
             value = draft.get(field, previous.get(field))
             merged[field] = True if value is None else bool(value)
+        dropped = []
         for field, kind in cls._JSON_FIELDS.items():
-            merged[field] = cls._json_text(merged[field], kind)
-        return merged
+            offered = merged[field]
+            merged[field] = cls._json_text(offered, kind)
+            if offered and not merged[field]:
+                dropped.append(
+                    "%s לא היה JSON תקין וירד מהטיוטה — צריך למלא אותו שוב."
+                    % cls._JSON_LABELS[field]
+                )
+        return merged, dropped
 
     @staticmethod
     def _json_text(value: str, kind: type) -> str:
@@ -195,7 +220,8 @@ class _ToolPlanner(_Planner):
 
         A malformed suggestion would otherwise reach the form as text the FDE
         has to debug by hand. Dropping it back to empty leaves the field
-        visibly unfilled, which the interview already knows how to resume.
+        visibly unfilled; the caller turns that into an open point so the
+        interview knows to resume it rather than the FDE discovering it later.
         """
         if not value:
             return ""

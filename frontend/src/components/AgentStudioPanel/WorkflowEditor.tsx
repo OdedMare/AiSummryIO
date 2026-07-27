@@ -2,8 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import {
-  Bot, CheckCircle2, ChevronDown, GitFork, LoaderCircle, Play, Plus, Save,
-  Send, Sparkles, Trash2, Workflow,
+  CheckCircle2, ChevronDown, GitFork, Play, Plus, Save, Send, Sparkles,
+  Trash2, Workflow,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
@@ -34,13 +34,14 @@ function useWorkflowEditor(
   const [form, setForm] = useState(emptyWorkflow);
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [error, setError] = useState("");
+  // Publishing and dry runs are triggered from the library column, so their
+  // failures are reported there. Routing them to `error` put the reason in the
+  // form column, far from the button that caused it, where it went unread.
+  const [libraryError, setLibraryError] = useState("");
   const [message, setMessage] = useState("");
   const [dryRunId, setDryRunId] = useState("");
   const [dryResult, setDryResult] = useState("");
   const [saving, setSaving] = useState(false);
-  const [planPrompt, setPlanPrompt] = useState("");
-  const [planResult, setPlanResult] = useState<WorkflowPlan | null>(null);
-  const [planning, setPlanning] = useState(false);
 
   const update = (key: keyof typeof emptyWorkflow, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -70,20 +71,20 @@ function useWorkflowEditor(
     }
   };
   const publish = async (id: string) => {
-    setError("");
+    setLibraryError("");
     try {
       await api.publishWorkflow(id); await onRefresh();
     } catch (reason) {
-      setError(errorMessage(reason, "הפרסום נכשל"));
+      setLibraryError(errorMessage(reason, "הפרסום נכשל"));
     }
   };
   const dryRun = async (id: string) => {
-    if (!dryRunId.trim()) return setError("יש להזין מזהה בדיקה");
-    setDryResult("מריץ חבילות…"); setError("");
+    if (!dryRunId.trim()) return setLibraryError("יש להזין מזהה בדיקה");
+    setDryResult("מריץ חבילות…"); setLibraryError("");
     try {
       setDryResult(JSON.stringify(await api.dryRun(id, dryRunId.trim()), null, 2));
     } catch (reason) {
-      setDryResult(""); setError(errorMessage(reason, "הבדיקה נכשלה"));
+      setDryResult(""); setLibraryError(errorMessage(reason, "הבדיקה נכשלה"));
     }
   };
   /** Load an agent proposal into the form as an editable draft, never saved. */
@@ -92,26 +93,12 @@ function useWorkflowEditor(
     setForm(planForm(plan)); setSteps(plan.steps.map((step) => ({ ...step })));
     setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
   };
-  const planWorkflow = async () => {
-    if (!planPrompt.trim()) return setError("יש לתאר מה התהליך צריך להשיג");
-    setPlanning(true); setError(""); setMessage("");
-    try {
-      const result = await api.planWorkflow(planPrompt.trim());
-      setPlanResult(result);
-      loadPlan(result);
-    } catch (reason) {
-      setError(errorMessage(reason, "תכנון התהליך נכשל"));
-    } finally {
-      setPlanning(false);
-    }
-  };
   const reset = () => { setForm(emptyWorkflow); setSteps([]); };
 
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
-    planPrompt, setPlanPrompt, planResult, planning, update, edit, addStep,
-    updateStep, removeStep, save, publish, dryRun, planWorkflow, loadPlan,
-    reset,
+    libraryError, update, edit, addStep, updateStep, removeStep, save, publish,
+    dryRun, loadPlan, reset,
   };
 }
 
@@ -128,6 +115,8 @@ function WorkflowLibrary({
       <header><h3>תהליכי עבודה</h3><span>{workflows.length} תהליכים</span></header>
       {workflows.map((item) =>
         <WorkflowCard key={item.id} item={item} editor={editor} />)}
+      {editor.libraryError &&
+        <p className="form-error" role="alert">{editor.libraryError}</p>}
       <label className="dry-run-field"><span>מזהה לבדיקה חיה</span>
         <input dir="ltr" value={editor.dryRunId}
           onChange={(e) => editor.setDryRunId(e.target.value)} />
@@ -176,7 +165,6 @@ function WorkflowForm({
         </div>
         <WorkflowPlanChat editor={editor} />
       </header>
-      <WorkflowPlanner editor={editor} />
       <WorkflowFields editor={editor} />
       <StepEditor packages={packages} editor={editor} />
       <AdvancedWorkflowFields editor={editor} />
@@ -232,49 +220,6 @@ function WorkflowPlanChat({ editor }: { editor: Editor }) {
         </div>}
       </PlanChat>
     </PlanChatDrawer>
-  );
-}
-
-function WorkflowPlanner({ editor }: { editor: Editor }) {
-  return (
-    <section className="workflow-planner" aria-labelledby="workflow-planner-title">
-      <header><span><Bot size={19} /></span><div>
-        <h3 id="workflow-planner-title">בניית workflow בעזרת הסוכן</h3>
-        <p>הצעת AI בלבד: הסוכן משתמש בטולים הקיימים או מפרט מה חסר.</p>
-      </div></header>
-      <label><span>הנחיית FDE</span><textarea value={editor.planPrompt}
-        onChange={(e) => editor.setPlanPrompt(e.target.value)} rows={4}
-        placeholder="לדוגמה: בנה תהליך שמאתר בעלות, קשרים וסיכונים סביב המזהה" />
-      </label>
-      <button type="button" className="planner-button"
-        onClick={() => void editor.planWorkflow()}
-        disabled={editor.planning || !editor.planPrompt.trim()}>
-        {editor.planning ? <LoaderCircle className="spin" size={17} /> :
-          <Sparkles size={17} />}
-        {editor.planning ? "מתכנן…" : "הרכבת הצעה"}
-      </button>
-      {editor.planResult && <PlanResult plan={editor.planResult} />}
-    </section>
-  );
-}
-
-function PlanResult({ plan }: { plan: WorkflowPlan }) {
-  return (
-    <div className="planner-result" aria-live="polite">
-      {plan.rationale && <p>{plan.rationale}</p>}
-      {!!plan.missing_tools.length && <section>
-        <strong>מה חסר כדי להשלים את הבקשה</strong>
-        <ul>{plan.missing_tools.map((item, index) =>
-          <li key={`${item.name}-${index}`}><b>{item.name}</b>
-            <span>{item.reason}</span>
-            {(item.input_description || item.output_description) &&
-              <small>קלט: {item.input_description || "לא צוין"} · פלט:{" "}
-                {item.output_description || "לא צוין"}
-              </small>}
-          </li>)}
-        </ul>
-      </section>}
-    </div>
   );
 }
 
@@ -362,18 +307,99 @@ function StepCard({
               פלט: {prior.name}
             </option>)}
         </select></label>
-        {mappedStep(step) && <label><span>שדה מזהה מתוך הפלט</span>
-          <input dir="ltr" value={step.input_field}
-            onChange={(e) => editor.updateStep(
-              index, { input_field: e.target.value }
-            )} />
-        </label>}
+        {mappedStep(step) && <InputFieldPicker step={step} index={index}
+          packages={packages} editor={editor} />}
       </div>
       <button type="button" className="icon-danger"
         onClick={() => editor.removeStep(index)}
         aria-label={`מחיקת ${step.name}`}><Trash2 size={17} /></button>
     </article>
   );
+}
+
+/**
+ * Which field of the source step's output carries the next identifier.
+ *
+ * A dropdown rather than a text box: a typo here is not caught until publish
+ * validation rejects the mapping, long after the FDE has stopped thinking
+ * about the shape of that data. A package with neither a schema nor examples
+ * has no fields to offer, so it falls back to free text instead of showing an
+ * empty list that would leave the step unfinishable.
+ */
+function InputFieldPicker({
+  step, index, packages, editor,
+}: {
+  step: WorkflowStep;
+  index: number;
+  packages: PackageVersion[];
+  editor: Editor;
+}) {
+  const fields = sourceOutputFields(step, index, editor.steps, packages);
+  const label = <span>שדה מזהה מתוך הפלט</span>;
+  const set = (value: string) =>
+    editor.updateStep(index, { input_field: value });
+
+  if (!fields.length) {
+    return (
+      <label>{label}
+        <input dir="ltr" value={step.input_field}
+          onChange={(event) => set(event.target.value)} />
+        <small className="field-hint">
+          לטול המקור אין עדיין חוזה פלט או דוגמאות, לכן שם השדה מוקלד ידנית.
+        </small>
+      </label>
+    );
+  }
+  // An existing mapping is offered even when the source no longer lists it,
+  // so editing a saved workflow never silently drops a field the FDE chose.
+  const known = !step.input_field || fields.includes(step.input_field);
+  return (
+    <label>{label}
+      <select dir="ltr" value={step.input_field}
+        onChange={(event) => set(event.target.value)}>
+        <option value="">בחירת שדה</option>
+        {fields.map((field) =>
+          <option key={field} value={field}>{field}</option>)}
+        {!known &&
+          <option value={step.input_field}>{step.input_field} (לא בקטלוג)</option>}
+      </select>
+      {!known && <small className="field-hint">
+        השדה אינו מופיע בפלט של טול המקור. יש לוודא שהוא עדיין קיים.
+      </small>}
+    </label>
+  );
+}
+
+/** Output field names of the package feeding this step, or none. */
+function sourceOutputFields(
+  step: WorkflowStep, index: number, steps: WorkflowStep[],
+  packages: PackageVersion[],
+) {
+  const sourceKey = step.input_source.startsWith("steps.")
+    ? step.input_source.split(".")[1] : "";
+  if (!sourceKey) return [];
+  const source = steps.slice(0, index).find((prior) => prior.key === sourceKey);
+  const item = packages.find(
+    (candidate) => candidate.id === source?.package_version_id);
+  return item ? outputFields(item) : [];
+}
+
+/**
+ * Mirrors the backend's `_output_fields`: schema properties unioned with the
+ * keys actually seen in the examples, so the picker and the planning agent
+ * agree on what a tool emits.
+ */
+function outputFields(item: PackageVersion) {
+  const schema = item.output_schema as { properties?: Record<string, unknown> };
+  const properties = schema?.properties;
+  const names = new Set<string>(
+    properties && typeof properties === "object" ? Object.keys(properties) : []);
+  for (const row of item.example_output ?? []) {
+    if (row && typeof row === "object") {
+      Object.keys(row).forEach((field) => names.add(field));
+    }
+  }
+  return [...names].sort();
 }
 
 function GraphPreview({ steps }: { steps: WorkflowStep[] }) {
@@ -387,12 +413,27 @@ function GraphPreview({ steps }: { steps: WorkflowStep[] }) {
               : `שלב ${index + 1}`}
           </span>
           <div className="graph-level-steps">
-            {level.map((step) => <b key={step.key}>{step.name}</b>)}
+            {level.map((step) =>
+              <b key={step.key}>{step.name}
+                {/* The wiring, spelled out: which earlier step this reads and
+                    through which field, so a mapping is visible without
+                    opening the step. */}
+                {mappedStep(step) && <small dir="ltr">
+                  {sourceName(step, steps)}
+                  {step.input_field ? ` → ${step.input_field}` : " → ?"}
+                </small>}
+              </b>)}
           </div>
           {index < levels.length - 1 && <GitFork size={15} />}
         </div>)}
     </div>
   );
+}
+
+/** The display name of the step a mapped step reads from. */
+function sourceName(step: WorkflowStep, steps: WorkflowStep[]) {
+  const key = step.input_source.split(".")[1] ?? "";
+  return steps.find((prior) => prior.key === key)?.name || key;
 }
 
 // Mirrors the backend's step_levels: steps whose dependencies are all
