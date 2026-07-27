@@ -17,15 +17,14 @@ def step_levels(steps: List[dict]) -> List[List[dict]]:
     levels, placed = [], set()
     remaining = list(steps)
     while remaining:
-        level = [
-            step for step in remaining
-            if _dependencies(step) <= placed
-        ]
+        level = [step for step in remaining if _dependencies(step) <= placed]
         if not level:
             raise ValueError("קיימת תלות מעגלית בין שלבי התהליך")
         levels.append(level)
         placed.update(step["key"] for step in level)
-        remaining = [step for step in remaining if step not in level]
+        # Identity, not equality: two steps may compare equal as dicts.
+        chosen = {id(step) for step in level}
+        remaining = [step for step in remaining if id(step) not in chosen]
     return levels
 
 

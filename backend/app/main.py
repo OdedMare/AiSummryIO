@@ -66,7 +66,22 @@ async def app_error_handler(_request, exc):
     )
 
 
-o
+@app.exception_handler(ValueError)
+async def value_error_handler(_request, exc):
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_request, exc):
+    """Return one Hebrew sentence instead of FastAPI's list of error objects.
+
+    The default 422 body is ``detail: [{loc, msg, type}, ...]``, which any
+    client joining it into a message renders as "[object Object]". Callers
+    here only ever need to know which field was rejected and why.
+    """
+    return JSONResponse(
+        status_code=422, content={"detail": format_validation_error(exc)}
+    )
 
 
 @app.middleware("http")

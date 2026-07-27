@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 from app.common.geometry import multipolygon_to_wkt
+from app.dal.repository.validation import step_levels
 
 
 def geo_capable(workflow: dict) -> bool:
