@@ -151,11 +151,8 @@ export function PlanChat<TDraft>({
       {children}
 
       <form className="plan-chat-composer" onSubmit={submit}>
-        <label className="visually-hidden" htmlFor="plan-chat-input">
-          הודעה לסוכן
-        </label>
         <textarea id="plan-chat-input" rows={2} value={text}
-          placeholder="ספרו על הנתונים שלכם…"
+          aria-label="הודעה לסוכן" placeholder="ספרו על הנתונים שלכם…"
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown} disabled={chat.pending} />
         <button type="submit" disabled={chat.pending || !text.trim()}

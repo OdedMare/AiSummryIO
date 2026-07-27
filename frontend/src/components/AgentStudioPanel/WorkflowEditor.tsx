@@ -10,6 +10,7 @@ import type {
   PackageVersion, WorkflowPlan, WorkflowStep, WorkflowVersion,
 } from "@/types";
 import { emptyWorkflow, parseJson } from "./forms";
+import { PlanChat, usePlanChat } from "./PlanChat";
 
 export default function WorkflowEditor({
   packages, workflows, onRefresh,
@@ -85,16 +86,19 @@ function useWorkflowEditor(
       setDryResult(""); setError(errorMessage(reason, "הבדיקה נכשלה"));
     }
   };
+  /** Load an agent proposal into the form as an editable draft, never saved. */
+  const loadPlan = (plan: WorkflowPlan) => {
+    if (!plan.can_build) return;
+    setForm(planForm(plan)); setSteps(plan.steps.map((step) => ({ ...step })));
+    setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
+  };
   const planWorkflow = async () => {
     if (!planPrompt.trim()) return setError("יש לתאר מה התהליך צריך להשיג");
     setPlanning(true); setError(""); setMessage("");
     try {
       const result = await api.planWorkflow(planPrompt.trim());
       setPlanResult(result);
-      if (result.can_build) {
-        setForm(planForm(result)); setSteps(result.steps);
-        setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
-      }
+      loadPlan(result);
     } catch (reason) {
       setError(errorMessage(reason, "תכנון התהליך נכשל"));
     } finally {
@@ -106,7 +110,8 @@ function useWorkflowEditor(
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
     planPrompt, setPlanPrompt, planResult, planning, update, edit, addStep,
-    updateStep, removeStep, save, publish, dryRun, planWorkflow, reset,
+    updateStep, removeStep, save, publish, dryRun, planWorkflow, loadPlan,
+    reset,
   };
 }
 
@@ -163,6 +168,7 @@ function WorkflowForm({
 }) {
   return (
     <form className="studio-form workflow-form" onSubmit={editor.save}>
+      <WorkflowPlanChat editor={editor} />
       <WorkflowPlanner editor={editor} />
       <WorkflowFields editor={editor} />
       <StepEditor packages={packages} editor={editor} />
@@ -176,6 +182,44 @@ function WorkflowForm({
         <pre className="dry-result" dir="ltr">{editor.dryResult}</pre>}
       <WorkflowActions editor={editor} />
     </form>
+  );
+}
+
+function WorkflowPlanChat({ editor }: { editor: Editor }) {
+  const chat = usePlanChat<WorkflowPlan>(
+    (messages, draft) => api.planWorkflowChat(messages, draft),
+  );
+  const plan = chat.draft;
+  return (
+    <PlanChat chat={chat}
+      title="תכנון תהליך בשיחה עם הסוכן"
+      hint="ספרו מה אתם רוצים לדעת על המזהה. הסוכן ישאל אילו שדות מחברים בין השלבים.">
+      {plan && <div className="planner-result" aria-live="polite">
+        {plan.rationale && <p>{plan.rationale}</p>}
+        {!!plan.steps.length && <ol className="plan-chat-steps">
+          {plan.steps.map((step) =>
+            <li key={step.key}>
+              <b dir="ltr">{step.key}</b> <span>{step.name}</span>
+              <small dir="ltr">
+                {step.input_source}
+                {step.input_field ? ` → ${step.input_field}` : ""}
+              </small>
+            </li>)}
+        </ol>}
+        {!!plan.missing_tools.length && <section>
+          <strong>מה חסר כדי להשלים את הבקשה</strong>
+          <ul>{plan.missing_tools.map((item, index) =>
+            <li key={`${item.name}-${index}`}><b>{item.name}</b>
+              <span>{item.reason}</span>
+            </li>)}
+          </ul>
+        </section>}
+        {chat.ready && <button type="button" className="planner-button"
+          onClick={() => editor.loadPlan(plan)}>
+          <Sparkles size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
+        </button>}
+      </div>}
+    </PlanChat>
   );
 }
 

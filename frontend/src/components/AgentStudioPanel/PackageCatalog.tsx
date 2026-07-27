@@ -8,8 +8,11 @@ import {
   PackagePlus, Save, Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
-import type { PackageInspection, PackageVersion } from "@/types";
+import type {
+  PackageInspection, PackageVersion, ToolPlanDraft,
+} from "@/types";
 import { emptyPackage, parseJson } from "./forms";
+import { PlanChat, usePlanChat } from "./PlanChat";
 
 type PackageForm = typeof emptyPackage;
 type FieldTarget =
@@ -59,6 +62,26 @@ export default function PackageCatalog({
       example_output: JSON.stringify(item.example_output, null, 2),
     });
     setInspection(null); setMessage("");
+  };
+
+  /** Copy an agreed chat draft into the form, leaving typed values intact. */
+  const applyDraft = (draft: ToolPlanDraft) => {
+    setForm((current) => ({
+      ...current,
+      name: current.name.trim() || draft.name,
+      package_id: current.package_id.trim() || draft.package_id,
+      input_cube_name:
+        current.input_cube_name.trim() || draft.input_cube_name,
+      input_cube_parameter:
+        current.input_cube_parameter.trim() || draft.input_cube_parameter,
+      output_cube_name:
+        current.output_cube_name.trim() || draft.output_cube_name,
+      input_mode: draft.input_mode || current.input_mode,
+      description: current.description.trim() || draft.description,
+      agent_instructions:
+        current.agent_instructions.trim() || draft.agent_instructions,
+    }));
+    setMessage("פרטי הטול מהשיחה נטענו לטופס. יש לבדוק לפני השמירה.");
   };
 
   const save = async (event: FormEvent) => {
@@ -113,6 +136,7 @@ export default function PackageCatalog({
       <PackageList items={items} onEdit={edit} />
       <form className="studio-form" onSubmit={save}>
         <FormHeader editing={!!form.package_key} />
+        <ToolPlanChat inspection={inspection} onApply={applyDraft} />
         <PackageFields form={form} update={update}
           onDropField={(event, target) =>
             dropTextField(event, target, setForm)} />
@@ -140,6 +164,55 @@ export default function PackageCatalog({
         </div>
       </form>
     </div>
+  );
+}
+
+const DRAFT_LABELS: Array<[keyof ToolPlanDraft, string]> = [
+  ["name", "שם תצוגה"],
+  ["package_id", "Package ID"],
+  ["input_cube_name", "Input cube"],
+  ["input_cube_parameter", "Input parameter"],
+  ["output_cube_name", "Output cube"],
+  ["input_mode", "מצב קלט"],
+];
+
+function ToolPlanChat({
+  inspection, onApply,
+}: {
+  inspection: PackageInspection | null;
+  onApply: (draft: ToolPlanDraft) => void;
+}) {
+  // The live inspection travels with every turn, so once the FDE runs
+  // Fetch 1 ID the agent names real fields instead of guessing at them.
+  const chat = usePlanChat<ToolPlanDraft>(
+    (messages, draft) => api.planToolChat(messages, draft ?? {}, inspection),
+  );
+  const draft = chat.draft;
+  return (
+    <PlanChat chat={chat}
+      title="הגדרת טול בשיחה עם הסוכן"
+      hint="ספרו איזה מידע החבילה מחזירה. הסוכן ישאל מה חסר וימלא את הטופס.">
+      {draft && <div className="planner-result" aria-live="polite">
+        <dl className="plan-chat-draft">
+          {DRAFT_LABELS.map(([field, label]) => (
+            <div key={field}>
+              <dt>{label}</dt>
+              <dd dir={field === "name" ? "rtl" : "ltr"}>
+                {draft[field] || "—"}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {chat.questions.length === 0 && !chat.ready && !inspection &&
+          <p className="plan-chat-note">
+            כדי שהסוכן יראה את שמות השדות האמיתיים, הריצו Fetch 1 ID למטה.
+          </p>}
+        {chat.ready && <button type="button" className="planner-button"
+          onClick={() => onApply(draft)}>
+          <Beaker size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
+        </button>}
+      </div>}
+    </PlanChat>
   );
 }
 
