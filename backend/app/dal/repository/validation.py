@@ -3,6 +3,42 @@
 from typing import List
 
 
+def step_levels(steps: List[dict]) -> List[List[dict]]:
+    """Group steps into dependency levels, preserving declared order.
+
+    A level holds steps whose dependencies are all satisfied by earlier
+    levels, so its members are independent of one another and may run
+    concurrently. Steps that declare no dependency all land in level 0, which
+    is how a workflow becomes a set of parallel tools rather than a chain.
+
+    Validation already rejects forward references, so every step is reachable
+    and no cycle can survive to this point.
+    """
+    levels, placed = [], set()
+    remaining = list(steps)
+    while remaining:
+        level = [
+            step for step in remaining
+            if _dependencies(step) <= placed
+        ]
+        if not level:
+            raise ValueError("קיימת תלות מעגלית בין שלבי התהליך")
+        levels.append(level)
+        placed.update(step["key"] for step in level)
+        remaining = [step for step in remaining if step not in level]
+    return levels
+
+
+def _dependencies(step: dict) -> set:
+    """Every step key this step must wait for, declared or implied by input."""
+    declared = set(step.get("depends_on") or [])
+    source = step.get("input_source", "workflow.id")
+    parts = source.split(".")
+    if len(parts) >= 2 and parts[0] == "steps":
+        declared.add(parts[1])
+    return declared
+
+
 def validate_steps(steps: List[dict]) -> None:
     keys = [step["key"] for step in steps]
     if len(keys) != len(set(keys)):

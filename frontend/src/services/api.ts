@@ -18,9 +18,34 @@ export async function request<T>(
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || `הבקשה נכשלה (${response.status})`);
+    throw new Error(errorDetail(data, response.status));
   }
   return data as T;
+}
+
+// A rejected body can still arrive as FastAPI's list of error objects, which
+// would render as "[object Object]" if passed to Error directly.
+function errorDetail(data: unknown, status: number): string {
+  const fallback = `הבקשה נכשלה (${status})`;
+  const detail = (data as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") return detail.trim() || fallback;
+  if (Array.isArray(detail)) {
+    const parts = detail.map(detailEntry).filter(Boolean);
+    return parts.length ? parts.join("; ") : fallback;
+  }
+  if (detail && typeof detail === "object") return detailEntry(detail) || fallback;
+  return fallback;
+}
+
+function detailEntry(entry: unknown): string {
+  if (typeof entry === "string") return entry.trim();
+  if (!entry || typeof entry !== "object") return "";
+  const { loc, msg } = entry as { loc?: unknown; msg?: unknown };
+  if (typeof msg !== "string") return "";
+  const field = Array.isArray(loc)
+    ? loc.filter((part) => part !== "body").join(" → ")
+    : "";
+  return field ? `${field}: ${msg}` : msg;
 }
 
 export const api = {

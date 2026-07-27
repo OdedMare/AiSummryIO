@@ -117,13 +117,58 @@ def execute_workflow(
 
 
 def _run_steps(service, run, workflow, context, save_evidence):
+    """Run the workflow's steps, level by level.
+
+    Steps that do not depend on one another are independent package calls, so
+    each level runs concurrently. A level completes before the next starts,
+    which is what lets a dependent step read its source from
+    ``context["steps"]`` without any further coordination.
+    """
     warnings, evidence_ids = [], []
-    for step in workflow["steps"]:
-        records = _run_step(service, step, context, warnings)
+    for level in step_levels(workflow["steps"]):
+        _run_level(
+            service, run, workflow, context, save_evidence, level,
+            warnings, evidence_ids,
+        )
+    return warnings, evidence_ids
+
+
+def _run_level(
+    service, run, workflow, context, save_evidence, level,
+    warnings, evidence_ids,
+) -> None:
+    outcomes = _level_outcomes(service, context, level)
+    # Applied in the level's declared order so evidence and warnings stay
+    # stable regardless of which package finished first.
+    for step in level:
+        records, step_warnings = outcomes[step["key"]]
+        warnings.extend(step_warnings)
         context["steps"][step["key"]] = records
         _save_evidence(service, run, workflow, step, records, evidence_ids,
                        save_evidence)
-    return warnings, evidence_ids
+
+
+def _level_outcomes(service, context, level) -> Dict[str, tuple]:
+    """Map each step key in the level to its ``(records, warnings)``."""
+    if len(level) == 1:
+        step = level[0]
+        return {step["key"]: _step_outcome(service, step, context)}
+    workers = min(service._store.get().max_parallel_workflows, len(level))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_step_outcome, service, step, context): step["key"]
+            for step in level
+        }
+        return {
+            futures[future]: future.result()
+            for future in as_completed(futures)
+        }
+
+
+def _step_outcome(service, step, context) -> tuple:
+    """Run one step, keeping its warnings local so threads never share a list."""
+    warnings = []
+    return _run_step(service, step, context, warnings), warnings
 
 
 def _run_step(service, step, context, warnings):

@@ -5,11 +5,13 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import make_dependencies
 from app.api.routers import register
 from app.api.routers.context import ApiContext
+from app.api.validation_errors import format_validation_error
 from app.bl.jobs import JobRunner
 from app.bl.workflow_engine import SummaryService
 from app.common.config.settings import Settings
@@ -64,9 +66,7 @@ async def app_error_handler(_request, exc):
     )
 
 
-@app.exception_handler(ValueError)
-async def value_error_handler(_request, exc):
-    return JSONResponse(status_code=422, content={"detail": str(exc)})
+o
 
 
 @app.middleware("http")
