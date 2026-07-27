@@ -244,7 +244,7 @@ function ConfirmCard({ onAnswer }: { onAnswer: (text: string) => void }) {
  * portal actually takes it out of the surrounding form.
  */
 export function PlanChatDrawer({
-  open, onOpen, onClose, label, busy, children,
+  open, onOpen, onClose, label, busy, disabled, disabledHint, children,
 }: {
   open: boolean;
   onOpen: () => void;
@@ -252,17 +252,29 @@ export function PlanChatDrawer({
   label: string;
   /** Reflects an interview still running while the drawer is shut. */
   busy?: boolean;
+  /** Blocks opening while a precondition of the interview is unmet. */
+  disabled?: boolean;
+  /** Why it is blocked — shown as the button's title so it is discoverable. */
+  disabledHint?: string;
   children: ReactNode;
 }) {
+  // A `title` on a disabled button is not reliably announced, so the reason is
+  // visible text tied to the button by `aria-describedby`.
+  const hintId = "agent-chat-hint";
   return (
     <>
-      <button type="button" className="agent-chat-button" onClick={onOpen}
-        aria-expanded={open} title={label}>
-        {busy
-          ? <LoaderCircle className="spin" size={16} aria-hidden="true" />
-          : <Sparkles size={16} aria-hidden="true" />}
-        <span>{label}</span>
-      </button>
+      <div className="agent-chat-launch">
+        <button type="button" className="agent-chat-button" onClick={onOpen}
+          aria-expanded={open} disabled={disabled}
+          aria-describedby={disabled && disabledHint ? hintId : undefined}>
+          {busy
+            ? <LoaderCircle className="spin" size={16} aria-hidden="true" />
+            : <Sparkles size={16} aria-hidden="true" />}
+          <span>{label}</span>
+        </button>
+        {disabled && disabledHint &&
+          <p id={hintId} className="agent-chat-hint">{disabledHint}</p>}
+      </div>
       {open && createPortal(
         <div className="agent-chat-drawer" role="dialog"
           aria-modal="false" aria-label={label}>

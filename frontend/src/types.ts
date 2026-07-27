@@ -190,7 +190,10 @@ interface PlanChatTurn {
 }
 
 export interface ToolPlanChatTurn extends PlanChatTurn {
-  /** The agent has what it needs to ask for a Fetch 1 ID run. */
+  /**
+   * Retained for the wire contract only. The interview now opens on a sample
+   * the FDE already ran, so there is nothing left for it to request.
+   */
   needs_inspection: boolean;
   draft: ToolPlanDraft;
 }

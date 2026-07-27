@@ -2953,13 +2953,29 @@ select:focus {
 
 /* Small by design: the agent is an offer beside the form, not a wall in
    front of it. Filling the fields by hand stays the default path. */
+/* Carries the alignment the button used to own, so the hint sits under it. */
+.agent-chat-launch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.agent-chat-hint {
+  max-width: 22ch;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: end;
+}
+
 .agent-chat-button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-height: 44px;
   padding: 0 14px;
-  margin-inline-start: auto;
   color: var(--primary);
   white-space: nowrap;
   background: var(--primary-soft);
@@ -2970,8 +2986,16 @@ select:focus {
   cursor: pointer;
 }
 
-.agent-chat-button:hover {
+.agent-chat-button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+/* Waiting on Fetch 1 ID, not broken: the hint beside it says which. */
+.agent-chat-button:disabled {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  cursor: not-allowed;
 }
 
 .agent-chat-drawer {

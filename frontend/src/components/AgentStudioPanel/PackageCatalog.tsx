@@ -64,35 +64,31 @@ export default function PackageCatalog({
     setInspection(null); setMessage("");
   };
 
-  /** Copy an agreed chat draft into the form, leaving typed values intact. */
+  /**
+   * Copy the interview's proposal into the form for the FDE to edit.
+   *
+   * Only the fields the interview authors are written. The connection is the
+   * FDE's own, already proved by a run that returned rows, so the agent never
+   * overwrites it — it is seeded into the conversation instead.
+   *
+   * These land as suggestions to be edited, so unlike the connection they do
+   * overwrite what is in the form: the FDE opened the interview to get better
+   * wording than they had, and the previous text stays recoverable by simply
+   * not saving.
+   */
   const applyDraft = (draft: ToolPlanDraft) => {
     setForm((current) => ({
       ...current,
-      name: current.name.trim() || draft.name,
-      package_id: current.package_id.trim() || draft.package_id,
-      input_cube_name:
-        current.input_cube_name.trim() || draft.input_cube_name,
-      input_cube_parameter:
-        current.input_cube_parameter.trim() || draft.input_cube_parameter,
-      output_cube_name:
-        current.output_cube_name.trim() || draft.output_cube_name,
-      input_mode: draft.input_mode || current.input_mode,
-      description: current.description.trim() || draft.description,
+      name: draft.name || current.name,
+      description: draft.description || current.description,
       agent_instructions:
-        current.agent_instructions.trim() || draft.agent_instructions,
-      query_name: current.query_name.trim() || draft.query_name,
+        draft.agent_instructions || current.agent_instructions,
       agent_enabled: draft.agent_enabled,
-      // These three are JSON text. "{}"/"[]" is the empty form value, so an
-      // untouched field yields to the draft while an edited one is kept.
-      output_schema: emptyJsonObject(current.output_schema)
-        ? draft.output_schema || current.output_schema : current.output_schema,
-      example_input: emptyJsonArray(current.example_input)
-        ? draft.example_input || current.example_input : current.example_input,
-      example_output: emptyJsonArray(current.example_output)
-        ? draft.example_output || current.example_output
-        : current.example_output,
+      output_schema: draft.output_schema || current.output_schema,
+      example_input: draft.example_input || current.example_input,
+      example_output: draft.example_output || current.example_output,
     }));
-    setMessage("פרטי הטול מהשיחה נטענו לטופס. יש לבדוק לפני השמירה.");
+    setMessage("הצעת הסוכן נטענה לטופס. יש לערוך ולאשר לפני השמירה.");
   };
 
   const save = async (event: FormEvent) => {
@@ -146,7 +142,7 @@ export default function PackageCatalog({
     <div className="studio-split">
       <PackageList items={items} onEdit={edit} />
       <form className="studio-form" onSubmit={save}>
-        <FormHeader editing={!!form.package_key}
+        <FormHeader form={form} editing={!!form.package_key}
           inspection={inspection} onApply={applyDraft} />
         <PackageFields form={form} update={update}
           onDropField={(event, target) =>
@@ -178,15 +174,15 @@ export default function PackageCatalog({
   );
 }
 
-/** Every field the interview fills, so its progress is legible at a glance. */
-const DRAFT_LABELS: Array<[keyof ToolPlanDraft, string, "rtl" | "ltr"]> = [
+/**
+ * What the interview writes, so its progress is legible at a glance.
+ *
+ * The connection fields are absent on purpose: the FDE supplied them and a
+ * real run confirmed them, so the interview carries them but never proposes
+ * them. Showing them here would read as work the agent had done.
+ */
+const AUTHORED_LABELS: Array<[keyof ToolPlanDraft, string, "rtl" | "ltr"]> = [
   ["name", "שם תצוגה", "rtl"],
-  ["package_id", "Package ID", "ltr"],
-  ["input_cube_name", "Input cube", "ltr"],
-  ["input_cube_parameter", "Input parameter", "ltr"],
-  ["output_cube_name", "Output cube", "ltr"],
-  ["input_mode", "מצב קלט", "ltr"],
-  ["query_name", "Query name", "ltr"],
   ["description", "מתי הטול שימושי", "rtl"],
   ["agent_instructions", "איך לסכם", "rtl"],
   ["output_schema", "Output schema", "ltr"],
@@ -261,7 +257,10 @@ function connectionDraft(form: PackageForm): Partial<ToolPlanDraft> {
     input_cube_name: form.input_cube_name,
     input_cube_parameter: form.input_cube_parameter,
     output_cube_name: form.output_cube_name,
-    input_mode: form.input_mode,
+    // The form types this as a free string; the draft only accepts the two
+    // real modes, and "" is how the interview says "not decided".
+    input_mode: form.input_mode === "many" ? "many"
+      : form.input_mode === "single" ? "single" : "",
     query_name: form.query_name,
   };
 }
@@ -300,8 +299,9 @@ function PackageList({
 }
 
 function FormHeader({
-  editing, inspection, onApply,
+  form, editing, inspection, onApply,
 }: {
+  form: PackageForm;
   editing: boolean;
   inspection: PackageInspection | null;
   onApply: (draft: ToolPlanDraft) => void;
@@ -313,7 +313,7 @@ function FormHeader({
         <h3>{editing ? "גרסה חדשה למקור" : "מקור מידע חדש"}</h3>
         <p>חבילת FLAPI שמביאה נתונים לתהליך הסיכום.</p>
       </div>
-      <ToolPlanChat inspection={inspection} onApply={onApply} />
+      <ToolPlanChat form={form} inspection={inspection} onApply={onApply} />
     </header>
   );
 }
@@ -673,12 +673,3 @@ function emptyJsonArray(value: string) {
   }
 }
 
-function emptyJsonObject(value: string) {
-  try {
-    const parsed = JSON.parse(value);
-    return !!parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      && !Object.keys(parsed).length;
-  } catch {
-    return false;
-  }
-}
