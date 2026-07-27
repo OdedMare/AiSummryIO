@@ -192,8 +192,8 @@ function WorkflowPlanChat({ editor }: { editor: Editor }) {
   const plan = chat.draft;
   return (
     <PlanChat chat={chat}
-      title="תכנון תהליך בשיחה עם הסוכן"
-      hint="ספרו מה אתם רוצים לדעת על המזהה. הסוכן ישאל אילו שדות מחברים בין השלבים.">
+      title="תשאול על התהליך"
+      hint="ספרו מה אתם רוצים לדעת על המזהה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, עד שנגיע להסכמה.">
       {plan && <div className="planner-result" aria-live="polite">
         {plan.rationale && <p>{plan.rationale}</p>}
         {!!plan.steps.length && <ol className="plan-chat-steps">

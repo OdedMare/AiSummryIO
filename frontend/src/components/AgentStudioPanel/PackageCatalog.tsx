@@ -190,8 +190,8 @@ function ToolPlanChat({
   const draft = chat.draft;
   return (
     <PlanChat chat={chat}
-      title="הגדרת טול בשיחה עם הסוכן"
-      hint="ספרו איזה מידע החבילה מחזירה. הסוכן ישאל מה חסר וימלא את הטופס.">
+      title="תשאול על הטול"
+      hint="ספרו איזה מידע החבילה מחזירה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, וימלא את הטופס.">
       {draft && <div className="planner-result" aria-live="polite">
         <dl className="plan-chat-draft">
           {DRAFT_LABELS.map(([field, label]) => (
