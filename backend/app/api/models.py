@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.common.runtime_settings.runtime_settings_store import MASKED_SECRET
+
 
 class PackageCreate(BaseModel):
     package_key: Optional[str] = None
@@ -258,3 +260,18 @@ class FeedbackCreate(BaseModel):
     run_id: str
     rating: Literal[-1, 1]
     comment: str = ""
+
+
+class ModelsProbeRequest(BaseModel):
+    """Unsaved LLM connection settings used to probe available models.
+
+    Empty, omitted, or masked means "use the saved value", so the panel can
+    check a typed base URL without the user re-entering a stored API key.
+    """
+
+    llm_base_url: Optional[str] = None
+    openai_api_key: Optional[str] = None
+
+    def override(self, name: str) -> Optional[str]:
+        value = (getattr(self, name) or "").strip()
+        return None if not value or value == MASKED_SECRET else value

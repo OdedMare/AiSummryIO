@@ -23,7 +23,14 @@ export function useSettings() {
   useEffect(() => {
     api.adminSession()
       .then(() => api.settings())
-      .then((next) => { setValues(next); setAuthorized(true); })
+      .then((next) => {
+        setValues(next); setAuthorized(true);
+        // Populate the datalist from the saved connection right away; a
+        // failure here is not an error worth showing before the user asks.
+        void api.models({ llm_base_url: String(next.llm_base_url ?? "") })
+          .then((result) => setModels(result.models))
+          .catch(() => undefined);
+      })
       .catch(() => setAuthorized(false))
       .finally(() => setLoading(false));
   }, []);
@@ -43,7 +50,13 @@ export function useSettings() {
   const loadModels = async () => {
     setLoadingModels(true); setModelsError("");
     try {
-      setModels((await api.models()).models);
+      // What is typed in the form wins, so a base URL / key can be tested
+      // before it is saved. An untouched secret stays masked and the
+      // backend falls back to the stored one.
+      setModels((await api.models({
+        llm_base_url: String(values.llm_base_url ?? ""),
+        openai_api_key: String(values.openai_api_key ?? ""),
+      })).models);
     } catch (reason) {
       setModelsError(errorMessage(reason, "טעינת המודלים נכשלה"));
     } finally {

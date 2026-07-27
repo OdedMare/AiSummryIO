@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter, Depends
 
+from app.api.models import ModelsProbeRequest
+
 
 def build(context) -> APIRouter:
     router = APIRouter(tags=["admin"])
@@ -23,6 +25,16 @@ def build(context) -> APIRouter:
     @router.get("/models", dependencies=guard)
     def models():
         return {"models": context.llm.list_models()}
+
+    # Overrides let the settings panel test a base URL / API key typed in
+    # the form BEFORE saving it. Empty or masked = fall back to the saved
+    # value, matching LocatoAI.
+    @router.post("/models", dependencies=guard)
+    def probe_models(body: ModelsProbeRequest):
+        return {"models": context.llm.list_models(
+            base_url_override=body.override("llm_base_url"),
+            api_key_override=body.override("openai_api_key"),
+        )}
 
     @router.get("/review-queue", dependencies=guard)
     def review_queue():

@@ -16,6 +16,10 @@ _SECRET_FIELDS = {
     "database_password", "openai_api_key", "flapi_token", "cookie_secret",
 }
 
+# What `public()` returns in place of a stored secret, and what the UI sends
+# back for a secret the user did not retype.
+MASKED_SECRET = "********"
+
 # Fields where None/empty means "clear the value", not "keep current".
 # Without this, an emptied base URL or port could never be unset from the UI.
 _NULLABLE = ("database_port", "llm_base_url", "flapi_username")
@@ -61,7 +65,7 @@ class RuntimeSettingsStore:
     def public(self) -> dict:
         data = asdict(self._settings)
         for key in _SECRET_FIELDS:
-            data[key] = "********" if data.get(key) else ""
+            data[key] = MASKED_SECRET if data.get(key) else ""
         return data
 
     def update(self, patch: dict) -> RuntimeSettings:
@@ -79,7 +83,7 @@ class RuntimeSettingsStore:
     def _apply(self, patch: dict, strict: bool) -> None:
         known = {item.name for item in fields(RuntimeSettings)}
         for key, value in patch.items():
-            if key not in known or value == "********":
+            if key not in known or value == MASKED_SECRET:
                 continue
             if key in _NULLABLE and (value is None or value == ""):
                 setattr(self._settings, key, None)

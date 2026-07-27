@@ -63,7 +63,13 @@ export const api = {
     }),
   adminSession: () => request<{ authenticated: boolean }>("/api/admin/session"),
   settings: () => request<Record<string, unknown>>("/api/settings"),
-  models: () => request<{ models: string[] }>("/api/models"),
+  // Send the CURRENT form values so the check tests what the user typed,
+  // before saving. Empty/masked = fall back to the saved value.
+  models: (overrides?: { llm_base_url?: string; openai_api_key?: string }) =>
+    request<{ models: string[] }>("/api/models", {
+      method: "POST",
+      body: JSON.stringify(overrides ?? {}),
+    }),
   updateSettings: (data: Record<string, unknown>) =>
     request<Record<string, unknown>>("/api/settings", {
       method: "PUT",
