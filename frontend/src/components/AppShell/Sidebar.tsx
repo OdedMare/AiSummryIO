@@ -1,6 +1,7 @@
 import {
-  Bot, History, Moon, PanelRightClose, Plus, Settings, Sparkles, Sun, Workflow,
+  Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
 } from "lucide-react";
+import BrandMark from "./BrandMark";
 import type { AppShellController } from "./useAppShell";
 
 export default function Sidebar({ app }: { app: AppShellController }) {

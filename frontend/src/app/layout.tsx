@@ -9,7 +9,7 @@ import "leaflet-draw/dist/leaflet.draw.css";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "AiSummryIO — סיכום חכם לפי מזהה",
+  title: "SumOrAI — סיכום חכם לפי מזהה",
   description: "סיכומים מלאים, תהליכי עבודה וראיות ממקורות ארגוניים",
 };
 
