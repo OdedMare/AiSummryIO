@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import type { SummarySkill } from "@/types";
 import type { AppShellController } from "./useAppShell";
@@ -104,7 +104,7 @@ function MessageInput({
   app: AppShellController;
   placeholder: string;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
   const [field, setField] = useState<HTMLTextAreaElement | null>(null);
   const [caret, setCaret] = useState(0);
   const [open, setOpen] = useState(false);
@@ -163,13 +163,17 @@ function filterSkills(skills: SummarySkill[], query: string | null) {
 }
 
 function SkillMenu({
-  matches, onPick,
+  matches, anchor, onPick,
 }: {
   matches: SummarySkill[];
+  anchor: MenuAnchor;
   onPick: (skill: SummarySkill) => void;
 }) {
   return (
-    <ul className="skill-menu" role="listbox" aria-label="Skills זמינים">
+    <ul className="skill-menu" role="listbox" aria-label="Skills זמינים"
+      style={{
+        left: anchor.left, width: anchor.width, bottom: anchor.bottom,
+      }}>
       {matches.map((skill) =>
         <li key={skill.content_key} role="option" aria-selected="false">
           <button type="button" onMouseDown={(event) => event.preventDefault()}
