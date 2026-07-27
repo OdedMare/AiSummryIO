@@ -59,60 +59,88 @@ docker compose down -v                # stop and DELETE the database volume
 and piece of evidence in it. Use plain `down` unless a clean database is the
 goal.
 
-### Backend image against the shared database
+### Backend image on its own
 
-Compose runs its own throwaway PostgreSQL. To point the backend at the shared
-server instead, build and run the image directly:
+Compose runs its own throwaway PostgreSQL. To point the backend at a different
+database, build and run the image directly. This follows the same pattern as
+LocatoAI:
 
 ```bash
-docker build -t aisummryio-backend:latest ./backend
+cd backend
+docker build --platform linux/amd64 -t aisummryio-backend:latest .
+```
 
-docker run --rm -p 8000:8000 \
+Build for `linux/amd64` on Apple Silicon: Python 3.8 has no arm64 wheels for
+part of the dependency set, and it matches the deployment target. Rebuild after
+any code or dependency change.
+
+**Against the shared server:**
+
+```bash
+docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
   -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
   -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
-  -e AISUMMRY_ADMIN_PASSWORD='your-fde-password' \
+  -v "$PWD/runtime-settings.json:/srv/backend/runtime-settings.json" \
   aisummryio-backend:latest
 ```
+
+**Against PostgreSQL on the host machine:**
+
+```bash
+docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
+  --add-host=pghost:host-gateway \
+  -e AISUMMRY_DATABASE_URL="postgresql://$(whoami)@pghost:5432/summaries" \
+  -v "$PWD/runtime-settings.json:/srv/backend/runtime-settings.json" \
+  aisummryio-backend:latest
+```
+
+`pghost` is mapped to the host gateway by `--add-host`. Use it rather than
+`host.docker.internal`, which resolves to an unreachable IPv6 address, and
+never `localhost`, which is the container's own loopback — both fail as
+`network is unreachable` on `::1`. The URL also needs an explicit user, since
+the container user is not the host user.
+
+Managing the container and running tests:
+
+```bash
+docker logs -f aisummry-backend
+docker stop aisummry-backend && docker rm aisummry-backend
+
+docker run --rm --platform linux/amd64 aisummryio-backend:latest python -m pytest -q
+```
+
+Add `-v "$PWD/app:/srv/backend/app"` to the run command to iterate on source
+without rebuilding.
+
+### Settings precedence
+
+`runtime-settings.json` holds UI-saved settings and **overrides environment
+variables**, so a stale file silently defeats an `-e` change. It is mounted
+above so settings and the hashed admin password survive container restarts.
+When mounted, its `database_url` must use `pghost` — not `localhost` — for a
+host database.
+
+`backend/.dockerignore` excludes the file, so an unmounted container starts
+from environment variables alone.
 
 The URL carries host, port, user, password, and database in one value; the
 schema is separate. A password containing `@`, `:`, `/`, or `#` must be
-percent-encoded in the URL.
+percent-encoded.
 
-`backend/.dockerignore` excludes `runtime-settings.json` and `.env`, so a
-container never inherits local settings — it starts from these variables
-alone. To keep settings and the hashed password across restarts, mount a
-volume:
+### Frontend image
 
 ```bash
-docker run --rm -p 8000:8000 \
-  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
-  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
-  -e AISUMMRY_RUNTIME_SETTINGS_FILE=/data/runtime-settings.json \
-  -v aisummry-settings:/data \
-  aisummryio-backend:latest
-```
-
-Detached, with logs:
-
-```bash
-docker run -d --name aisummry-backend -p 8000:8000 \
-  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
-  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
-  aisummryio-backend:latest
-
-docker logs -f aisummry-backend
-docker stop aisummry-backend && docker rm aisummry-backend
-```
-
-The frontend image builds the same way and needs the backend's address:
-
-```bash
-docker build -t aisummryio-frontend:latest ./frontend
+cd frontend
+docker build -t aisummryio-frontend:latest .
 
 docker run --rm -p 3000:3000 \
-  -e BACKEND_URL=http://host.docker.internal:8000 \
+  --add-host=apihost:host-gateway \
+  -e BACKEND_URL=http://apihost:8000 \
   aisummryio-frontend:latest
 ```
+
+The same hostname rule applies: reach the backend through a `--add-host` alias,
+not `localhost` or `host.docker.internal`.
 
 ### Connection notes
 
@@ -125,25 +153,14 @@ nslookup rnd619-nv-prd01
 ```
 
 If the host resolves on the machine but not inside the container, which some
-VPN clients cause, pin the address:
+VPN clients cause, pin the address the same way:
 
 ```bash
-docker run --rm -p 8000:8000 \
+docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
   --add-host rnd619-nv-prd01:<ip-address> \
   -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
   -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
   aisummryio-backend:latest
-```
-
-Never use `localhost` in a container's database URL. Inside the container it
-resolves to the container's own loopback — `::1` first on most hosts — which
-fails as `connection refused` or `network is unreachable`. Use the real
-hostname, or `host.docker.internal` for a database running on the host.
-
-Building on Apple Silicon for an x86 server needs an explicit platform:
-
-```bash
-docker build --platform linux/amd64 -t aisummryio-backend:latest ./backend
 ```
 
 The backend Dockerfile copies the source before `pip install`, so any source
@@ -176,7 +193,8 @@ AISUMMRY_DATABASE_SCHEMA=mosaic_magen
 
 Settings saved in the UI are written to `backend/runtime-settings.json` and
 are applied **on top of** `.env`, so a stale file silently overrides an
-environment change. Delete it to fall back to the environment.
+environment change. Edit that file, or clear the field in the Settings screen,
+when an environment change appears to have no effect.
 
 Backend and frontend implementation rules are documented in their respective
 `CLAUDE.md` files.

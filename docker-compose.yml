@@ -16,7 +16,8 @@ services:
   backend:
     build: ./backend
     environment:
-      AISUMMRY_DATABASE_URL: postgresql://summaries:summaries@db:5432/summaries
+      AISUMMRY_DATABASE_URL: ${AISUMMRY_DATABASE_URL:-postgresql://summaries:summaries@db:5432/summaries}
+      AISUMMRY_DATABASE_SCHEMA: ${AISUMMRY_DATABASE_SCHEMA:-mosaic_magen}
       AISUMMRY_RUNTIME_SETTINGS_FILE: /data/runtime-settings.json
       AISUMMRY_ADMIN_PASSWORD: ${AISUMMRY_ADMIN_PASSWORD:-}
     volumes:

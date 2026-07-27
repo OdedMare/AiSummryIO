@@ -14,33 +14,35 @@ class Settings(BaseSettings):
         env_prefix="AISUMMRY_", env_file=".env", extra="ignore"
     )
 
-    database_url: str = "postgresql://localhost:5432/summaries"
-    """Postgres holding conversations, workflows, and evidence."""
+    database_url: str = (
+        "postgresql://spear:spear@rnd619-nv-prd01:5432/spear"
+    )
+    """Postgres holding conversations, workflows, and evidence. A
+    `jdbc:postgresql://...` URL is accepted and converted automatically."""
 
-    database_user: str = ""
+    database_user: str = "spear"
     """Optional explicit Postgres user. Overrides credentials in the URL."""
 
     database_password: str = ""
     """Optional explicit Postgres password. Never returned by the API."""
 
-    database_host: str = ""
+    database_host: str = "rnd619-nv-prd01"
     """Optional explicit Postgres host. Overrides the host in the URL."""
 
-    database_port: Optional[int] = None
+    database_port: Optional[int] = 5432
     """Optional explicit Postgres port. Overrides the port in the URL."""
 
-    database_name: str = ""
+    database_name: str = "spear"
     """Optional explicit database name. Overrides the database in the URL."""
 
-    database_schema: str = ""
-    """Optional PostgreSQL schema owning every table. Empty means the server
-    default (normally `public`). Also settable as `?currentSchema=` in the
-    URL."""
+    database_schema: str = "mosaic_magen"
+    """PostgreSQL schema owning every table. Empty means the server default
+    (normally `public`). Also settable as `?currentSchema=` in the URL."""
 
-    llm_model: str = "gemma4:31b-cloud"
+    llm_model: str = "gemma4:31b-it"
     """The main model — Gemma 4 31B served through Ollama."""
 
-    llm_diet_mode: bool = True
+    llm_diet_mode: bool = False
     """Use compact prompts, schema samples, and bounded completion output."""
 
     llm_base_url: Optional[str] = "http://localhost:11434/v1"
