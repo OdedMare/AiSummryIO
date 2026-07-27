@@ -1,17 +1,29 @@
 "use client";
 
-import { Dispatch, FormEvent, SetStateAction, useState } from "react";
 import {
-  ArrowLeft, Beaker, CheckCircle2, LoaderCircle, PackagePlus, Save, Wrench,
+  Dispatch, DragEvent, FormEvent, SetStateAction, useState,
+} from "react";
+import {
+  ArrowLeft, Beaker, CheckCircle2, Eye, EyeOff, GripVertical, LoaderCircle,
+  PackagePlus, Save, Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type { PackageInspection, PackageVersion } from "@/types";
 import { emptyPackage, parseJson } from "./forms";
 
 type PackageForm = typeof emptyPackage;
+type FieldTarget =
+  "description" | "agent_instructions" | "output_schema" | "example_output";
+type SchemaField = {
+  name: string;
+  type: string;
+  description: string;
+  listened: boolean;
+};
 type UpdatePackage = <Key extends keyof PackageForm>(
   key: Key, value: PackageForm[Key]
 ) => void;
+const FIELD_MIME = "application/x-aisummry-field";
 
 export default function PackageCatalog({
   items, onRefresh,
@@ -26,6 +38,8 @@ export default function PackageCatalog({
   const [inspectId, setInspectId] = useState("");
   const [inspection, setInspection] = useState<PackageInspection | null>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [fieldTarget, setFieldTarget] =
+    useState<FieldTarget>("agent_instructions");
 
   const update = <Key extends keyof typeof emptyPackage>(
     key: Key, value: (typeof emptyPackage)[Key],
@@ -68,9 +82,24 @@ export default function PackageCatalog({
         ...packagePayload(form), root_id: inspectId.trim(),
       });
       setInspection(result);
-      setForm((current) => ({ ...current,
-        output_schema: JSON.stringify(result.output_schema, null, 2) }));
-      setMessage("ה-schema הוסק מההרצה ונטען לטופס. יש לבדוק לפני שמירה.");
+      setForm((current) => ({
+        ...current,
+        description: current.description.trim()
+          ? current.description : result.metadata_suggestions.description,
+        agent_instructions: current.agent_instructions.trim()
+          ? current.agent_instructions
+          : result.metadata_suggestions.agent_instructions,
+        output_schema: JSON.stringify(result.output_schema, null, 2),
+        example_input: emptyJsonArray(current.example_input)
+          ? JSON.stringify([inspectId.trim()], null, 2)
+          : current.example_input,
+        example_output: emptyJsonArray(current.example_output)
+          ? JSON.stringify(result.records, null, 2)
+          : current.example_output,
+      }));
+      setMessage(result.metadata_suggestions.description
+        ? "השדות והצעות המטא־דאטה נטענו. אפשר לערוך, לגרור ולבחור למה להקשיב."
+        : "השדות נטענו מההרצה. יצירת המטא־דאטה לא הייתה זמינה.");
     } catch (reason) {
       setInspection(null);
       setError(errorMessage(reason, "בדיקת הטול נכשלה"));
@@ -84,10 +113,18 @@ export default function PackageCatalog({
       <PackageList items={items} onEdit={edit} />
       <form className="studio-form" onSubmit={save}>
         <FormHeader editing={!!form.package_key} />
-        <PackageFields form={form} update={update} />
+        <PackageFields form={form} update={update}
+          onDropField={(event, target) =>
+            dropTextField(event, target, setForm)} />
         <Inspector form={form} inspectId={inspectId} setInspectId={setInspectId}
           inspecting={inspecting} inspect={inspect} inspection={inspection} />
-        <AdvancedFields form={form} update={update} />
+        <FieldPalette form={form} update={update} target={fieldTarget}
+          setTarget={setFieldTarget}
+          onInsert={(field) => setForm((current) =>
+            insertField(current, field, fieldTarget, inspection))} />
+        <AdvancedFields form={form} update={update}
+          onDropField={(event, target) =>
+            dropJsonField(event, target, inspection, setForm)} />
         {error && <p className="form-error" role="alert">{error}</p>}
         {message && <p className="form-success">
           <CheckCircle2 size={16} /> {message}
@@ -142,10 +179,14 @@ function FormHeader({ editing }: { editing: boolean }) {
 }
 
 function PackageFields({
-  form, update,
+  form, update, onDropField,
 }: {
   form: PackageForm;
   update: UpdatePackage;
+  onDropField: (
+    event: DragEvent<HTMLTextAreaElement>,
+    target: "description" | "agent_instructions",
+  ) => void;
 }) {
   return (
     <>
@@ -170,11 +211,19 @@ function PackageFields({
           value={form.output_cube_name}
           onChange={(e) => update("output_cube_name", e.target.value)} /></label>
       </div>
-      <label><span>מתי הטול שימושי</span><textarea value={form.description}
-        onChange={(e) => update("description", e.target.value)} rows={2} />
+      <label className="field-drop-target"><span>מתי הטול שימושי
+        <small>אפשר לגרור לכאן שדות</small></span>
+        <textarea value={form.description}
+          onDragOver={allowFieldDrop}
+          onDrop={(event) => onDropField(event, "description")}
+          onChange={(e) => update("description", e.target.value)} rows={2} />
       </label>
-      <label><span>איך לסכם את תוצאות הטול</span>
+      <label className="field-drop-target">
+        <span>איך לסכם את תוצאות הטול
+          <small>אפשר לגרור לכאן שדות</small></span>
         <textarea value={form.agent_instructions}
+          onDragOver={allowFieldDrop}
+          onDrop={(event) => onDropField(event, "agent_instructions")}
           onChange={(e) => update("agent_instructions", e.target.value)}
           rows={3} />
       </label>
@@ -189,6 +238,76 @@ function PackageFields({
         value={form.query_name}
         onChange={(e) => update("query_name", e.target.value)} /></label>
     </>
+  );
+}
+
+function FieldPalette({
+  form, update, target, setTarget, onInsert,
+}: {
+  form: PackageForm;
+  update: UpdatePackage;
+  target: FieldTarget;
+  setTarget: Dispatch<SetStateAction<FieldTarget>>;
+  onInsert: (field: string) => void;
+}) {
+  const fields = schemaFields(form.output_schema);
+  if (!fields.length) return null;
+  return (
+    <section className="field-palette" aria-labelledby="field-palette-title">
+      <header>
+        <div><h4 id="field-palette-title">שדות הטול</h4>
+          <p>גררו שדה ליעד, או בחרו יעד ולחצו על השדה.</p></div>
+        <label><span>יעד ללחיצה</span>
+          <select value={target}
+            onChange={(event) => setTarget(event.target.value as FieldTarget)}>
+            <option value="agent_instructions">הנחיות סיכום</option>
+            <option value="description">תיאור הטול</option>
+            <option value="output_schema">Output schema JSON</option>
+            <option value="example_output">פלט לדוגמה JSON</option>
+          </select>
+        </label>
+      </header>
+      <div className="field-chip-list">
+        {fields.map((field) =>
+          <FieldChip key={field.name} field={field}
+            onInsert={() => onInsert(field.name)}
+            onToggle={(listened) =>
+              update("output_schema", setFieldPolicy(
+                form.output_schema, field.name, listened
+              ))} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function FieldChip({
+  field, onInsert, onToggle,
+}: {
+  field: SchemaField;
+  onInsert: () => void;
+  onToggle: (listened: boolean) => void;
+}) {
+  return (
+    <div className={`field-chip ${field.listened ? "listening" : "ignored"}`}>
+      <button type="button" draggable onClick={onInsert}
+        onDragStart={(event) => {
+          event.dataTransfer.setData(FIELD_MIME, field.name);
+          event.dataTransfer.setData("text/plain", field.name);
+          event.dataTransfer.effectAllowed = "copy";
+        }}
+        aria-label={`הוספת השדה ${field.name} ליעד שנבחר`}>
+        <GripVertical size={17} aria-hidden="true" />
+        <span><bdi dir="ltr">{field.name}</bdi>
+          <small>{field.description || field.type}</small></span>
+      </button>
+      <label>
+        <input type="checkbox" checked={field.listened}
+          onChange={(event) => onToggle(event.target.checked)} />
+        {field.listened ? <Eye size={16} /> : <EyeOff size={16} />}
+        <span>{field.listened ? "להקשיב" : "להתעלם"}</span>
+      </label>
+    </div>
   );
 }
 
@@ -228,24 +347,36 @@ function Inspector({
 }
 
 function AdvancedFields({
-  form, update,
+  form, update, onDropField,
 }: {
   form: PackageForm;
   update: UpdatePackage;
+  onDropField: (
+    event: DragEvent<HTMLTextAreaElement>,
+    target: "output_schema" | "example_output",
+  ) => void;
 }) {
   return (
     <details className="advanced-block">
       <summary><Beaker size={16} /> Schema ודוגמאות קלט ופלט</summary>
-      <label><span>Output schema</span><textarea dir="ltr"
+      <label className="field-drop-target"><span>Output schema
+        <small>גרירת שדה לכאן מסמנת אותו לשימוש בסיכום</small></span>
+        <textarea dir="ltr"
         value={form.output_schema}
+        onDragOver={allowFieldDrop}
+        onDrop={(event) => onDropField(event, "output_schema")}
         onChange={(e) => update("output_schema", e.target.value)} rows={7} />
       </label>
       <label><span>מזהי דוגמה (JSON)</span><textarea dir="ltr"
         value={form.example_input}
         onChange={(e) => update("example_input", e.target.value)} rows={3} />
       </label>
-      <label><span>פלט חבילה לדוגמה (JSON)</span><textarea dir="ltr"
+      <label className="field-drop-target"><span>פלט חבילה לדוגמה (JSON)
+        <small>גרירת שדה מוסיפה אותו עם ערך מה־preview</small></span>
+        <textarea dir="ltr"
         value={form.example_output}
+        onDragOver={allowFieldDrop}
+        onDrop={(event) => onDropField(event, "example_output")}
         onChange={(e) => update("example_output", e.target.value)} rows={6} />
       </label>
     </details>
@@ -273,4 +404,131 @@ function inspectionDisabled(
 
 function errorMessage(reason: unknown, fallback: string) {
   return reason instanceof Error ? reason.message : fallback;
+}
+
+function schemaFields(value: string): SchemaField[] {
+  try {
+    const schema = JSON.parse(value) as {
+      properties?: Record<string, unknown>;
+    };
+    return Object.entries(schema.properties ?? {}).map(([name, raw]) => {
+      const definition = (
+        raw && typeof raw === "object" ? raw : {}
+      ) as Record<string, unknown>;
+      const type = Array.isArray(definition.type)
+        ? definition.type.join(" / ") : String(definition.type ?? "unknown");
+      return {
+        name, type,
+        description: typeof definition.description === "string"
+          ? definition.description : "",
+        listened: definition["x-summary"] !== false,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function setFieldPolicy(value: string, field: string, listened: boolean) {
+  const schema = parseJson<Record<string, unknown>>(value, {});
+  const properties = (
+    schema.properties && typeof schema.properties === "object"
+      ? schema.properties : {}
+  ) as Record<string, unknown>;
+  const current = properties[field];
+  properties[field] = {
+    ...(current && typeof current === "object" ? current : {}),
+    "x-summary": listened,
+  };
+  return JSON.stringify({ ...schema, properties }, null, 2);
+}
+
+function allowFieldDrop(event: DragEvent<HTMLTextAreaElement>) {
+  if (event.dataTransfer.types.includes(FIELD_MIME)) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+}
+
+function draggedField(event: DragEvent<HTMLTextAreaElement>) {
+  return event.dataTransfer.getData(FIELD_MIME);
+}
+
+function dropTextField(
+  event: DragEvent<HTMLTextAreaElement>,
+  target: "description" | "agent_instructions",
+  setForm: Dispatch<SetStateAction<PackageForm>>,
+) {
+  const field = draggedField(event);
+  if (!field) return;
+  event.preventDefault();
+  const start = event.currentTarget.selectionStart;
+  const end = event.currentTarget.selectionEnd;
+  setForm((current) => ({
+    ...current,
+    [target]: insertText(current[target], `\`${field}\``, start, end),
+  }));
+}
+
+function dropJsonField(
+  event: DragEvent<HTMLTextAreaElement>,
+  target: "output_schema" | "example_output",
+  inspection: PackageInspection | null,
+  setForm: Dispatch<SetStateAction<PackageForm>>,
+) {
+  const field = draggedField(event);
+  if (!field) return;
+  event.preventDefault();
+  setForm((current) => insertField(current, field, target, inspection));
+}
+
+function insertField(
+  form: PackageForm,
+  field: string,
+  target: FieldTarget,
+  inspection: PackageInspection | null,
+): PackageForm {
+  if (target === "description" || target === "agent_instructions") {
+    return { ...form, [target]: appendText(form[target], `\`${field}\``) };
+  }
+  if (target === "output_schema") {
+    return {
+      ...form,
+      output_schema: setFieldPolicy(form.output_schema, field, true),
+    };
+  }
+  const rows = parseJson<Array<Record<string, unknown>>>(
+    form.example_output, []
+  );
+  const sample = inspection?.records[0]?.[field] ?? null;
+  const [first = {}, ...rest] = rows;
+  return {
+    ...form,
+    example_output: JSON.stringify([
+      { ...first, [field]: sample }, ...rest,
+    ], null, 2),
+  };
+}
+
+function appendText(value: string, token: string) {
+  return value.trimEnd() + (value.trim() ? " " : "") + token;
+}
+
+function insertText(
+  value: string, token: string, start: number, end: number,
+) {
+  const before = value.slice(0, start);
+  const after = value.slice(end);
+  const leading = before && !/\s$/.test(before) ? " " : "";
+  const trailing = after && !/^\s/.test(after) ? " " : "";
+  return before + leading + token + trailing + after;
+}
+
+function emptyJsonArray(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.length === 0;
+  } catch {
+    return false;
+  }
 }
