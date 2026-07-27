@@ -30,7 +30,7 @@ service = SummaryService(repository, provider, llm, store)
 jobs = JobRunner(repository, service, store.get().max_parallel_workflows)
 
 app = FastAPI(
-    title="AiSummryIO",
+    title="SumOrAI",
     version="0.1.0",
     description=(
         "Evidence-backed Hebrew summaries by identifier or map area. "

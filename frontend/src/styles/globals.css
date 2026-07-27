@@ -395,7 +395,7 @@ button:disabled {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
-  background: #45d6a8;
+  background: #22d7a1;
   border-radius: 50%;
   box-shadow: 0 0 0 0 rgba(69, 214, 168, 0.55);
   animation: agent-pulse 2.4s ease-out infinite;
@@ -511,15 +511,49 @@ button:disabled {
 }
 
 .empty-illustration {
+  position: relative;
   display: grid;
   place-items: center;
   width: 84px;
   height: 84px;
   color: #fff;
-  background: linear-gradient(145deg, var(--primary), #527ce7 68%, var(--accent));
+  background: var(--brand-gradient);
   border: 1px solid color-mix(in srgb, var(--primary) 36%, transparent);
   border-radius: 26px;
-  box-shadow: 0 22px 50px color-mix(in srgb, var(--primary) 24%, transparent);
+  box-shadow: 0 22px 50px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+/* Slow halo behind the hero mark. Sits behind via a negative z-index so it
+   never intercepts pointer events on the surrounding copy. */
+.empty-illustration::before {
+  position: absolute;
+  z-index: -1;
+  inset: -18px;
+  content: "";
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--primary) 26%, transparent), transparent 68%);
+  border-radius: 50%;
+  animation: hero-halo 4.5s ease-in-out infinite;
+}
+
+@keyframes hero-halo {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* Gradient text needs a colour fallback first: if `background-clip: text` is
+   unsupported the text stays readable instead of rendering transparent. */
+.hero-accent {
+  color: var(--primary);
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .hero-accent {
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 .empty-workspace h1 {
@@ -536,6 +570,13 @@ button:disabled {
   color: var(--text-soft);
   font-size: 15px;
   line-height: 1.7;
+}
+
+/* Brand name inside running Hebrew copy: `dir="ltr"` on the element keeps the
+   Latin glyphs ordered, this just keeps it from shouting. */
+.empty-workspace > p b {
+  color: var(--primary);
+  font-weight: 800;
 }
 
 .welcome-pill {
