@@ -1,15 +1,20 @@
 "use client";
 
-import { useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent } from "react";
-import { LoaderCircle, MessagesSquare, Send } from "lucide-react";
+import { useState } from "react";
+import type { FormEvent, KeyboardEvent, ReactNode } from "react";
+import {
+  CheckCircle2, CircleDot, LoaderCircle, MessagesSquare, Send, ThumbsUp,
+} from "lucide-react";
 
-import type { PlanChatMessage } from "@/types";
+import type { PlanChatMessage, PlanQuestion } from "@/types";
 
-/** One planning turn as the chat needs it, whatever kind of draft it carries. */
+/** One interview turn as the chat needs it, whatever draft it carries. */
 export interface PlanTurn<TDraft> {
   reply: string;
-  questions: string[];
+  question: PlanQuestion | null;
+  resolved: string[];
+  open_points: string[];
+  awaiting_confirmation: boolean;
   ready: boolean;
   draft: TDraft;
 }
@@ -17,8 +22,11 @@ export interface PlanTurn<TDraft> {
 export interface PlanChatState<TDraft> {
   messages: PlanChatMessage[];
   draft: TDraft | null;
+  question: PlanQuestion | null;
+  resolved: string[];
+  openPoints: string[];
+  awaitingConfirmation: boolean;
   ready: boolean;
-  questions: string[];
   pending: boolean;
   error: string;
   send: (text: string) => Promise<void>;
@@ -26,7 +34,7 @@ export interface PlanChatState<TDraft> {
 }
 
 /**
- * Drives a stateless planning conversation.
+ * Drives a stateless planning interview.
  *
  * The whole history is replayed to the server each turn, so this hook holds
  * the only copy of it. `onTurn` is what makes the hook reusable: it sends the
@@ -36,11 +44,13 @@ export function usePlanChat<TDraft>(
   onTurn: (
     messages: PlanChatMessage[], draft: TDraft | null,
   ) => Promise<PlanTurn<TDraft>>,
-  onReady?: (draft: TDraft) => void,
 ): PlanChatState<TDraft> {
   const [messages, setMessages] = useState<PlanChatMessage[]>([]);
   const [draft, setDraft] = useState<TDraft | null>(null);
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [question, setQuestion] = useState<PlanQuestion | null>(null);
+  const [resolved, setResolved] = useState<string[]>([]);
+  const [openPoints, setOpenPoints] = useState<string[]>([]);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -48,13 +58,17 @@ export function usePlanChat<TDraft>(
   const send = async (text: string) => {
     const said = text.trim();
     if (!said || pending) return;
-    const history: PlanChatMessage[] = [...messages, { role: "fde", text: said }];
-    setMessages(history); setPending(true); setError(""); setQuestions([]);
+    const history: PlanChatMessage[] = [
+      ...messages, { role: "fde", text: said },
+    ];
+    setMessages(history); setPending(true); setError(""); setQuestion(null);
     try {
       const turn = await onTurn(history, draft);
       setMessages([...history, { role: "agent", text: turn.reply }]);
-      setDraft(turn.draft); setQuestions(turn.questions); setReady(turn.ready);
-      if (turn.ready && onReady) onReady(turn.draft);
+      setDraft(turn.draft); setQuestion(turn.question);
+      setResolved(turn.resolved); setOpenPoints(turn.open_points);
+      setAwaitingConfirmation(turn.awaiting_confirmation);
+      setReady(turn.ready);
     } catch (reason) {
       // The FDE's own message stays in the thread so it is not retyped.
       setError(reason instanceof Error ? reason.message : "השיחה נכשלה");
@@ -64,12 +78,14 @@ export function usePlanChat<TDraft>(
   };
 
   const reset = () => {
-    setMessages([]); setDraft(null); setQuestions([]);
-    setReady(false); setError("");
+    setMessages([]); setDraft(null); setQuestion(null); setResolved([]);
+    setOpenPoints([]); setAwaitingConfirmation(false); setReady(false);
+    setError("");
   };
 
   return {
-    messages, draft, ready, questions, pending, error, send, reset,
+    messages, draft, question, resolved, openPoints, awaitingConfirmation,
+    ready, pending, error, send, reset,
   };
 }
 
@@ -79,25 +95,24 @@ export function PlanChat<TDraft>({
   chat: PlanChatState<TDraft>;
   title: string;
   hint: string;
-  /** Draft preview rendered under the thread once there is something to show. */
-  children?: React.ReactNode;
+  /** Draft preview rendered under the interview once there is one. */
+  children?: ReactNode;
 }) {
   const [text, setText] = useState("");
-  const threadRef = useRef<HTMLDivElement>(null);
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const said = text;
+  const say = (said: string) => {
     setText("");
     void chat.send(said);
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    say(text);
   };
   // Enter sends, Shift+Enter breaks the line — as in the main composer.
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      const said = text;
-      setText("");
-      void chat.send(said);
+      say(text);
     }
   };
 
@@ -116,10 +131,9 @@ export function PlanChat<TDraft>({
           </button>}
       </header>
 
-      <div className="plan-chat-thread" ref={threadRef} aria-live="polite">
+      <div className="plan-chat-thread" aria-live="polite">
         {chat.messages.map((message, index) => (
-          <p key={index}
-            className={`plan-chat-message ${message.role}`}>
+          <p key={index} className={`plan-chat-message ${message.role}`}>
             <span className="plan-chat-role">
               {message.role === "fde" ? "אני" : "הסוכן"}
             </span>
@@ -135,24 +149,22 @@ export function PlanChat<TDraft>({
           <p className="panel-empty">{hint}</p>}
       </div>
 
-      {!!chat.questions.length &&
-        <ul className="plan-chat-questions">
-          {chat.questions.map((question, index) =>
-            <li key={index}>
-              <button type="button" onClick={() => setText(question)}>
-                {question}
-              </button>
-            </li>)}
-        </ul>}
+      {chat.question && !chat.pending &&
+        <QuestionCard question={chat.question} onAnswer={say} />}
 
-      {chat.error &&
-        <p className="panel-error" role="alert">{chat.error}</p>}
+      {chat.awaitingConfirmation && !chat.pending &&
+        <ConfirmCard onAnswer={say} />}
+
+      <InterviewProgress
+        resolved={chat.resolved} openPoints={chat.openPoints} />
+
+      {chat.error && <p className="panel-error" role="alert">{chat.error}</p>}
 
       {children}
 
       <form className="plan-chat-composer" onSubmit={submit}>
         <textarea id="plan-chat-input" rows={2} value={text}
-          aria-label="הודעה לסוכן" placeholder="ספרו על הנתונים שלכם…"
+          aria-label="תשובה לסוכן" placeholder="ספרו על הנתונים שלכם…"
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown} disabled={chat.pending} />
         <button type="submit" disabled={chat.pending || !text.trim()}
@@ -163,5 +175,75 @@ export function PlanChat<TDraft>({
         </button>
       </form>
     </section>
+  );
+}
+
+/**
+ * The single open question, with the agent's recommendation.
+ *
+ * Accepting the recommendation is one click because that is the common case;
+ * the FDE's own answer is always available in the composer below.
+ */
+function QuestionCard({
+  question, onAnswer,
+}: {
+  question: PlanQuestion;
+  onAnswer: (text: string) => void;
+}) {
+  return (
+    <div className="plan-question" role="group"
+      aria-label="השאלה הפתוחה של הסוכן">
+      <p className="plan-question-text">{question.question}</p>
+      {question.recommendation &&
+        <p className="plan-question-recommendation">
+          <strong>המלצה:</strong> {question.recommendation}
+        </p>}
+      {question.why && <p className="plan-question-why">{question.why}</p>}
+      {question.recommendation &&
+        <button type="button" className="planner-button"
+          onClick={() => onAnswer(question.recommendation)}>
+          <ThumbsUp size={16} aria-hidden="true" /> מקבל את ההמלצה
+        </button>}
+    </div>
+  );
+}
+
+/** The interview does not act before the FDE confirms the summary above. */
+function ConfirmCard({ onAnswer }: { onAnswer: (text: string) => void }) {
+  return (
+    <div className="plan-confirm" role="group" aria-label="אישור סיכום">
+      <p>הסוכן סיים לשאול. מאשרים את הסיכום שלמעלה?</p>
+      <div className="plan-confirm-actions">
+        <button type="button" className="planner-button"
+          onClick={() => onAnswer("מאשר, הגענו להסכמה.")}>
+          <CheckCircle2 size={16} aria-hidden="true" /> מאשר
+        </button>
+        <button type="button" className="secondary-button"
+          onClick={() => onAnswer("עוד לא — יש נקודה שצריך לחדד.")}>
+          עוד לא
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InterviewProgress({
+  resolved, openPoints,
+}: {
+  resolved: string[];
+  openPoints: string[];
+}) {
+  if (!resolved.length && !openPoints.length) return null;
+  return (
+    <div className="plan-progress">
+      {!!resolved.length && <section>
+        <h4><CheckCircle2 size={14} aria-hidden="true" /> סוכם</h4>
+        <ul>{resolved.map((item, index) => <li key={index}>{item}</li>)}</ul>
+      </section>}
+      {!!openPoints.length && <section>
+        <h4><CircleDot size={14} aria-hidden="true" /> נשאר פתוח</h4>
+        <ul>{openPoints.map((item, index) => <li key={index}>{item}</li>)}</ul>
+      </section>}
+    </div>
   );
 }

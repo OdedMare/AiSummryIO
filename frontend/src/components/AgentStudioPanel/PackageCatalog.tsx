@@ -203,7 +203,7 @@ function ToolPlanChat({
             </div>
           ))}
         </dl>
-        {chat.questions.length === 0 && !chat.ready && !inspection &&
+        {!inspection && !chat.ready &&
           <p className="plan-chat-note">
             כדי שהסוכן יראה את שמות השדות האמיתיים, הריצו Fetch 1 ID למטה.
           </p>}

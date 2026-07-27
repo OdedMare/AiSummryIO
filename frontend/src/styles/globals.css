@@ -2863,30 +2863,92 @@ select:focus {
   font-weight: 600;
 }
 
-.plan-chat-questions {
+.plan-question {
+  display: grid;
+  gap: 7px;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-inline-start: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+}
+
+.plan-question-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.plan-question-recommendation {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.plan-question-recommendation strong {
+  color: var(--primary);
+}
+
+.plan-question-why {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.plan-confirm {
+  display: grid;
+  gap: 9px;
+  padding: 13px 15px;
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border));
+  border-radius: var(--radius-sm);
+}
+
+.plan-confirm p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-confirm-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 8px;
 }
 
-.plan-chat-questions button {
-  min-height: 44px;
-  padding: 0 12px;
-  color: var(--text-soft);
+.plan-progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 11px 13px;
   background: var(--surface);
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 12px;
-  text-align: start;
-  cursor: pointer;
 }
 
-.plan-chat-questions button:hover {
-  color: var(--text);
-  border-style: solid;
+.plan-progress h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.plan-progress section:first-child h4 {
+  color: var(--success);
+}
+
+.plan-progress ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-inline-start: 16px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .plan-chat-draft {
