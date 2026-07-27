@@ -72,8 +72,9 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - Package input mode is `single` or `many`; both preserve strings.
 - Claims require evidence references. Package failures stay visible and do
   not discard successful sections.
-- Never log API keys, admin passwords, raw package bodies, or full user IDs.
-- Admin authentication uses a secure hash and an HttpOnly signed cookie.
+- Never log API keys, tokens, raw package bodies, or full user IDs.
+- FDE routes are guarded by `api_token` alone; there is no password login.
+  Anonymous conversation sessions still use an HttpOnly signed cookie.
 - FDE edits create drafts. Publishing is blocked by invalid mappings or
   failing mandatory examples.
 - Keep the design simple: add a module only when it owns a distinct boundary.
