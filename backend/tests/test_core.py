@@ -1229,3 +1229,173 @@ def test_invalid_saved_value_does_not_prevent_boot(tmp_path):
     saved["database_url"] = "mysql://nope"
     path.write_text(json.dumps(saved), encoding="utf-8")
     assert _store(tmp_path).get().database_url == store.get().database_url
+
+
+def _chat_service(answer, tools=None):
+    """A service whose model returns one canned planning turn."""
+    class FakeRepository:
+        @staticmethod
+        def list_packages():
+            return list(tools or [])
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, user, _schema):
+            FakeLlm.payload = json.loads(user)
+            return answer
+
+    return SummaryService(FakeRepository(), None, FakeLlm(), None), FakeLlm
+
+
+def test_tool_chat_carries_earlier_answers_into_the_next_draft():
+    # The model returns only what it learned this turn; everything the FDE
+    # already supplied must survive rather than reset to empty.
+    service, _llm = _chat_service({
+        "reply": "מה שם הקובייה היוצאת?",
+        "questions": ["שם הקובייה היוצאת?"],
+        "ready": False,
+        "needs_inspection": False,
+        "draft": {
+            "name": "", "package_id": "", "input_cube_name": "",
+            "input_cube_parameter": "", "output_cube_name": "OUT",
+            "input_mode": "", "description": "", "agent_instructions": "",
+        },
+    })
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "יש לי נתוני בעלות"}],
+        {"name": "בעלות", "package_id": "PKG-1", "input_mode": "single"},
+        {},
+    )
+
+    assert result["draft"]["name"] == "בעלות"
+    assert result["draft"]["package_id"] == "PKG-1"
+    assert result["draft"]["input_mode"] == "single"
+    assert result["draft"]["output_cube_name"] == "OUT"
+    assert result["ready"] is False
+
+
+def test_tool_chat_passes_only_bounded_sample_data_to_the_model():
+    service, llm = _chat_service({
+        "reply": "ראיתי את השדות", "questions": [], "ready": False,
+        "needs_inspection": False,
+        "draft": {
+            "name": "", "package_id": "", "input_cube_name": "",
+            "input_cube_parameter": "", "output_cube_name": "",
+            "input_mode": "single", "description": "", "agent_instructions": "",
+        },
+    })
+    service.plan_tool_chat(
+        [{"role": "fde", "text": "הרצתי Fetch 1 ID"}],
+        {},
+        {
+            "row_count": 3,
+            "records": [
+                {"parcel_id": "00123", "_internal": "secret", "owner": "דנה"}
+                for _index in range(25)
+            ],
+            "output_schema": {"properties": {"parcel_id": {}}},
+        },
+    )
+
+    sample = llm.payload["inspection_result"]["sample_data"]
+    assert len(sample) == 10
+    # Underscore-prefixed internals never reach the model.
+    assert all("_internal" not in row for row in sample)
+    assert sample[0]["parcel_id"] == "00123"
+
+
+def test_workflow_chat_rejects_a_draft_naming_a_tool_outside_the_catalog():
+    service, _llm = _chat_service(
+        {
+            "reply": "הנה טיוטה", "questions": [], "ready": True,
+            "draft": {
+                "name": "תמונת בעלות", "description": "", "role": "baseline",
+                "rationale": "", "system_prompt": "",
+                "steps": [{
+                    "key": "ownership", "name": "בעלות",
+                    "package_version_id": "does-not-exist",
+                    "depends_on": [], "input_source": "workflow.id",
+                    "input_field": "", "summary_prompt": "",
+                }],
+                "missing_tools": [],
+            },
+        },
+        tools=[{
+            "id": "pkg-real", "name": "בעלות", "input_mode": "single",
+            "input_cube_parameter": "id", "output_schema": {},
+        }],
+    )
+    result = service.plan_workflow_chat(
+        [{"role": "fde", "text": "בנה לי תהליך"}], {}
+    )
+
+    # The model claimed ready; the shared validation gate overrules it.
+    assert result["ready"] is False
+    assert result["draft"]["can_build"] is False
+    assert result["draft"]["steps"] == []
+    assert result["draft"]["missing_tools"]
+
+
+def test_workflow_chat_rejects_a_step_reading_an_undeclared_dependency():
+    service, _llm = _chat_service(
+        {
+            "reply": "טיוטה", "questions": [], "ready": True,
+            "draft": {
+                "name": "שרשרת", "description": "", "role": "detail",
+                "rationale": "", "system_prompt": "",
+                "steps": [
+                    {
+                        "key": "first", "name": "ראשון",
+                        "package_version_id": "pkg-real", "depends_on": [],
+                        "input_source": "workflow.id", "input_field": "",
+                        "summary_prompt": "",
+                    },
+                    {
+                        "key": "second", "name": "שני",
+                        "package_version_id": "pkg-real",
+                        "depends_on": [],
+                        "input_source": "steps.first",
+                        "input_field": "parcel_id", "summary_prompt": "",
+                    },
+                ],
+                "missing_tools": [],
+            },
+        },
+        tools=[{
+            "id": "pkg-real", "name": "בעלות", "input_mode": "single",
+            "input_cube_parameter": "id", "output_schema": {},
+        }],
+    )
+    result = service.plan_workflow_chat(
+        [{"role": "fde", "text": "שרשר שני שלבים"}], {}
+    )
+
+    assert result["ready"] is False
+    assert result["draft"]["can_build"] is False
+
+
+def test_workflow_chat_explains_an_empty_catalog_without_calling_the_model():
+    class ExplodingLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AssertionError("the model must not be called")
+
+    class EmptyRepository:
+        @staticmethod
+        def list_packages():
+            return []
+
+    service = SummaryService(EmptyRepository(), None, ExplodingLlm(), None)
+    result = service.plan_workflow_chat(
+        [{"role": "fde", "text": "בנה תהליך"}], {}
+    )
+
+    assert result["ready"] is False
+    assert "טולים" in result["reply"]
+
+
+def test_plan_chat_requires_at_least_one_message():
+    from app.api.models import PlanChatCreate
+
+    with pytest.raises(ValidationError, match="נדרשת הודעה אחת לפחות"):
+        PlanChatCreate(messages=[{"role": "fde", "text": "   "}])
