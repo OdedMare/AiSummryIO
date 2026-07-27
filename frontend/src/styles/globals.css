@@ -30,6 +30,10 @@
   --radius: 18px;
   --radius-sm: 12px;
   --focus: 0 0 0 3px rgba(112, 86, 232, 0.28);
+  /* SumOrAI signature: one gradient reused by the logo, hero and agent
+     surfaces so the brand reads as a single system. */
+  --brand-gradient: linear-gradient(135deg, #7c5cf5, #4f7ce8 55%, #22c3d6);
+  --brand-glow: 0 14px 40px rgba(112, 86, 232, 0.32);
 }
 
 :root[data-theme="dark"] {
@@ -60,6 +64,8 @@
   --danger-soft: #432326;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.44);
   --shadow-soft: 0 12px 36px rgba(0, 0, 0, 0.24);
+  --brand-gradient: linear-gradient(135deg, #9a87f7, #5b8bf0 55%, #3bc5d6);
+  --brand-glow: 0 14px 44px rgba(112, 86, 232, 0.42);
 }
 
 * {
@@ -179,16 +185,31 @@ button:disabled {
 .brand-mark,
 .modal-icon,
 .login-icon {
+  position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   width: 42px;
   height: 42px;
+  overflow: hidden;
   color: #fff;
-  background: linear-gradient(135deg, #a28cf9, #547fe9 62%, #26b4ca);
+  background: var(--brand-gradient);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(112, 86, 232, 0.28);
+  box-shadow: var(--brand-glow);
+}
+
+/* Diagonal sheen across the logo tile — static, so it reads as a lit
+   surface rather than an animation competing with the content. */
+.brand-mark::after,
+.modal-icon::after,
+.login-icon::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(150deg,
+    rgba(255, 255, 255, 0.32), transparent 46%);
+  pointer-events: none;
 }
 
 .brand > span:nth-child(2) {
@@ -199,6 +220,18 @@ button:disabled {
 .brand strong {
   font-size: 17px;
   letter-spacing: -0.02em;
+}
+
+.brand-word {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* The pivot syllable is tinted, not italic — it separates the three parts of
+   the name without the slant fighting the surrounding Hebrew. */
+.brand-word em {
+  color: #6fdcea;
+  font-style: normal;
 }
 
 .brand small {
@@ -342,6 +375,35 @@ button:disabled {
   background: linear-gradient(135deg,
     rgba(112, 86, 232, 0.32), rgba(59, 197, 214, 0.13));
   border-color: rgba(154, 135, 247, 0.42);
+}
+
+.agent-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  background: var(--brand-gradient);
+  border-radius: 11px;
+  box-shadow: 0 8px 20px rgba(112, 86, 232, 0.34);
+}
+
+/* "Agent is live" tell. Colour alone never carries status here — the label
+   beside it already names the destination, so this is decoration. */
+.agent-pulse {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  background: #45d6a8;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(69, 214, 168, 0.55);
+  animation: agent-pulse 2.4s ease-out infinite;
+}
+
+@keyframes agent-pulse {
+  70% { box-shadow: 0 0 0 7px rgba(69, 214, 168, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(69, 214, 168, 0); }
 }
 
 .fde-studio-action .nav-copy {
