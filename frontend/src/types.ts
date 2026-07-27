@@ -98,6 +98,10 @@ export interface PackageInspection {
   records: Array<Record<string, unknown>>;
   truncated: boolean;
   output_schema: Record<string, unknown>;
+  metadata_suggestions: {
+    description: string;
+    agent_instructions: string;
+  };
 }
 
 export interface WorkflowStep {

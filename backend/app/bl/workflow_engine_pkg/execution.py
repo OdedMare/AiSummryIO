@@ -107,11 +107,14 @@ def _failed_section(workflow: dict, exc: Exception) -> dict:
 def execute_workflow(
     service, run, root_id, workflow, save_evidence=True, boundaries=None
 ) -> dict:
-    context = {"workflow": {"id": root_id, "boundaries": boundaries}, "steps": {}}
+    context = {
+        "workflow": {"id": root_id, "boundaries": boundaries},
+        "steps": {}, "summary_fields": {},
+    }
     warnings, evidence_ids = _run_steps(
         service, run, workflow, context, save_evidence
     )
-    facts = chunk_facts(context["steps"])
+    facts = chunk_facts(context["steps"], context["summary_fields"])
     _add_summary_instructions(facts, workflow["steps"])
     generated = service._section_summary(workflow, facts, warnings)
     return _section(workflow, generated, warnings, evidence_ids)
@@ -142,9 +145,10 @@ def _run_level(
     # Applied in the level's declared order so evidence and warnings stay
     # stable regardless of which package finished first.
     for step in level:
-        records, step_warnings = outcomes[step["key"]]
+        records, step_warnings, fields = outcomes[step["key"]]
         warnings.extend(step_warnings)
         context["steps"][step["key"]] = records
+        context["summary_fields"][step["key"]] = fields
         _save_evidence(service, run, workflow, step, records, evidence_ids,
                        save_evidence)
 
@@ -169,16 +173,28 @@ def _level_outcomes(service, context, level) -> Dict[str, tuple]:
 def _step_outcome(service, step, context) -> tuple:
     """Run one step, keeping its warnings local so threads never share a list."""
     warnings = []
-    return _run_step(service, step, context, warnings), warnings
-
-
-def _run_step(service, step, context, warnings):
     package = service._repository.get_package(step["package_version_id"])
+    fields = _summary_fields(package)
     try:
-        return service._run_package(package, service._identifiers(step, context))
+        records = service._run_package(
+            package, service._identifiers(step, context)
+        )
     except Exception as exc:
         warnings.append("%s: %s" % (step["name"], exc))
-        return []
+        records = []
+    return records, warnings, fields
+
+
+def _summary_fields(package):
+    schema = package.get("output_schema", {})
+    properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    if not properties:
+        return None
+    return [
+        str(field) for field, definition in properties.items()
+        if not isinstance(definition, dict)
+        or definition.get("x-summary", True)
+    ]
 
 
 def _save_evidence(
@@ -288,17 +304,28 @@ def _values(records: List[dict], field: str):
             yield value
 
 
-def chunk_facts(step_records: Dict[str, List[dict]]) -> List[dict]:
+def chunk_facts(
+    step_records: Dict[str, List[dict]], field_policies=None
+) -> List[dict]:
+    field_policies = field_policies or {}
     return [
-        _fact_chunk(step_key, records, offset)
+        _fact_chunk(
+            step_key, records, offset, field_policies.get(step_key)
+        )
         for step_key, records in step_records.items()
         for offset in range(0, len(records) or 1, 100)
     ]
 
 
-def _fact_chunk(step_key: str, records: List[dict], offset: int) -> dict:
+def _fact_chunk(
+    step_key: str, records: List[dict], offset: int, allowed_fields=None
+) -> dict:
     rows = records[offset:offset + 100]
-    fields = sorted({str(key) for row in rows for key in row})
+    available = {str(key) for row in rows for key in row}
+    fields = sorted(
+        available if allowed_fields is None
+        else available.intersection(allowed_fields)
+    )
     return {
         "step": step_key,
         "chunk": offset // 100 + 1,

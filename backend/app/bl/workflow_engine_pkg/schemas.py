@@ -130,6 +130,22 @@ WORKFLOW_PLAN_SCHEMA = {
     "additionalProperties": False,
 }
 
+TOOL_METADATA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "description": {"type": "string"},
+        "agent_instructions": {"type": "string"},
+        "field_descriptions": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+        },
+    },
+    "required": [
+        "description", "agent_instructions", "field_descriptions",
+    ],
+    "additionalProperties": False,
+}
+
 ROUTER_SCHEMA = {
     "type": "object",
     "properties": {
