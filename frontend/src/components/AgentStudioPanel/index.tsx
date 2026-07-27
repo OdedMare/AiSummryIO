@@ -69,8 +69,9 @@ function StudioHeader({ onClose }: { onClose: () => void }) {
   return (
     <header className="modal-header studio-header">
       <span className="modal-icon"><Workflow size={20} /></span>
-      <div><h2 id="studio-title">מרכז ניהול</h2>
-        <p>מקורות מידע, תהליכי סיכום, Skills ובקרת איכות.</p>
+      <div><span className="studio-kicker">FDE Workspace</span>
+        <h2 id="studio-title">FDE Studio</h2>
+        <p>מתכננים, בודקים ומפרסמים טולים, Workflows ו־Skills.</p>
       </div>
       <button type="button" onClick={onClose} aria-label="סגירה"><X /></button>
     </header>
@@ -110,6 +111,7 @@ function StudioTabs({ studio }: { studio: Studio }) {
       {tabs.map(([key, label, Icon]) =>
         <button type="button" key={key}
           className={studio.tab === key ? "active" : ""}
+          aria-current={studio.tab === key ? "page" : undefined}
           onClick={() => studio.setTab(key)}>
           <Icon size={17} /> {label}<span>{studio.counts[key]}</span>
         </button>)}

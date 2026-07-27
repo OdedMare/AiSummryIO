@@ -55,8 +55,13 @@ function SidebarActions({ app }: { app: AppShellController }) {
       <button type="button" onClick={() => app.setSettingsOpen(true)}>
         <Settings size={18} /> הגדרות
       </button>
-      <button type="button" onClick={() => app.setStudioOpen(true)}>
-        <Workflow size={18} /> מרכז ניהול
+      <button className="fde-studio-action" type="button"
+        onClick={() => app.setStudioOpen(true)}>
+        <Workflow size={19} />
+        <span className="nav-copy">
+          <strong>FDE Studio</strong>
+          <small>Workflows, Skills וטולים</small>
+        </span>
       </button>
       <button type="button" onClick={() => app.setDark((value) => !value)}>
         {app.dark ? <Sun size={18} /> : <Moon size={18} />}
