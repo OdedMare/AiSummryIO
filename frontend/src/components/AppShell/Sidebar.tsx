@@ -21,8 +21,11 @@ export default function Sidebar({ app }: { app: AppShellController }) {
 function Brand({ onClose }: { onClose: () => void }) {
   return (
     <div className="brand">
-      <span className="brand-mark"><Sparkles size={20} /></span>
-      <span><strong>AiSummryIO</strong><small>סיכום חכם עם ראיות</small></span>
+      <span className="brand-mark"><BrandMark size={22} /></span>
+      <span>
+        <strong dir="ltr" className="brand-word">Sum<em>Or</em>AI</strong>
+        <small>סיכום חכם עם ראיות</small>
+      </span>
       <button className="mobile-close" type="button" onClick={onClose}
         aria-label="סגירת תפריט">
         <PanelRightClose size={20} />
@@ -58,11 +61,12 @@ function SidebarActions({ app }: { app: AppShellController }) {
       </button>
       <button className="fde-studio-action" type="button"
         onClick={() => app.setStudioOpen(true)}>
-        <Workflow size={19} />
+        <span className="agent-avatar"><Workflow size={18} /></span>
         <span className="nav-copy">
-          <strong>FDE Studio</strong>
+          <strong dir="ltr">SumOrAI Agent</strong>
           <small>Workflows, Skills וטולים</small>
         </span>
+        <span className="agent-pulse" aria-hidden="true" />
       </button>
       <button type="button" onClick={() => app.setDark((value) => !value)}>
         {app.dark ? <Sun size={18} /> : <Moon size={18} />}
