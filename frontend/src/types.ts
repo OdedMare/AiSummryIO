@@ -163,9 +163,22 @@ export interface ToolPlanDraft {
   agent_instructions: string;
 }
 
+/** The single question a turn may ask, always with a recommended answer. */
+export interface PlanQuestion {
+  question: string;
+  recommendation: string;
+  why: string;
+}
+
 interface PlanChatTurn {
   reply: string;
-  questions: string[];
+  /** Null once the interview has nothing left to ask. */
+  question: PlanQuestion | null;
+  resolved: string[];
+  open_points: string[];
+  /** The agent is presenting its summary and waiting for the FDE to confirm. */
+  awaiting_confirmation: boolean;
+  /** Confirmed and safe to load into the form; never true while asking. */
   ready: boolean;
 }
 
