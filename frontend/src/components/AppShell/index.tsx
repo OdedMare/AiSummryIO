@@ -11,6 +11,12 @@ import { useAppShell } from "./useAppShell";
 
 export default function AppShell() {
   const app = useAppShell();
+  // The studio takes the whole viewport rather than floating over the shell:
+  // its forms and interviews need the height, and a dialog could only ever
+  // lend them a fraction of it.
+  if (app.studioOpen) {
+    return <AgentStudioPanel onClose={() => app.setStudioOpen(false)} />;
+  }
   return (
     <div className={`app-shell${app.conversation ? "" : " has-map"}`}>
       <Sidebar app={app} />
@@ -22,8 +28,6 @@ export default function AppShell() {
       {!app.conversation && <MapPanel app={app} />}
       {app.settingsOpen &&
         <SettingsPanel onClose={() => app.setSettingsOpen(false)} />}
-      {app.studioOpen &&
-        <AgentStudioPanel onClose={() => app.setStudioOpen(false)} />}
       {app.sidebarOpen && <Backdrop app={app} />}
     </div>
   );

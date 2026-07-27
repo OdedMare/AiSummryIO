@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, BookOpen, LoaderCircle, RefreshCw, Workflow, Wrench, X,
+  AlertTriangle, ArrowRight, BookOpen, LoaderCircle, RefreshCw, Workflow,
+  Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
@@ -18,12 +19,9 @@ type Tab = "packages" | "workflows" | "content" | "review";
 export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
   const studio = useStudio();
   return (
-    <div className="modal-backdrop studio-backdrop" role="presentation">
-      <section className="modal studio-modal" role="dialog" aria-modal="true"
-        aria-labelledby="studio-title">
-        <StudioHeader onClose={onClose} />
-        <StudioContent studio={studio} />
-      </section>
+    <div className="studio-page">
+      <StudioHeader onClose={onClose} studio={studio} />
+      <StudioContent studio={studio} />
     </div>
   );
 }
@@ -65,15 +63,26 @@ function useStudio() {
 
 type Studio = ReturnType<typeof useStudio>;
 
-function StudioHeader({ onClose }: { onClose: () => void }) {
+function StudioHeader({
+  onClose, studio,
+}: {
+  onClose: () => void;
+  studio: Studio;
+}) {
   return (
-    <header className="modal-header studio-header">
+    <header className="studio-page-header">
+      <button type="button" className="studio-back" onClick={onClose}>
+        <ArrowRight size={17} aria-hidden="true" /> חזרה לשיחה
+      </button>
       <span className="modal-icon"><Workflow size={20} /></span>
       <div><span className="studio-kicker">SumOrAI Workspace</span>
         <h2 id="studio-title" dir="ltr">SumOrAI Agent Studio</h2>
-        <p>מתכננים, בודקים ומפרסמים טולים, Workflows ו־Skills.</p>
       </div>
-      <button type="button" onClick={onClose} aria-label="סגירה"><X /></button>
+      {studio.authorized &&
+        <button type="button" className="studio-refresh"
+          onClick={() => void studio.refresh()}>
+          <RefreshCw size={16} aria-hidden="true" /> רענון
+        </button>}
     </header>
   );
 }
@@ -90,50 +99,50 @@ function StudioContent({ studio }: { studio: Studio }) {
     </p>;
   }
   return (
-    <>
-      <StudioTabs studio={studio} />
-      {studio.error &&
-        <p className="studio-global-error" role="alert">{studio.error}</p>}
-      <StudioBody studio={studio} />
-    </>
+    <div className="studio-page-body">
+      <StudioNav studio={studio} />
+      <main className="studio-main">
+        {studio.error &&
+          <p className="studio-global-error" role="alert">{studio.error}</p>}
+        <StudioBody studio={studio} />
+      </main>
+    </div>
   );
 }
 
-function StudioTabs({ studio }: { studio: Studio }) {
-  const tabs = [
-    ["packages", "מקורות מידע", Wrench],
-    ["workflows", "תהליכי סיכום", Workflow],
-    ["content", "Skills והנחיות", BookOpen],
-    ["review", "תור שיפור", AlertTriangle],
-  ] as const;
+const TABS = [
+  ["packages", "מקורות מידע", "חבילות FLAPI", Wrench],
+  ["workflows", "תהליכי סיכום", "Workflows", Workflow],
+  ["content", "Skills והנחיות", "ניסוח וסיכום", BookOpen],
+  ["review", "תור שיפור", "מה נכשל", AlertTriangle],
+] as const;
+
+function StudioNav({ studio }: { studio: Studio }) {
   return (
-    <nav className="studio-tabs" aria-label="אזורי Agent Studio">
-      {tabs.map(([key, label, Icon]) =>
+    <nav className="studio-nav" aria-label="אזורי Agent Studio">
+      {TABS.map(([key, label, hint, Icon]) =>
         <button type="button" key={key}
           className={studio.tab === key ? "active" : ""}
           aria-current={studio.tab === key ? "page" : undefined}
           onClick={() => studio.setTab(key)}>
-          <Icon size={17} /> {label}<span>{studio.counts[key]}</span>
+          <Icon size={18} aria-hidden="true" />
+          <span className="studio-nav-label">{label}<small>{hint}</small></span>
+          <span className="studio-nav-count">{studio.counts[key]}</span>
         </button>)}
-      <button type="button" className="refresh-button"
-        onClick={() => void studio.refresh()} aria-label="רענון נתונים">
-        <RefreshCw size={17} />
-      </button>
     </nav>
   );
 }
 
 function StudioBody({ studio }: { studio: Studio }) {
-  return (
-    <div className="studio-body">
-      {studio.tab === "packages" &&
-        <PackageCatalog items={studio.packages} onRefresh={studio.refresh} />}
-      {studio.tab === "workflows" &&
-        <WorkflowEditor packages={studio.packages} workflows={studio.workflows}
-          onRefresh={studio.refresh} />}
-      {studio.tab === "content" &&
-        <ContentStudio items={studio.content} onRefresh={studio.refresh} />}
-      {studio.tab === "review" && <ReviewQueue items={studio.review} />}
-    </div>
-  );
+  if (studio.tab === "packages") {
+    return <PackageCatalog items={studio.packages} onRefresh={studio.refresh} />;
+  }
+  if (studio.tab === "workflows") {
+    return <WorkflowEditor packages={studio.packages}
+      workflows={studio.workflows} onRefresh={studio.refresh} />;
+  }
+  if (studio.tab === "content") {
+    return <ContentStudio items={studio.content} onRefresh={studio.refresh} />;
+  }
+  return <ReviewQueue items={studio.review} />;
 }

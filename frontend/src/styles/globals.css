@@ -1724,19 +1724,133 @@ select:focus {
   color: var(--success);
 }
 
-.studio-modal {
-  width: min(1440px, 100%);
-  height: min(920px, calc(100vh - 36px));
-  height: min(920px, calc(100dvh - 36px));
+/* The studio owns the viewport. Every region below scrolls on its own, so a
+   long form never drags the tool list or the interview along with it — which
+   is what made the old dialog feel stuck. */
+.studio-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
+  background: var(--surface);
 }
 
-.studio-header {
-  position: relative;
+.studio-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
   background:
     linear-gradient(100deg,
       color-mix(in srgb, var(--primary-soft) 58%, var(--surface)),
       color-mix(in srgb, var(--surface) 90%, transparent) 48%);
+}
+
+.studio-page-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.studio-back,
+.studio-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 13px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.studio-refresh {
+  margin-inline-start: auto;
+}
+
+.studio-back:hover,
+.studio-refresh:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.studio-page-body {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.studio-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-inline-start: 1px solid var(--border);
+}
+
+.studio-nav > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 12px;
+  color: var(--text-muted);
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.studio-nav > button:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.studio-nav > button.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  font-weight: 700;
+}
+
+.studio-nav-label {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.studio-nav-label small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.studio-nav-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  background: color-mix(in srgb, var(--surface-3) 84%, transparent);
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.studio-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
 }
 
 .studio-kicker {
@@ -1749,72 +1863,21 @@ select:focus {
   text-transform: uppercase;
 }
 
-.studio-tabs {
-  display: flex;
-  gap: 8px;
-  min-height: 64px;
-  padding: 9px 18px;
-  overflow-x: auto;
-  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
-  border-bottom: 1px solid var(--border);
-}
-
-.studio-tabs button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 46px;
-  padding: 0 14px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 12px;
-}
-
-.studio-tabs button:hover,
-.studio-tabs button.active {
-  color: var(--text);
-  background: var(--surface);
-  border-color: var(--border);
-}
-
-.studio-tabs button.active {
-  color: var(--primary);
-  background: var(--primary-soft);
-  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
-  font-weight: 800;
-}
-
-.studio-tabs button span {
-  display: grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  background: color-mix(in srgb, var(--surface-3) 84%, transparent);
-  border-radius: 999px;
-  font-size: 10px;
-}
-
-.studio-tabs .refresh-button {
-  width: 44px;
-  padding: 0;
-  margin-inline-start: auto;
-  justify-content: center;
-}
-
-.studio-body {
-  height: calc(100% - 144px);
-  overflow: auto;
-  background: var(--surface);
-}
-
+/* Two panes, each its own scroll container. `min-height: 0` on both is what
+   lets them scroll instead of stretching the grid row to fit their content. */
 .studio-split,
 .workflow-studio {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
-  min-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-list,
+.workflow-library,
+.studio-form {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .studio-list,
@@ -2758,7 +2821,6 @@ select:focus {
   }
 
   .modal,
-  .studio-modal,
   .settings-workspace-modal {
     width: 100%;
     height: 100%;
@@ -2766,6 +2828,42 @@ select:focus {
     max-height: 100dvh;
     border: 0;
     border-radius: 0;
+  }
+
+  /* The nav becomes a horizontal strip, and the two panes stack: the list
+     collapses to a bounded strip so the form keeps most of the height. */
+  .studio-page-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .studio-nav {
+    flex-direction: row;
+    padding: 9px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-inline-start: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .studio-nav > button {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .studio-nav-label small {
+    display: none;
+  }
+
+  .studio-split,
+  .workflow-studio {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 34%) minmax(0, 1fr);
+  }
+
+  .agent-chat-drawer {
+    width: 100vw;
   }
 
   .form-grid.two {
@@ -2815,14 +2913,6 @@ select:focus {
 
   .settings-footer {
     padding: 12px 16px;
-  }
-
-  .studio-tabs {
-    padding-inline: 8px;
-  }
-
-  .studio-tabs button {
-    padding: 0 9px;
   }
 
   .studio-form {
@@ -2875,6 +2965,86 @@ select:focus {
   }
 }
 
+/* The form header stays put while the fields under it scroll, so the agent
+   button is reachable without scrolling back up. */
+.studio-form-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-block: 4px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.studio-form-header > div {
+  min-width: 0;
+}
+
+/* Small by design: the agent is an offer beside the form, not a wall in
+   front of it. Filling the fields by hand stays the default path. */
+.agent-chat-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 14px;
+  margin-inline-start: auto;
+  color: var(--primary);
+  white-space: nowrap;
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, transparent);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-chat-button:hover {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+.agent-chat-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 40;
+  width: min(460px, 100vw);
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
+}
+
+.agent-chat-close {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-start: auto;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-chat-drawer {
+    animation: drawer-in 160ms ease-out;
+  }
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(-12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 .plan-chat {
   display: grid;
   gap: 12px;
@@ -2882,6 +3052,22 @@ select:focus {
   background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
   border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
   border-radius: 17px;
+}
+
+.plan-chat-count {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.plan-chat-draft > div.empty dd {
+  color: var(--text-muted);
+}
+
+.plan-chat-draft > div.filled dt::after {
+  content: " ✓";
+  color: var(--success);
 }
 
 .plan-chat > header {

@@ -161,6 +161,13 @@ export interface ToolPlanDraft {
   input_mode: "single" | "many" | "";
   description: string;
   agent_instructions: string;
+  package_key: string;
+  query_name: string;
+  agent_enabled: boolean;
+  /** JSON text, so the FDE edits it in the same textarea as always. */
+  output_schema: string;
+  example_input: string;
+  example_output: string;
 }
 
 /** The single question a turn may ask, always with a recommended answer. */

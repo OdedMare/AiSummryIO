@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import {
-  CheckCircle2, CircleDot, LoaderCircle, MessagesSquare, Send, ThumbsUp,
+  CheckCircle2, CircleDot, LoaderCircle, MessagesSquare, Send, Sparkles,
+  ThumbsUp, X,
 } from "lucide-react";
 
 import type { PlanChatMessage, PlanQuestion } from "@/types";
@@ -224,6 +225,45 @@ function ConfirmCard({ onAnswer }: { onAnswer: (text: string) => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The agent as an offer, not an obligation.
+ *
+ * Filling the form by hand is the default path and stays untouched behind
+ * this. The interview is one button away for an FDE who wants it, and closing
+ * the drawer keeps the conversation — reopening resumes rather than restarts.
+ */
+export function PlanChatDrawer({
+  open, onOpen, onClose, label, busy, children,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  label: string;
+  /** Reflects an interview still running while the drawer is shut. */
+  busy?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <button type="button" className="agent-chat-button" onClick={onOpen}
+        aria-expanded={open} title={label}>
+        {busy
+          ? <LoaderCircle className="spin" size={16} aria-hidden="true" />
+          : <Sparkles size={16} aria-hidden="true" />}
+        <span>{label}</span>
+      </button>
+      {open && <div className="agent-chat-drawer" role="dialog"
+        aria-modal="false" aria-label={label}>
+        <button type="button" className="agent-chat-close" onClick={onClose}
+          aria-label="סגירת השיחה">
+          <X size={17} aria-hidden="true" />
+        </button>
+        {children}
+      </div>}
+    </>
   );
 }
 

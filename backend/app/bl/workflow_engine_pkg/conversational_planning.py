@@ -145,6 +145,15 @@ class _ToolPlanner(_Planner):
     system = TOOL_SYSTEM
     schema = TOOL_PLAN_CHAT_SCHEMA
     _DRAFT_FIELDS = TOOL_PLAN_CHAT_SCHEMA["properties"]["draft"]["required"]
+    # `agent_enabled` is the one draft field that is not text. It is merged
+    # separately because "" is a meaningful "not decided yet" for every other
+    # field, but would read as False here.
+    _BOOL_FIELDS = ("agent_enabled",)
+    # JSON arrives from the model as a string so the FDE can edit it in the
+    # same textarea they always could; it is only checked for shape here.
+    _JSON_FIELDS = {
+        "output_schema": dict, "example_input": list, "example_output": list,
+    }
 
     def _payload(self, messages, draft, inspection=None) -> dict:
         payload = _Planner._payload(self, messages, draft)
@@ -162,17 +171,41 @@ class _ToolPlanner(_Planner):
         )
 
     @classmethod
-    def _merged_draft(cls, draft, previous) -> Dict[str, str]:
+    def _merged_draft(cls, draft, previous) -> Dict[str, Any]:
         """This turn over the last, so nothing agreed is silently dropped."""
         draft, previous = as_dict(draft), as_dict(previous)
         merged = {
             field: bounded_text(draft.get(field))
             or bounded_text(previous.get(field))
             for field in cls._DRAFT_FIELDS
+            if field not in cls._BOOL_FIELDS
         }
         if merged["input_mode"] not in ("single", "many"):
             merged["input_mode"] = ""
+        for field in cls._BOOL_FIELDS:
+            value = draft.get(field, previous.get(field))
+            merged[field] = True if value is None else bool(value)
+        for field, kind in cls._JSON_FIELDS.items():
+            merged[field] = cls._json_text(merged[field], kind)
         return merged
+
+    @staticmethod
+    def _json_text(value: str, kind: type) -> str:
+        """Keep a JSON draft field only when it really parses to `kind`.
+
+        A malformed suggestion would otherwise reach the form as text the FDE
+        has to debug by hand. Dropping it back to empty leaves the field
+        visibly unfilled, which the interview already knows how to resume.
+        """
+        if not value:
+            return ""
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return ""
+        if not isinstance(parsed, kind):
+            return ""
+        return json.dumps(parsed, ensure_ascii=False, indent=2)
 
     @staticmethod
     def _inspection(inspection: dict) -> dict:

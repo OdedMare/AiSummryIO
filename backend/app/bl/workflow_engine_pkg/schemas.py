@@ -176,11 +176,23 @@ TOOL_PLAN_CHAT_SCHEMA = {
                 },
                 "description": {"type": "string"},
                 "agent_instructions": {"type": "string"},
+                # The rest of the save form. The interview used to stop at the
+                # eight fields above, which left `example_input`/
+                # `example_output` empty — and an empty example is exactly what
+                # blocks publishing later, far from where it was decided.
+                "package_key": {"type": "string"},
+                "query_name": {"type": "string"},
+                "agent_enabled": {"type": "boolean"},
+                "output_schema": {"type": "string"},
+                "example_input": {"type": "string"},
+                "example_output": {"type": "string"},
             },
             "required": [
                 "name", "package_id", "input_cube_name",
                 "input_cube_parameter", "output_cube_name", "input_mode",
                 "description", "agent_instructions",
+                "package_key", "query_name", "agent_enabled",
+                "output_schema", "example_input", "example_output",
             ],
             "additionalProperties": False,
         },

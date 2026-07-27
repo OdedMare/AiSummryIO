@@ -12,7 +12,7 @@ import type {
   PackageInspection, PackageVersion, ToolPlanDraft,
 } from "@/types";
 import { emptyPackage, parseJson } from "./forms";
-import { PlanChat, usePlanChat } from "./PlanChat";
+import { PlanChat, PlanChatDrawer, usePlanChat } from "./PlanChat";
 
 type PackageForm = typeof emptyPackage;
 type FieldTarget =
@@ -80,6 +80,17 @@ export default function PackageCatalog({
       description: current.description.trim() || draft.description,
       agent_instructions:
         current.agent_instructions.trim() || draft.agent_instructions,
+      query_name: current.query_name.trim() || draft.query_name,
+      agent_enabled: draft.agent_enabled,
+      // These three are JSON text. "{}"/"[]" is the empty form value, so an
+      // untouched field yields to the draft while an edited one is kept.
+      output_schema: emptyJsonObject(current.output_schema)
+        ? draft.output_schema || current.output_schema : current.output_schema,
+      example_input: emptyJsonArray(current.example_input)
+        ? draft.example_input || current.example_input : current.example_input,
+      example_output: emptyJsonArray(current.example_output)
+        ? draft.example_output || current.example_output
+        : current.example_output,
     }));
     setMessage("פרטי הטול מהשיחה נטענו לטופס. יש לבדוק לפני השמירה.");
   };
@@ -135,8 +146,8 @@ export default function PackageCatalog({
     <div className="studio-split">
       <PackageList items={items} onEdit={edit} />
       <form className="studio-form" onSubmit={save}>
-        <FormHeader editing={!!form.package_key} />
-        <ToolPlanChat inspection={inspection} onApply={applyDraft} />
+        <FormHeader editing={!!form.package_key}
+          inspection={inspection} onApply={applyDraft} />
         <PackageFields form={form} update={update}
           onDropField={(event, target) =>
             dropTextField(event, target, setForm)} />
@@ -167,13 +178,20 @@ export default function PackageCatalog({
   );
 }
 
-const DRAFT_LABELS: Array<[keyof ToolPlanDraft, string]> = [
-  ["name", "שם תצוגה"],
-  ["package_id", "Package ID"],
-  ["input_cube_name", "Input cube"],
-  ["input_cube_parameter", "Input parameter"],
-  ["output_cube_name", "Output cube"],
-  ["input_mode", "מצב קלט"],
+/** Every field the interview fills, so its progress is legible at a glance. */
+const DRAFT_LABELS: Array<[keyof ToolPlanDraft, string, "rtl" | "ltr"]> = [
+  ["name", "שם תצוגה", "rtl"],
+  ["package_id", "Package ID", "ltr"],
+  ["input_cube_name", "Input cube", "ltr"],
+  ["input_cube_parameter", "Input parameter", "ltr"],
+  ["output_cube_name", "Output cube", "ltr"],
+  ["input_mode", "מצב קלט", "ltr"],
+  ["query_name", "Query name", "ltr"],
+  ["description", "מתי הטול שימושי", "rtl"],
+  ["agent_instructions", "איך לסכם", "rtl"],
+  ["output_schema", "Output schema", "ltr"],
+  ["example_input", "קלט לדוגמה", "ltr"],
+  ["example_output", "פלט לדוגמה", "ltr"],
 ];
 
 function ToolPlanChat({
@@ -182,38 +200,57 @@ function ToolPlanChat({
   inspection: PackageInspection | null;
   onApply: (draft: ToolPlanDraft) => void;
 }) {
+  const [open, setOpen] = useState(false);
   // The live inspection travels with every turn, so once the FDE runs
   // Fetch 1 ID the agent names real fields instead of guessing at them.
   const chat = usePlanChat<ToolPlanDraft>(
     (messages, draft) => api.planToolChat(messages, draft ?? {}, inspection),
   );
   const draft = chat.draft;
+  const filled = draft
+    ? DRAFT_LABELS.filter(([field]) => draft[field]).length : 0;
   return (
-    <PlanChat chat={chat}
-      title="תשאול על הטול"
-      hint="ספרו איזה מידע החבילה מחזירה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, וימלא את הטופס.">
-      {draft && <div className="planner-result" aria-live="polite">
-        <dl className="plan-chat-draft">
-          {DRAFT_LABELS.map(([field, label]) => (
-            <div key={field}>
-              <dt>{label}</dt>
-              <dd dir={field === "name" ? "rtl" : "ltr"}>
-                {draft[field] || "—"}
-              </dd>
+    <PlanChatDrawer open={open} busy={chat.pending}
+      onOpen={() => setOpen(true)} onClose={() => setOpen(false)}
+      label="שאלו את הסוכן">
+      <PlanChat chat={chat}
+        title="תשאול על הטול"
+        hint="ספרו איזה מידע החבילה מחזירה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, וימלא את הטופס.">
+        {draft && <div className="planner-result" aria-live="polite">
+          <p className="plan-chat-count">
+            מולאו {filled} מתוך {DRAFT_LABELS.length} שדות
+          </p>
+          <dl className="plan-chat-draft">
+            {DRAFT_LABELS.map(([field, label, dir]) => (
+              <div key={field} className={draft[field] ? "filled" : "empty"}>
+                <dt>{label}</dt>
+                <dd dir={dir}>{fieldPreview(draft[field])}</dd>
+              </div>
+            ))}
+            <div className={draft.agent_enabled ? "filled" : "empty"}>
+              <dt>זמין לסוכן</dt>
+              <dd>{draft.agent_enabled ? "כן" : "ל-workflow בלבד"}</dd>
             </div>
-          ))}
-        </dl>
-        {!inspection && !chat.ready &&
-          <p className="plan-chat-note">
-            כדי שהסוכן יראה את שמות השדות האמיתיים, הריצו Fetch 1 ID למטה.
-          </p>}
-        {chat.ready && <button type="button" className="planner-button"
-          onClick={() => onApply(draft)}>
-          <Beaker size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
-        </button>}
-      </div>}
-    </PlanChat>
+          </dl>
+          {!inspection && !chat.ready &&
+            <p className="plan-chat-note">
+              כדי שהסוכן יראה את שמות השדות האמיתיים, הריצו Fetch 1 ID בטופס.
+            </p>}
+          {chat.ready && <button type="button" className="planner-button"
+            onClick={() => { onApply(draft); setOpen(false); }}>
+            <Beaker size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
+          </button>}
+        </div>}
+      </PlanChat>
+    </PlanChatDrawer>
   );
+}
+
+/** Long JSON and prose are summarized; the form is where they get read. */
+function fieldPreview(value: string | boolean): string {
+  if (typeof value !== "string" || !value) return "—";
+  const flat = value.replace(/\s+/g, " ").trim();
+  return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat;
 }
 
 function PackageList({
@@ -242,12 +279,22 @@ function PackageList({
   );
 }
 
-function FormHeader({ editing }: { editing: boolean }) {
+function FormHeader({
+  editing, inspection, onApply,
+}: {
+  editing: boolean;
+  inspection: PackageInspection | null;
+  onApply: (draft: ToolPlanDraft) => void;
+}) {
   return (
-    <header><span><PackagePlus size={19} /></span><div>
-      <h3>{editing ? "גרסה חדשה למקור" : "מקור מידע חדש"}</h3>
-      <p>חבילת FLAPI שמביאה נתונים לתהליך הסיכום.</p>
-    </div></header>
+    <header className="studio-form-header">
+      <span><PackagePlus size={19} /></span>
+      <div>
+        <h3>{editing ? "גרסה חדשה למקור" : "מקור מידע חדש"}</h3>
+        <p>חבילת FLAPI שמביאה נתונים לתהליך הסיכום.</p>
+      </div>
+      <ToolPlanChat inspection={inspection} onApply={onApply} />
+    </header>
   );
 }
 
@@ -601,6 +648,16 @@ function emptyJsonArray(value: string) {
   try {
     const parsed = JSON.parse(value);
     return Array.isArray(parsed) && parsed.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+function emptyJsonObject(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return !!parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      && !Object.keys(parsed).length;
   } catch {
     return false;
   }

@@ -73,15 +73,61 @@ fit in a blank field.
 
 ## What you are establishing
 
-`package_id`, `input_cube_name`, `input_cube_parameter`, `output_cube_name`,
-a display `name` in Hebrew, `input_mode`, and — grounded in real output —
-`description` and `agent_instructions`.
+You are filling the **whole** tool form, not a subset of it. Leaving a field
+for later means the FDE meets it as a publish failure long after this
+conversation ended.
+
+Connection: `package_id`, `input_cube_name`, `input_cube_parameter`,
+`output_cube_name`, `input_mode`, and an optional `query_name`.
+Presentation: a display `name` in Hebrew, and `agent_enabled` — true when the
+tool may be chosen on its own for a follow-up question, false when it only
+makes sense as a step inside a workflow. Ask which.
+Grounded in real output: `description`, `agent_instructions`,
+`output_schema`, `example_input`, and `example_output`.
+
+`package_key` stays empty for a new tool; set it only when the FDE says they
+are versioning an existing one.
 
 `input_mode` is `single` when the package takes one identifier per call and
 `many` when it accepts a batch. This one is worth pressing on: `many` against
 a package that expects a single identifier fails silently, returning a wrong
 answer rather than an error. Ask which the package actually supports; do not
 infer it from convenience.
+
+## Examples are not paperwork
+
+`example_input` is a JSON array of identifier strings — the safe test
+identifier the FDE used. `example_output` is a JSON array of the rows that
+came back. `output_schema` is the inferred schema as a JSON object. Send all
+three as JSON **text**.
+
+Fill them from the sample the moment you have one. A tool saved without them
+cannot be published, and the FDE will not know why.
+
+## Writing `description` and `agent_instructions`
+
+These two are read by another model at summary time, and they are the only
+thing standing between it and a guess. The FDE will tell you the gist in a
+sentence; your job is to expand that into something operational. Write more
+than they said, never something they did not say.
+
+`description` answers *when this tool applies*: what question it settles,
+which identifiers it is meaningful for, and — just as important — when it
+should **not** be reached for, including any case the FDE mentioned in
+passing. Name the real limits: rows that come back empty, values that only
+exist for some identifiers, anything the sample shows is sparse.
+
+`agent_instructions` answers *how to summarize what came back*: which fields
+carry the answer and what each one means in the FDE's own domain terms, which
+are context and should not be stated as findings, how to read an empty result
+versus a zero, what to do when fields disagree, and which values deserve to be
+called out rather than averaged away. Refer to fields by the exact names in
+the sample.
+
+Ground every sentence in what the FDE told you or what the rows show. Where
+you extend past their wording, you are making their intent explicit — so if
+you are extending past it into something they have not confirmed, that is a
+question for them, not a sentence for the field.
 
 ## The sample is not optional
 

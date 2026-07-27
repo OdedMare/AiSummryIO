@@ -10,7 +10,7 @@ import type {
   PackageVersion, WorkflowPlan, WorkflowStep, WorkflowVersion,
 } from "@/types";
 import { emptyWorkflow, parseJson } from "./forms";
-import { PlanChat, usePlanChat } from "./PlanChat";
+import { PlanChat, PlanChatDrawer, usePlanChat } from "./PlanChat";
 
 export default function WorkflowEditor({
   packages, workflows, onRefresh,
@@ -168,7 +168,14 @@ function WorkflowForm({
 }) {
   return (
     <form className="studio-form workflow-form" onSubmit={editor.save}>
-      <WorkflowPlanChat editor={editor} />
+      <header className="studio-form-header">
+        <span><Workflow size={19} /></span>
+        <div>
+          <h3>{editor.form.workflow_key ? "גרסה חדשה לתהליך" : "תהליך חדש"}</h3>
+          <p>סדרת שלבים שמרכיבה סעיף אחד בסיכום.</p>
+        </div>
+        <WorkflowPlanChat editor={editor} />
+      </header>
       <WorkflowPlanner editor={editor} />
       <WorkflowFields editor={editor} />
       <StepEditor packages={packages} editor={editor} />
@@ -186,40 +193,45 @@ function WorkflowForm({
 }
 
 function WorkflowPlanChat({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
   const chat = usePlanChat<WorkflowPlan>(
     (messages, draft) => api.planWorkflowChat(messages, draft),
   );
   const plan = chat.draft;
   return (
-    <PlanChat chat={chat}
-      title="תשאול על התהליך"
-      hint="ספרו מה אתם רוצים לדעת על המזהה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, עד שנגיע להסכמה.">
-      {plan && <div className="planner-result" aria-live="polite">
-        {plan.rationale && <p>{plan.rationale}</p>}
-        {!!plan.steps.length && <ol className="plan-chat-steps">
-          {plan.steps.map((step) =>
-            <li key={step.key}>
-              <b dir="ltr">{step.key}</b> <span>{step.name}</span>
-              <small dir="ltr">
-                {step.input_source}
-                {step.input_field ? ` → ${step.input_field}` : ""}
-              </small>
-            </li>)}
-        </ol>}
-        {!!plan.missing_tools.length && <section>
-          <strong>מה חסר כדי להשלים את הבקשה</strong>
-          <ul>{plan.missing_tools.map((item, index) =>
-            <li key={`${item.name}-${index}`}><b>{item.name}</b>
-              <span>{item.reason}</span>
-            </li>)}
-          </ul>
-        </section>}
-        {chat.ready && <button type="button" className="planner-button"
-          onClick={() => editor.loadPlan(plan)}>
-          <Sparkles size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
-        </button>}
-      </div>}
-    </PlanChat>
+    <PlanChatDrawer open={open} busy={chat.pending}
+      onOpen={() => setOpen(true)} onClose={() => setOpen(false)}
+      label="שאלו את הסוכן">
+      <PlanChat chat={chat}
+        title="תשאול על התהליך"
+        hint="ספרו מה אתם רוצים לדעת על המזהה. הסוכן ישאל שאלה אחת בכל פעם, עם המלצה, עד שנגיע להסכמה.">
+        {plan && <div className="planner-result" aria-live="polite">
+          {plan.rationale && <p>{plan.rationale}</p>}
+          {!!plan.steps.length && <ol className="plan-chat-steps">
+            {plan.steps.map((step) =>
+              <li key={step.key}>
+                <b dir="ltr">{step.key}</b> <span>{step.name}</span>
+                <small dir="ltr">
+                  {step.input_source}
+                  {step.input_field ? ` → ${step.input_field}` : ""}
+                </small>
+              </li>)}
+          </ol>}
+          {!!plan.missing_tools.length && <section>
+            <strong>מה חסר כדי להשלים את הבקשה</strong>
+            <ul>{plan.missing_tools.map((item, index) =>
+              <li key={`${item.name}-${index}`}><b>{item.name}</b>
+                <span>{item.reason}</span>
+              </li>)}
+            </ul>
+          </section>}
+          {chat.ready && <button type="button" className="planner-button"
+            onClick={() => { editor.loadPlan(plan); setOpen(false); }}>
+            <Sparkles size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
+          </button>}
+        </div>}
+      </PlanChat>
+    </PlanChatDrawer>
   );
 }
 
@@ -270,10 +282,6 @@ function WorkflowFields({ editor }: { editor: Editor }) {
   const { form, update } = editor;
   return (
     <>
-      <header><span><Workflow size={19} /></span><div>
-        <h3>{form.workflow_key ? "גרסת תהליך חדשה" : "תהליך חדש"}</h3>
-        <p>כל שלב משתמש בגרסת טול קבועה ובפלט שכבר קיים.</p>
-      </div></header>
       <div className="form-grid two">
         <label><span>שם התהליך *</span><input value={form.name}
           onChange={(e) => update("name", e.target.value)} /></label>
