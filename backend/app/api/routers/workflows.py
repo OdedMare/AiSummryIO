@@ -2,7 +2,9 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.models import DryRunCreate, WorkflowCreate, WorkflowPlanCreate
+from app.api.models import (
+    DryRunCreate, PlanChatCreate, WorkflowCreate, WorkflowPlanCreate,
+)
 
 
 def build(context) -> APIRouter:
@@ -22,6 +24,12 @@ def build(context) -> APIRouter:
     @router.post("/plan")
     def plan_workflow(payload: WorkflowPlanCreate):
         return context.service.plan_workflow(payload.prompt)
+
+    @router.post("/plan-chat")
+    def plan_workflow_chat(payload: PlanChatCreate):
+        return context.service.plan_workflow_chat(
+            [item.model_dump() for item in payload.messages], payload.draft,
+        )
 
     @router.post("/{workflow_id}/publish")
     def publish_workflow(workflow_id: str):

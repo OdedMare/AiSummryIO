@@ -2,7 +2,9 @@
 
 from typing import Dict, List
 
-from app.bl.workflow_engine_pkg import execution, planning, routing, synthesis
+from app.bl.workflow_engine_pkg import (
+    conversational_planning, execution, planning, routing, synthesis,
+)
 from app.bl.workflow_engine_pkg.schemas import (
     FINAL_SCHEMA, SECTION_SCHEMA, SKILL_SCHEMA, WORKFLOW_PLAN_SCHEMA,
     merge_output_schema,
@@ -41,6 +43,18 @@ class SummaryService:
 
     def inspect_tool(self, package: dict, root_id: str) -> dict:
         return planning.inspect_tool(self, package, root_id)
+
+    def plan_tool_chat(
+        self, messages: List[dict], draft: Dict, inspection: Dict
+    ) -> dict:
+        return conversational_planning.plan_tool_chat(
+            self, messages, draft, inspection
+        )
+
+    def plan_workflow_chat(self, messages: List[dict], draft: Dict) -> dict:
+        return conversational_planning.plan_workflow_chat(
+            self, messages, draft
+        )
 
     def preview_skill(
         self, name: str, content: str, question: str, sections: List[dict]

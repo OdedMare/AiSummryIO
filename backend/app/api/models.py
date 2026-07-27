@@ -65,6 +65,34 @@ class WorkflowCreate(BaseModel):
     steps: List[WorkflowStep] = Field(default_factory=list)
 
 
+class PlanChatMessage(BaseModel):
+    role: Literal["fde", "agent"]
+    text: str
+
+
+class PlanChatCreate(BaseModel):
+    """One turn of conversational planning.
+
+    The whole exchange is replayed on every turn, so the server keeps no
+    session state. ``draft`` carries what was agreed so far and comes back
+    extended, never reset.
+    """
+
+    messages: List[PlanChatMessage] = Field(default_factory=list)
+    draft: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("messages")
+    @classmethod
+    def conversation_required(cls, value):
+        if not any(item.text.strip() for item in value):
+            raise ValueError("נדרשת הודעה אחת לפחות")
+        return value
+
+
+class ToolPlanChatCreate(PlanChatCreate):
+    inspection: Dict[str, Any] = Field(default_factory=dict)
+
+
 class WorkflowPlanCreate(BaseModel):
     prompt: str
 

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.models import PackageCreate, PackageInspect
+from app.api.models import PackageCreate, PackageInspect, ToolPlanChatCreate
 
 
 def build(context) -> APIRouter:
@@ -24,5 +24,12 @@ def build(context) -> APIRouter:
         data = payload.model_dump()
         root_id = data.pop("root_id")
         return context.service.inspect_tool(data, root_id)
+
+    @router.post("/plan-chat")
+    def plan_tool_chat(payload: ToolPlanChatCreate):
+        return context.service.plan_tool_chat(
+            [item.model_dump() for item in payload.messages],
+            payload.draft, payload.inspection,
+        )
 
     return router
