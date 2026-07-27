@@ -1,4 +1,4 @@
-# AiSummryIO frontend context
+# SumOrAI frontend context
 
 Read this before changing `frontend/`.
 

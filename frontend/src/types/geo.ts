@@ -1,7 +1,7 @@
 /**
  * Geometry types for the map picker, ported from LocatoAI's `geo-query.ts`.
  *
- * Only the drawing subset is kept: AiSummryIO scopes a summary by an area,
+ * Only the drawing subset is kept: SumOrAI scopes a summary by an area,
  * it does not run LocatoAI's layer/plan pipeline.
  *
  * `GeoJSONMultiPolygon` mirrors the backend contract (`models.SummaryCreate`).

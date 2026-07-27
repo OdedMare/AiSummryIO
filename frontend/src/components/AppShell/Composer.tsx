@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import type { SummarySkill } from "@/types";
 import type { AppShellController } from "./useAppShell";
@@ -54,6 +54,42 @@ function FollowUpField({ app }: { app: AppShellController }) {
   );
 }
 
+type MenuAnchor = { left: number; width: number; bottom: number };
+
+/**
+ * Viewport rect for the skill menu, anchored above `element`. The menu is
+ * `position: fixed` to escape the composer's scroll clipping, so it has to
+ * track the textarea itself while the composer scrolls or the window resizes.
+ */
+function useMenuAnchor(
+  element: HTMLTextAreaElement | null, active: boolean,
+) {
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
+
+  useLayoutEffect(() => {
+    if (!element || !active) { setAnchor(null); return; }
+    const measure = () => {
+      const rect = element.getBoundingClientRect();
+      setAnchor({
+        left: rect.left,
+        width: rect.width,
+        bottom: window.innerHeight - rect.top + 6,
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    // `true` captures scrolls on the composer and any other ancestor, which
+    // do not bubble to `window`.
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [element, active]);
+
+  return anchor;
+}
+
 /** The `/name` fragment being typed at the caret, or null. */
 function activeQuery(value: string, caret: number) {
   const before = value.slice(0, caret);
@@ -69,11 +105,14 @@ function MessageInput({
   placeholder: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [field, setField] = useState<HTMLTextAreaElement | null>(null);
   const [caret, setCaret] = useState(0);
   const [open, setOpen] = useState(false);
   const query = open ? activeQuery(app.message, caret) : null;
   const matches = useMemo(
     () => filterSkills(app.skills, query), [app.skills, query]);
+  const showMenu = query !== null && !!matches.length;
+  const anchor = useMenuAnchor(field, showMenu);
 
   const sync = (element: HTMLTextAreaElement) => {
     setCaret(element.selectionStart ?? 0); setOpen(true);
@@ -92,7 +131,9 @@ function MessageInput({
 
   return (
     <div className="message-input">
-      <textarea ref={ref} value={app.message}
+      <textarea
+        ref={(node) => { ref.current = node; setField(node); }}
+        value={app.message}
         onChange={(event) => {
           app.setMessage(event.target.value); sync(event.target);
         }}
@@ -106,8 +147,8 @@ function MessageInput({
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder={placeholder} rows={2}
         disabled={app.submitting || isActive(app.run)} />
-      {query !== null && !!matches.length &&
-        <SkillMenu matches={matches} onPick={complete} />}
+      {showMenu && !!anchor &&
+        <SkillMenu matches={matches} anchor={anchor} onPick={complete} />}
     </div>
   );
 }

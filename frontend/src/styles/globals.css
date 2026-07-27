@@ -695,13 +695,15 @@ button:disabled {
   position: relative;
 }
 
+/* `position: fixed`, not `absolute`: `.composer` sets `overflow-y: auto` so it
+   can scroll inside its capped shell row, which makes it a clipping context an
+   absolutely positioned child cannot escape — the menu was clipped and scrolled
+   away from its textarea instead of floating above the composer. Fixed takes it
+   out of that context; `MessageInput` measures the textarea to place it. */
 .skill-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  left: 0;
-  z-index: 20;
-  max-height: 240px;
+  position: fixed;
+  z-index: 60;
+  max-height: min(240px, 40vh);
   margin: 0;
   padding: 5px;
   overflow-y: auto;
