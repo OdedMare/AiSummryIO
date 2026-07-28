@@ -57,7 +57,9 @@ def plan_workflow_chat(
 class _Planner:
     """One conversational planning turn, shared across planner kinds."""
 
-    system = ""
+    # The prompt file this planner sends, resolved per turn rather than at
+    # import, so editing the markdown takes effect without a restart.
+    prompt = ""
     schema: Dict[str, Any] = {}
 
     def __init__(self, service):
@@ -86,7 +88,8 @@ class _Planner:
         if self._service._llm is None:
             raise AgentError("לא הוגדר חיבור למודל")
         answer = self._service._llm.complete_json(
-            self.system, json.dumps(payload, ensure_ascii=False), self.schema,
+            prompts.load(self.prompt),
+            json.dumps(payload, ensure_ascii=False), self.schema,
         )
         return answer if isinstance(answer, dict) else {}
 
@@ -142,7 +145,7 @@ class _Planner:
 class _ToolPlanner(_Planner):
     """Fills one FLAPI tool's fields by discussing the FDE's data."""
 
-    system = TOOL_SYSTEM
+    prompt = "tool_interview"
     schema = TOOL_PLAN_CHAT_SCHEMA
     _DRAFT_FIELDS = TOOL_PLAN_CHAT_SCHEMA["properties"]["draft"]["required"]
     # `agent_enabled` is the one draft field that is not text. It is merged
@@ -289,7 +292,7 @@ class _ToolPlanner(_Planner):
 class _WorkflowPlanner(_Planner):
     """Wires catalog tools into one workflow, mapping confirmed out loud."""
 
-    system = WORKFLOW_SYSTEM
+    prompt = "workflow_interview"
     schema = WORKFLOW_PLAN_CHAT_SCHEMA
 
     def __init__(self, service):

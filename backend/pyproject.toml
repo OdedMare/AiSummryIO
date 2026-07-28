@@ -28,5 +28,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+# Prompts are markdown beside the code that sends them. `packages.find` ships
+# only .py, so without this they are missing from a built wheel and every LLM
+# call raises "prompt not found" — including in the air-gapped install.
+[tool.setuptools.package-data]
+"app.bl.prompts" = ["*.md", "shared/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

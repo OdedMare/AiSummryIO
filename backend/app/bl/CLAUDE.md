@@ -11,8 +11,15 @@ client, and the provider it was constructed with.
 | `jobs.py` | 72 | `JobRunner` — the bounded background queue |
 
 `workflow_engine_pkg/` holds the behavior modules the facade delegates to,
-including `conversational_planning.py` and its prompts in
-`planning_prompts.py`.
+including `conversational_planning.py`.
+
+`prompts/` holds the prompt text those modules send, as markdown rather than
+Python constants — see [prompts/README.md](prompts/README.md). Callers use
+`prompts.load("tool_interview")`; composition is an include line, and the text
+is read once per process unless `reload=True`. **FDE-owned content stays in
+the `agent_content` table**, editable live in Agent Studio: Skills, the
+`workflow-planner` prompt, and a workflow's `system_prompt` are all read from
+the database at call time and must not move into files.
 
 ## `SummaryService` (`workflow_engine.py`)
 

@@ -76,6 +76,17 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - Steps are sorted by dependency level in `workflowPayload`, because the
   backend resolves `steps.<key>` only against steps earlier in the array
   while the canvas lets an FDE wire a node backwards.
+- **Two execution modes, inferred — never stored.** A step with no incoming
+  connection lands in level 0, and the backend runs a whole level
+  concurrently in a thread pool, so a workflow with nothing connected *is* a
+  parallel bundle of tools and one long chain is a pipeline. There is no
+  mode flag to set: connecting steps is the only control. `ExecutionMode`
+  reads the graph and names what will run, and `stepLevels` must keep
+  matching the backend's `step_levels` or the banner misreports it.
+- Edges from `workflow.id` / `workflow.boundaries` carry `is-implicit` and
+  are drawn faint and dashed. They are every unconnected step's default
+  rather than a mapping the FDE drew, and at full strength a parallel bundle
+  reads as a fan-out chain.
 - The canvas expands to a fullscreen overlay, portalled to `document.body`
   so the studio form's scroll container cannot clip it. Like the interview
   drawer, it must stop `submit` and `Enter` at its own boundary — the canvas

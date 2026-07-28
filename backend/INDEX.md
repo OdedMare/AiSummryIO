@@ -13,6 +13,7 @@ backend/app/
 ├── bl/
 │   ├── jobs.py                     background execution
 │   ├── workflow_engine.py          stable SummaryService facade
+│   ├── prompts/                    prompt markdown + loader
 │   └── workflow_engine_pkg/        execution, routing, planning, synthesis
 ├── common/
 │   ├── config/                     environment defaults
@@ -34,6 +35,7 @@ the only implementation file at the root of `app/`.
 | Composition root | [app/CLAUDE.md](app/CLAUDE.md) |
 | HTTP models and auth | [app/api/CLAUDE.md](app/api/CLAUDE.md) |
 | Business logic | [app/bl/CLAUDE.md](app/bl/CLAUDE.md) |
+| Prompts | [app/bl/prompts/README.md](app/bl/prompts/README.md) |
 | Shared utilities | [app/common/CLAUDE.md](app/common/CLAUDE.md) |
 | Data access | [app/dal/CLAUDE.md](app/dal/CLAUDE.md) |
 | Repository | [app/dal/repository/CLAUDE.md](app/dal/repository/CLAUDE.md) |

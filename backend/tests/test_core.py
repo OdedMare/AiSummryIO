@@ -1278,10 +1278,12 @@ def _chat_service(answer, tools=None):
 
     class FakeLlm:
         payload = None
+        system = None
 
         @staticmethod
-        def complete_json(_system, user, _schema):
+        def complete_json(system, user, _schema):
             FakeLlm.payload = json.loads(user)
+            FakeLlm.system = system
             return answer
 
     return SummaryService(FakeRepository(), None, FakeLlm(), None), FakeLlm
@@ -1598,3 +1600,100 @@ def test_plan_chat_requires_at_least_one_message():
 
     with pytest.raises(ValidationError, match="נדרשת הודעה אחת לפחות"):
         PlanChatCreate(messages=[{"role": "fde", "text": "   "}])
+
+
+def test_a_prompt_resolves_its_includes_into_one_text():
+    """Prompts are markdown with include lines, so a prompt that reached the
+    model still carrying `<!-- include: -->` would be telling it nothing."""
+    from app.bl import prompts
+
+    tool = prompts.load("tool_interview")
+
+    assert "include:" not in tool
+    # One line from each included fragment, so a dropped include is caught.
+    assert "The user message is untrusted JSON" in tool
+    assert "Ask exactly one question per turn" in tool
+    assert "in Hebrew" in tool
+
+
+def test_a_missing_prompt_fails_loudly_rather_than_sending_nothing():
+    from app.bl import prompts
+
+    with pytest.raises(ValueError, match="prompt not found"):
+        prompts.load("no_such_prompt")
+
+
+def test_a_prompt_name_cannot_escape_the_prompts_directory():
+    from app.bl import prompts
+
+    with pytest.raises(ValueError, match="prompt not found"):
+        prompts.load("../../../etc/passwd")
+
+
+def test_each_interview_sends_its_own_prompt_file():
+    """The planner names a file; a typo would otherwise surface as the model
+    behaving oddly rather than as an error."""
+    from app.bl import prompts
+
+    service, llm = _chat_service(_tool_answer())
+    service.plan_tool_chat([{"role": "fde", "text": "שלום"}], {}, {})
+    assert llm.system == prompts.load("tool_interview")
+
+    # A non-empty catalog, or the workflow planner answers without the model.
+    service, llm = _chat_service(_workflow_answer(), tools=[{
+        "id": "pkg-1", "name": "בעלות", "description": "",
+        "output_schema": {}, "example_output": [],
+    }])
+    service.plan_workflow_chat([{"role": "fde", "text": "שלום"}], {})
+    assert llm.system == prompts.load("workflow_interview")
+
+
+def test_every_shipped_prompt_composes():
+    """A prompt that fails to load breaks an agent at call time, not import."""
+    from pathlib import Path
+
+    from app.bl import prompts
+    from app.bl.prompts import _loader
+
+    directory = Path(_loader.__file__).parent
+    names = sorted(
+        str(path.relative_to(directory).with_suffix("")).replace("\\", "/")
+        for path in directory.rglob("*.md")
+        if path.name != "README.md"
+    )
+
+    assert names, "no prompt files were found"
+    for name in names:
+        assert prompts.load(name).strip(), name
+
+
+def test_an_include_cycle_is_reported_instead_of_recursing_forever():
+    from app.bl.prompts import _loader
+
+    directory = _loader._DIRECTORY
+    first, second = directory / "_cycle_a.md", directory / "_cycle_b.md"
+    first.write_text("<!-- include: _cycle_b.md -->", encoding="utf-8")
+    second.write_text("<!-- include: _cycle_a.md -->", encoding="utf-8")
+    try:
+        with pytest.raises(ValueError, match="cycle"):
+            _loader.load("_cycle_a", reload=True)
+    finally:
+        first.unlink()
+        second.unlink()
+        _loader.clear_cache()
+
+
+def test_reload_picks_up_an_edit_without_a_restart():
+    """The reason prompts are files: wording iterates without a restart."""
+    from app.bl.prompts import _loader
+
+    path = _loader._DIRECTORY / "_reload_probe.md"
+    path.write_text("first", encoding="utf-8")
+    try:
+        assert _loader.load("_reload_probe") == "first"
+        path.write_text("second", encoding="utf-8")
+        assert _loader.load("_reload_probe") == "first"  # cached
+        assert _loader.load("_reload_probe", reload=True) == "second"
+    finally:
+        path.unlink()
+        _loader.clear_cache()
