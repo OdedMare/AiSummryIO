@@ -70,9 +70,15 @@ export function SummaryContent({ run }: { run: SummaryRun }) {
       {run.result?.summary &&
         <section className="executive-summary">
           <span className="eyebrow">תמונה כוללת</span>
+          {run.result.headline && <p className="headline">{run.result.headline}</p>}
           <p>{run.result.summary}</p>
+          {run.result.coverage &&
+            <p className="coverage-note">{run.result.coverage}</p>}
         </section>}
       <Findings items={run.result?.key_findings ?? []} />
+      <ListBlock title="סיכונים" tone="risk" items={run.result?.risks ?? []} />
+      <ListBlock title="מידע חסר" tone="gap"
+        items={run.result?.missing_data ?? []} />
       <SkillResults items={run.result?.skill_results ?? []} />
       <section className="section-stack" aria-label="חלקי הסיכום">
         {sections.map((section) =>
@@ -88,6 +94,19 @@ function Findings({ items }: { items: string[] }) {
     <section className="finding-grid">
       {items.map((finding) =>
         <div key={finding}><CheckCircle2 size={18} /><span>{finding}</span></div>)}
+    </section>
+  );
+}
+
+/** Risks and gaps were computed by the backend but had nowhere to render. */
+function ListBlock(
+  { title, tone, items }: { title: string; tone: string; items: string[] },
+) {
+  if (!items.length) return null;
+  return (
+    <section className={`list-block ${tone}`} aria-label={title}>
+      <h3>{title}</h3>
+      <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>
     </section>
   );
 }

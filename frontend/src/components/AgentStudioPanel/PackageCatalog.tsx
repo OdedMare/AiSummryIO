@@ -12,7 +12,9 @@ import type {
   PackageInspection, PackageVersion, ToolPlanDraft,
 } from "@/types";
 import { emptyPackage, parseJson } from "./forms";
-import { PlanChat, PlanChatDrawer, usePlanChat } from "./PlanChat";
+import {
+  FieldAgentPopover, PlanChat, PlanChatDrawer, usePlanChat,
+} from "./PlanChat";
 
 type PackageForm = typeof emptyPackage;
 type FieldTarget =
@@ -280,6 +282,72 @@ function fieldPreview(value: string | boolean): string {
   return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat;
 }
 
+/** The fields an interview may be opened on, with the label it discusses. */
+const FIELD_AGENT_LABELS: Partial<Record<keyof ToolPlanDraft, string>> = {
+  name: "שם תצוגה",
+  description: "מתי הטול שימושי",
+  agent_instructions: "איך לסכם את תוצאות הטול",
+  output_schema: "Output schema",
+  example_input: "קלט לדוגמה",
+  example_output: "פלט לדוגמה",
+};
+
+/**
+ * The agent for one field, reachable from the field itself.
+ *
+ * The drawer above discusses the whole tool; this discusses the field the FDE
+ * pointed at. Each field keeps its own conversation, so opening the agent on
+ * "how to summarize" after settling "when is this useful" starts on that
+ * question rather than replaying the first one.
+ *
+ * Only the focused field is written back. The interview carries the rest of
+ * the draft — it has to, the form is one object — but applying all of it would
+ * let a conversation about one field quietly rewrite text the FDE had already
+ * edited by hand somewhere else on the form.
+ */
+function FieldAgent({
+  field, form, inspection, onApply,
+}: {
+  field: keyof ToolPlanDraft;
+  form: PackageForm;
+  inspection: PackageInspection | null;
+  onApply: (field: keyof ToolPlanDraft, value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = FIELD_AGENT_LABELS[field] ?? field;
+  const chat = usePlanChat<ToolPlanDraft>(
+    (messages, draft) => api.planToolChat(
+      messages, { ...connectionDraft(form), ...(draft ?? {}) }, inspection,
+      field,
+    ),
+  );
+  const offered = chat.draft?.[field];
+  const value = typeof offered === "string" ? offered : "";
+  return (
+    <FieldAgentPopover open={open} field={field} label={label}
+      busy={chat.pending}
+      onOpen={() => setOpen(true)} onClose={() => setOpen(false)}
+      disabled={!inspection}
+      disabledHint="הריצו Fetch 1 ID קודם">
+      <PlanChat chat={chat} title={label}
+        hint={`הסוכן ראה את הפלט של ההרצה. שוחחו איתו על "${label}" בלבד.`}>
+        {value && <div className="planner-result" aria-live="polite">
+          <p className="field-agent-proposal-label">ההצעה לשדה:</p>
+          <p className="field-agent-proposal"
+            dir={field === "name" || field === "description"
+              || field === "agent_instructions" ? "rtl" : "ltr"}>
+            {value}
+          </p>
+          {chat.ready && <button type="button" className="planner-button"
+            onClick={() => { onApply(field, value); setOpen(false); }}>
+            <Beaker size={16} aria-hidden="true" /> טעינה לשדה
+          </button>}
+        </div>}
+      </PlanChat>
+    </FieldAgentPopover>
+  );
+}
+
 function PackageList({
   items, onEdit,
 }: {
@@ -327,7 +395,7 @@ function FormHeader({
 }
 
 function PackageFields({
-  form, update, onDropField,
+  form, update, onDropField, inspection, onApplyField,
 }: {
   form: PackageForm;
   update: UpdatePackage;
@@ -335,11 +403,18 @@ function PackageFields({
     event: DragEvent<HTMLTextAreaElement>,
     target: "description" | "agent_instructions",
   ) => void;
+  inspection: PackageInspection | null;
+  onApplyField: (field: keyof ToolPlanDraft, value: string) => void;
 }) {
+  /** Every field's agent button is the same control, only the field differs. */
+  const agent = (field: keyof ToolPlanDraft) => (
+    <FieldAgent field={field} form={form} inspection={inspection}
+      onApply={onApplyField} />
+  );
   return (
     <>
       <div className="form-grid two">
-        <label><span>שם תצוגה *</span><input value={form.name}
+        <label><span>שם תצוגה *{agent("name")}</span><input value={form.name}
           onChange={(e) => update("name", e.target.value)} /></label>
         <label><span>Package ID *</span><input dir="ltr" value={form.package_id}
           onChange={(e) => update("package_id", e.target.value)} /></label>

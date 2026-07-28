@@ -843,6 +843,82 @@ button:disabled {
   white-space: pre-line;
 }
 
+/* The one-line answer. Heavier than the body so a reader who stops after it
+   still has the answer. */
+.executive-summary p.headline {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* What the summary rests on: supporting, never competing with the answer. */
+.executive-summary p.coverage-note,
+.section-coverage {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.section-coverage {
+  margin: 6px 0 0;
+}
+
+.section-degraded {
+  margin: 8px 0 0;
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fact-group + .fact-group {
+  margin-top: 12px;
+}
+
+.fact-group h4 {
+  margin: 0 0 6px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.list-block {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.list-block h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.list-block ul {
+  padding-inline-start: 20px;
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.7;
+}
+
+.list-block.risk {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+
+.list-block.risk h3 {
+  color: var(--danger);
+}
+
+.list-block.gap {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+}
+
+.list-block.gap h3 {
+  color: var(--warning);
+}
+
 .finding-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
