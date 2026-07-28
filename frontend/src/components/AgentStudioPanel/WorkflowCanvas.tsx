@@ -19,7 +19,8 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import {
-  AlertTriangle, Map as MapIcon, Maximize2, Minimize2, Package, Tag,
+  AlertTriangle, GitCommitHorizontal, Map as MapIcon, Maximize2, Minimize2,
+  Package, Rows3, Tag,
 } from "lucide-react";
 import type { PackageVersion, WorkflowStep } from "@/types";
 
@@ -140,6 +141,7 @@ export default function WorkflowCanvas({
 
   const canvas = (
     <div className={`workflow-canvas${expanded ? " is-expanded" : ""}`}>
+      <ExecutionMode steps={steps} />
       <div className="workflow-canvas-surface" aria-label="עריכת חיבורי התהליך">
         {graph}
         <button type="button" className="canvas-expand"
@@ -176,6 +178,71 @@ export default function WorkflowCanvas({
       {canvas}
     </div>,
     document.body);
+}
+
+/* ---------- execution mode ---------- */
+
+/**
+ * What this graph will actually do when it runs.
+ *
+ * The engine already supports both modes and needs no flag to pick one: a
+ * step with no incoming connection lands in level 0, and the backend runs a
+ * whole level concurrently in a thread pool. So a workflow with nothing
+ * connected *is* a parallel bundle of tools, and one long chain is a
+ * pipeline. What was missing is that the canvas never said so — every
+ * unconnected step is drawn as an edge from the main identifier, which
+ * reads like a fan-out chain rather than a deliberate choice.
+ */
+function ExecutionMode({ steps }: { steps: WorkflowStep[] }) {
+  const levels = stepLevels(steps);
+  if (!levels.length) return null;
+  const mode = executionMode(levels);
+  return (
+    <div className={`canvas-mode is-${mode.kind}`}>
+      <span className="canvas-mode-icon">
+        {mode.kind === "chain"
+          ? <GitCommitHorizontal size={15} aria-hidden="true" />
+          : <Rows3 size={15} aria-hidden="true" />}
+      </span>
+      <p><strong>{mode.title}</strong> <span>{mode.detail}</span></p>
+      {/* The shape of the run, as a row per level. A level's width is how
+          many packages fire at once, which is the fact an FDE is weighing
+          when they decide whether to connect two steps at all. */}
+      <ol className="canvas-mode-levels" aria-label="שלבי ריצה">
+        {levels.map((level, index) =>
+          <li key={index}>
+            <b>{index + 1}</b>
+            <span>{level.length > 1
+              ? `${level.length} טולים במקביל` : level[0].name || level[0].key}
+            </span>
+          </li>)}
+      </ol>
+    </div>
+  );
+}
+
+type ExecutionModeInfo = {
+  kind: "bundle" | "chain" | "mixed";
+  title: string;
+  detail: string;
+};
+
+function executionMode(levels: WorkflowStep[][]): ExecutionModeInfo {
+  const total = levels.reduce((count, level) => count + level.length, 0);
+  const widest = Math.max(...levels.map((level) => level.length));
+  if (levels.length === 1) {
+    return total === 1
+      ? { kind: "bundle", title: "טול יחיד",
+          detail: "שלב אחד, ללא תלויות." }
+      : { kind: "bundle", title: "חבילת טולים מקבילה",
+          detail: `כל ${total} הטולים רצים יחד על המזהה הראשי.` };
+  }
+  if (widest === 1) {
+    return { kind: "chain", title: "שרשרת",
+      detail: `${levels.length} שלבים, כל אחד ממתין לקודם.` };
+  }
+  return { kind: "mixed", title: "משולב",
+    detail: `${levels.length} שלבי ריצה; הרחב ביותר מריץ ${widest} טולים במקביל.` };
 }
 
 const FIT_VIEW_OPTIONS = { padding: 0.18, maxZoom: 1 };
@@ -473,6 +540,11 @@ function canvasEdges(
       markerEnd: { type: MarkerType.ArrowClosed },
       animated: mappedStep(step),
       updatable: true,
+      // An edge from a workflow-level input is not a mapping the FDE built;
+      // it is every unconnected step's default. Drawn faintly so a bundle of
+      // parallel tools does not read as a deliberate fan-out chain, and the
+      // real mappings stand out against it.
+      className: mappedStep(step) ? undefined : "is-implicit",
     };
   });
 }

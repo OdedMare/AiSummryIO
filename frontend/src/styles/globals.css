@@ -2420,6 +2420,95 @@ select:focus {
   margin-bottom: 12px;
 }
 
+/* What the graph will do when it runs: a parallel bundle, a chain, or a mix.
+   The engine infers this from the connections alone, so the banner reads the
+   graph rather than any stored mode flag. */
+.canvas-mode {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+  padding: 8px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.canvas-mode p {
+  flex: 1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.canvas-mode strong {
+  color: var(--text);
+}
+
+.canvas-mode span {
+  color: var(--text-muted);
+}
+
+.canvas-mode-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+/* Each mode gets its own tint, but the banner always states the mode in
+   words too, so the distinction never rests on color. */
+.canvas-mode.is-bundle .canvas-mode-icon {
+  color: var(--accent);
+  background: var(--surface-3);
+}
+
+.canvas-mode.is-chain .canvas-mode-icon,
+.canvas-mode.is-mixed .canvas-mode-icon {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* One row per execution level, widest-first reading: how many packages fire
+   at once at each stage of the run. */
+.canvas-mode-levels {
+  display: flex;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.canvas-mode-levels li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 10px;
+}
+
+.canvas-mode-levels b {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 50%;
+  font-size: 9px;
+}
+
+.canvas-mode-levels span {
+  color: var(--text-soft);
+}
+
 .workflow-canvas-surface {
   position: relative;
   height: 340px;
@@ -2553,6 +2642,19 @@ select:focus {
 .workflow-canvas .react-flow__edge.selected .react-flow__edge-path,
 .workflow-canvas .react-flow__edge:hover .react-flow__edge-path {
   stroke: var(--primary);
+}
+
+/* The default feed from a workflow-level input, which every unconnected step
+   gets for free. Dashed and faint so a bundle of parallel tools reads as a
+   set rather than as a chain someone drew. */
+.workflow-canvas .react-flow__edge.is-implicit .react-flow__edge-path {
+  stroke: var(--border);
+  stroke-dasharray: 3 4;
+}
+
+.workflow-canvas .react-flow__edge.is-implicit .react-flow__arrowhead,
+.workflow-canvas .react-flow__edge.is-implicit marker path {
+  fill: var(--border);
 }
 
 .workflow-canvas .react-flow__edge-text {

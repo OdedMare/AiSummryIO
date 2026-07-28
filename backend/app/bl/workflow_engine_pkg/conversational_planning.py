@@ -24,12 +24,10 @@ import json
 from typing import Any, Dict, List, Optional
 
 from app.common.errors import AgentError
+from app.bl import prompts
 from app.bl.workflow_engine_pkg.planning import tool_catalog, validated_plan
 from app.bl.workflow_engine_pkg.schemas import (
     TOOL_PLAN_CHAT_SCHEMA, WORKFLOW_PLAN_CHAT_SCHEMA,
-)
-from app.bl.workflow_engine_pkg.planning_prompts import (
-    TOOL_SYSTEM, WORKFLOW_SYSTEM,
 )
 
 _MAX_MESSAGES = 40
