@@ -67,14 +67,23 @@ function useWorkflowEditor(
       current[index]?.key ?? "",
     ));
 
-  /** Point one step at a new source; the canvas draws this as an edge. */
-  const connectStep = (targetKey: string, source: string) =>
+  /**
+   * Point one step at a new source; the canvas draws this as an edge.
+   *
+   * The canvas drags from a specific output field, so it supplies the
+   * mapping too. An empty field means the source carries no named value —
+   * the workflow-level inputs, or a package with no output contract — and
+   * clears any mapping left over from a previous connection.
+   */
+  const connectStep = (
+    targetKey: string, source: string, inputField: string,
+  ) =>
     setSteps((current) => current.map((step) =>
       step.key === targetKey
-        ? patchedStep(step, { input_source: source })
+        ? patchedStep(step, { input_source: source, input_field: inputField })
         : step));
   const disconnectStep = (targetKey: string) =>
-    connectStep(targetKey, "workflow.id");
+    connectStep(targetKey, "workflow.id", "");
 
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
@@ -504,7 +513,7 @@ function workflowPayload(form: typeof emptyWorkflow, steps: WorkflowStep[]) {
 function releaseDependents(steps: WorkflowStep[], removedKey: string) {
   if (!removedKey) return steps;
   return steps.map((step) => step.input_source === `steps.${removedKey}`
-    ? patchedStep(step, { input_source: "workflow.id" })
+    ? patchedStep(step, { input_source: "workflow.id", input_field: "" })
     : step);
 }
 

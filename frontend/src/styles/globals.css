@@ -2468,18 +2468,55 @@ select:focus {
   border: 2px solid var(--surface);
 }
 
+/* A field's own connection point. React Flow positions handles against the
+   node, so a handle inside a row is pulled back out to the node's left edge
+   and re-centred on the row it belongs to. */
+.canvas-node-fields .react-flow__handle,
+.canvas-node-empty .react-flow__handle {
+  top: 50%;
+  left: -6px;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%);
+  background: var(--border-strong);
+}
+
+.canvas-node-fields li:hover .react-flow__handle,
+.canvas-node-fields li.is-consumed .react-flow__handle {
+  background: var(--primary);
+}
+
+/* Dragging a connection is a fine-motor task, so the grab area is widened
+   well past the dot without enlarging the dot itself. */
+.canvas-node-fields .react-flow__handle::after,
+.canvas-node-empty .react-flow__handle::after {
+  position: absolute;
+  content: "";
+  inset: -9px;
+}
+
 .canvas-node {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 210px;
-  padding: 9px 11px;
+  width: 232px;
   direction: rtl;
   text-align: right;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 11px;
   box-shadow: var(--shadow-soft);
+}
+
+.canvas-node-source {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+}
+
+.canvas-node-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
 }
 
 .canvas-node strong {
@@ -2494,8 +2531,70 @@ select:focus {
   font-size: 10px;
 }
 
-.canvas-node-mapping {
+/* The output contract. Each row is a connection point, so rows are the
+   node's real interactive surface and get the padding to match. */
+.canvas-node-fields {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.canvas-node-fields li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 11px;
+  direction: ltr;
+  font-size: 10px;
+}
+
+.canvas-node-fields b {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.canvas-node-fields span {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+/* A field a later step reads. Marked by weight and a leading rule as well as
+   color, so the distinction survives a color-blind reader. */
+.canvas-node-fields li.is-consumed {
+  background: var(--primary-soft);
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.canvas-node-fields li.is-consumed b {
   color: var(--primary);
+  font-weight: 800;
+}
+
+.canvas-node-more,
+.canvas-node-empty {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.canvas-node-empty {
+  position: relative;
+  margin: 0;
+  padding: 8px 11px;
+  border-top: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.canvas-node-warning {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 4px 11px 6px;
+  color: var(--warning);
+  font-size: 10px;
 }
 
 .canvas-node-icon {

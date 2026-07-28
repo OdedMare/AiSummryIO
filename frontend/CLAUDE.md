@@ -58,14 +58,24 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - Agent Studio uses structured forms and a drag-to-connect step canvas,
   never an arbitrary code/SQL/HTTP editor.
 - `WorkflowCanvas` is a view over the step array, not a second source of
-  truth: an edge writes `input_source` and `depends_on` on the target step,
-  and the step cards below it stay the place every field is labeled and
-  edited. A step holds one `input_source`, so a new edge replaces the old
-  one; deleting an edge returns the step to `workflow.id`. Cycles are
-  refused at drag time rather than at publish. Steps are sorted by
-  dependency level in `workflowPayload`, because the backend resolves
-  `steps.<key>` only against steps earlier in the array while the canvas
-  lets an FDE wire a node backwards.
+  truth: an edge writes `input_source`, `input_field`, and `depends_on` on
+  the target step, and the step cards below it stay the place every field is
+  labeled and edited.
+- A step node lists its tool's output fields (schema properties unioned with
+  example keys, mirroring the backend's `_output_fields`), and **each field
+  carries its own source handle**. Dragging from a field sets the source and
+  the mapping in one gesture, so `input_field` is chosen by pointing at the
+  value rather than recalled into a separate dropdown. Fields a later step
+  reads are marked. An edge's endpoint can be dragged to another field or
+  step to move it (`onEdgeUpdate`), which is why edges anchor to the field's
+  handle rather than the node.
+- A step holds one `input_source`, so a new edge replaces the old one.
+  Deleting an edge — or deleting the step feeding it — returns the target to
+  `workflow.id` **and clears `input_field`**, or the step keeps a mapping
+  nothing points at. Cycles are refused at drag time rather than at publish.
+- Steps are sorted by dependency level in `workflowPayload`, because the
+  backend resolves `steps.<key>` only against steps earlier in the array
+  while the canvas lets an FDE wire a node backwards.
 - The tool interview ("שאלו את הסוכן") opens only after Fetch 1 ID has
   returned rows, and the disabled button carries a visible reason. The FDE owns
   the connection: it is seeded into every turn as fact, and the interview

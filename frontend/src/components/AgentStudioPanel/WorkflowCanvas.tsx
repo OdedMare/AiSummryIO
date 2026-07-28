@@ -34,14 +34,17 @@ export default function WorkflowCanvas({
 }: {
   steps: WorkflowStep[];
   packages: PackageVersion[];
-  onConnectStep: (targetKey: string, source: string) => void;
+  onConnectStep: (
+    targetKey: string, source: string, inputField: string,
+  ) => void;
   onDisconnectStep: (targetKey: string) => void;
   onSelectStep: (key: string) => void;
   selectedKey: string;
 }) {
   const nodes = useMemo(
     () => canvasNodes(steps, packages, selectedKey), [steps, packages, selectedKey]);
-  const edges = useMemo(() => canvasEdges(steps), [steps]);
+  const edges = useMemo(
+    () => canvasEdges(steps, packages), [steps, packages]);
 
   // A step carries exactly one `input_source`, so a new connection replaces
   // whatever fed that node rather than adding a second incoming edge. The
@@ -96,6 +99,8 @@ export default function WorkflowCanvas({
         edges={edges}
         nodeTypes={NODE_TYPES}
         onConnect={onConnect}
+        onEdgeUpdate={onEdgeUpdate}
+        edgeUpdaterRadius={14}
         onEdgesChange={onEdgesChange}
         onNodeClick={(_, node) => {
           if (!isSourceNode(node.id)) onSelectStep(node.id);
@@ -110,8 +115,9 @@ export default function WorkflowCanvas({
         <Controls showInteractive={false} position="bottom-left" />
       </ReactFlow>
       <p className="canvas-hint">
-        גררו מהנקודה שבצד שלב אל שלב אחר כדי להזרים אליו את הפלט.
-        בחירת שלב פותחת אותו לעריכה. מחיקת חיבור מחזירה את השלב למזהה הראשי.
+        גררו משדה פלט אל שלב אחר כדי להזרים אליו את השדה הזה — החיבור קובע
+        גם את שדה המזהה. אפשר לגרור קצה של חיבור קיים אל שדה אחר כדי להזיז
+        אותו, ומחיקת חיבור מחזירה את השלב למזהה הראשי.
       </p>
     </div>
   );
@@ -355,7 +361,9 @@ function fieldType(definition: { type?: unknown }): string {
 
 /* ---------- edges ---------- */
 
-function canvasEdges(steps: WorkflowStep[]): Edge[] {
+function canvasEdges(
+  steps: WorkflowStep[], packages: PackageVersion[],
+): Edge[] {
   return steps.map((step) => {
     const source = step.input_source || ROOT_SOURCE;
     const from = source.startsWith("steps.") ? source.split(".")[1] : source;
@@ -363,11 +371,32 @@ function canvasEdges(steps: WorkflowStep[]): Edge[] {
       id: edgeId(from, step.key),
       source: from,
       target: step.key,
-      label: mappedStep(step) ? step.input_field || "?" : "",
+      // Anchor on the field's own handle so the string visibly leaves the
+      // value it carries, not the node as a whole. A mapping naming a field
+      // the source no longer emits has no handle to anchor to, and falls
+      // back to the node so the edge stays visible instead of vanishing.
+      sourceHandle: sourceHandleFor(step, from, steps, packages),
+      label: mappedStep(step) && !step.input_field.trim() ? "?" : "",
       markerEnd: { type: MarkerType.ArrowClosed },
       animated: mappedStep(step),
+      updatable: true,
     };
   });
+}
+
+/** The handle a step's incoming edge should leave from, or null for a node. */
+function sourceHandleFor(
+  step: WorkflowStep, from: string, steps: WorkflowStep[],
+  packages: PackageVersion[],
+): string | null {
+  if (isSourceNode(from)) return null;
+  const field = step.input_field.trim();
+  const source = steps.find((candidate) => candidate.key === from);
+  const item = packages.find(
+    (candidate) => candidate.id === source?.package_version_id);
+  const fields = outputFields(item);
+  if (!fields.length) return ANY_FIELD_HANDLE;
+  return fields.some((candidate) => candidate.name === field) ? field : null;
 }
 
 const EDGE_SEPARATOR = "~>";
@@ -378,6 +407,19 @@ function edgeId(from: string, to: string) {
 
 function targetOfEdge(id: string) {
   return id.split(EDGE_SEPARATOR)[1] ?? "";
+}
+
+/**
+ * The output field a drag started from.
+ *
+ * The workflow-level sources and a package with no contract carry no field:
+ * `workflow.id` and `workflow.boundaries` are complete inputs on their own,
+ * and `_validate_source` only demands an `input_field` for a `steps.<key>`
+ * source, which the step form is then left to fill in.
+ */
+function connectedField(handle: string | null | undefined): string {
+  if (!handle || handle === ANY_FIELD_HANDLE) return "";
+  return handle;
 }
 
 /** `steps.<key>` for a step source; the workflow-level sources pass through. */
