@@ -12,20 +12,35 @@ SECTION_SCHEMA = {
     "type": "object",
     "properties": {
         "summary": {"type": "string"},
+        # What the section covers, stated by the model rather than inferred by
+        # a reader from prose. A summary that says "412 rows over 3 steps"
+        # cannot silently imply coverage it did not have.
+        "coverage": {"type": "string"},
         "facts": {"type": "array", "items": {"type": "string"}},
+        # Distributions and ranges kept apart from individual facts. Mixing
+        # them made a single record and a 300-record split read as equals.
+        "patterns": {"type": "array", "items": {"type": "string"}},
+        "outliers": {"type": "array", "items": {"type": "string"}},
         "warnings": {"type": "array", "items": {"type": "string"}},
         "suggested_questions": {
             "type": "array", "items": {"type": "string"}
         },
     },
-    "required": ["summary", "facts", "warnings", "suggested_questions"],
+    "required": [
+        "summary", "coverage", "facts", "patterns", "outliers",
+        "warnings", "suggested_questions",
+    ],
     "additionalProperties": False,
 }
 
 FINAL_SCHEMA = {
     "type": "object",
     "properties": {
+        # The one-line answer, before any detail. A reader who stops after the
+        # first line should still have the answer to the question they asked.
+        "headline": {"type": "string"},
         "summary": {"type": "string"},
+        "coverage": {"type": "string"},
         "key_findings": {"type": "array", "items": {"type": "string"}},
         "risks": {"type": "array", "items": {"type": "string"}},
         "missing_data": {"type": "array", "items": {"type": "string"}},
@@ -55,7 +70,7 @@ FINAL_SCHEMA = {
         },
     },
     "required": [
-        "summary", "key_findings", "risks",
+        "headline", "summary", "coverage", "key_findings", "risks",
         "missing_data", "suggested_questions", "skill_results",
     ],
     "additionalProperties": False,

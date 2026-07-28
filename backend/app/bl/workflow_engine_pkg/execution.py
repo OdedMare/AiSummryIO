@@ -335,11 +335,35 @@ def _fact_chunk(
         "chunk": offset // 100 + 1,
         "row_count": len(rows),
         "fields": fields,
+        # Whole rows, so the model can see which values co-occur. `samples`
+        # grouped values by field, which destroyed the row: five names and
+        # five dates gave no way to tell which name held which date.
+        "rows": _rows(rows, fields),
+        # Computed over every row in the chunk, not over `rows`. Frequency,
+        # ranges, and emptiness are arithmetic — deriving them in Python is
+        # exact and cannot be hallucinated, and it is what lets a summary say
+        # "263 of 412" instead of naming a handful of values.
+        "stats": _stats(rows, fields),
         "samples": _samples(rows, fields),
     }
 
 
+def _rows(rows: List[dict], fields: List[str]) -> List[dict]:
+    return [
+        {
+            field: str(row[field])[:160]
+            for field in fields if row.get(field) is not None
+        }
+        for row in rows
+    ]
+
+
 def _samples(rows: List[dict], fields: List[str]) -> dict:
+    """Distinct values per field.
+
+    Kept beside `rows` because it stays the quickest way to see a field's
+    vocabulary, and an FDE prompt may already refer to it.
+    """
     return {
         field: list(dict.fromkeys(
             str(row[field])[:160]
@@ -347,6 +371,47 @@ def _samples(rows: List[dict], fields: List[str]) -> dict:
         ))[:5]
         for field in fields
     }
+
+
+def _stats(rows: List[dict], fields: List[str]) -> dict:
+    return {
+        field: _field_stats(rows, field)
+        for field in fields
+    }
+
+
+def _field_stats(rows: List[dict], field: str) -> dict:
+    values = [row[field] for row in rows if row.get(field) is not None]
+    stats = {"present": len(values), "missing": len(rows) - len(values)}
+    texts = [str(value) for value in values]
+    distinct = dict.fromkeys(texts)
+    stats["distinct"] = len(distinct)
+    # A low-cardinality field is categorical: the split is the finding. A
+    # high-cardinality one is an identifier or free text, where counting every
+    # value would bloat the payload and tell the model nothing.
+    if 0 < len(distinct) <= 15:
+        counts = {}
+        for text in texts:
+            counts[text[:160]] = counts.get(text[:160], 0) + 1
+        stats["counts"] = dict(sorted(
+            counts.items(), key=lambda pair: (-pair[1], pair[0])
+        ))
+    numbers = _numbers(values)
+    if numbers and len(numbers) == len(values):
+        stats["min"] = min(numbers)
+        stats["max"] = max(numbers)
+        stats["mean"] = round(sum(numbers) / len(numbers), 4)
+    return stats
+
+
+def _numbers(values: List) -> List[float]:
+    numbers = []
+    for value in values:
+        if isinstance(value, bool):
+            return []
+        if isinstance(value, (int, float)):
+            numbers.append(float(value))
+    return numbers
 
 
 def empty_result(message: str) -> dict:

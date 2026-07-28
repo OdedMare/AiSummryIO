@@ -29,7 +29,10 @@ def _section_result(result: dict) -> dict:
     contract = set(SECTION_SCHEMA["properties"])
     return {
         "summary": str(result.get("summary", "")),
+        "coverage": str(result.get("coverage", "")),
         "facts": list(result.get("facts", [])),
+        "patterns": list(result.get("patterns", [])),
+        "outliers": list(result.get("outliers", [])),
         "warnings": list(result.get("warnings", [])),
         "suggested_questions": list(result.get("suggested_questions", [])),
         "fields": {key: value for key, value in result.items()
@@ -38,14 +41,23 @@ def _section_result(result: dict) -> dict:
 
 
 def _section_fallback(workflow: dict, facts: List[dict]) -> dict:
+    """Stated coverage, and `degraded` so the caller can say the model failed.
+
+    Without the flag a reader cannot tell a thin section from a fallback, and
+    reads "no information" where the truth is "the model did not answer".
+    """
     count = sum(item["row_count"] for item in facts)
     return {
         "summary": "נאספו %d רשומות בתהליך %s." % (count, workflow["name"]),
+        "coverage": "%d רשומות ב-%d שלבים" % (count, len(facts)),
         "facts": ["%s: %d רשומות" % (item["step"], item["row_count"])
                   for item in facts],
-        "warnings": [],
+        "patterns": [],
+        "outliers": [],
+        "warnings": ["הסיכום הופק ללא מודל השפה; מוצגות ספירות בלבד."],
         "suggested_questions": [],
         "fields": {},
+        "degraded": True,
     }
 
 
@@ -62,10 +74,21 @@ def final_summary(service, root_id, question, sections, skills=None) -> dict:
 
 
 def _safe_section(section: dict) -> dict:
+    """The section view sent to the final call and to every Skill.
+
+    `patterns`, `outliers`, and `coverage` are included because a Skill that
+    never sees rows can only reason about distributions if the section carries
+    them. Optional via `get`, so a section built before this contract — a
+    cached run, a `preview_skill` sample — still passes through.
+    """
     keys = (
         "workflow_key", "name", "status", "summary", "facts", "warnings"
     )
-    return {key: section[key] for key in keys}
+    safe = {key: section[key] for key in keys}
+    for key in ("coverage", "patterns", "outliers"):
+        if section.get(key):
+            safe[key] = section[key]
+    return safe
 
 
 def _shared_summary(service, question, sections, safe_sections) -> dict:
