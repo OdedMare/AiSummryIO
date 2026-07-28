@@ -175,9 +175,6 @@ def _step_outcome(service, step, context) -> tuple:
     warnings = []
     package = service._repository.get_package(step["package_version_id"])
     fields = _summary_fields(package)
-    mismatch = input_kind_mismatch(package, step)
-    if mismatch:
-        warnings.append("%s: %s" % (step["name"], mismatch))
     try:
         records = service._run_package(
             package, service._identifiers(step, context)

@@ -1,0 +1,108 @@
+# Throwaway local stack: Postgres + backend (with mock FLAPI) + frontend.
+#
+# Separate project name and separate volumes, so nothing here touches the
+# real `aisummryio_*` volumes. Tear the whole thing down with:
+#   docker compose -p aisummry-sandbox -f devsandbox/docker-compose.sandbox.yml down -v
+#
+# Run from the REPOSITORY ROOT — build contexts are `.`.
+
+name: aisummry-sandbox
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: summaries
+      POSTGRES_USER: summaries
+      POSTGRES_PASSWORD: summaries
+    ports:
+      # Exposed so the seed script can be run from the host if wanted.
+      - "55432:5432"
+    volumes:
+      - sandbox-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U summaries"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Docker creates a named volume owned by root, but the backend runs as the
+  # unprivileged `app` user and must write runtime-settings.json there — the
+  # UI's Settings screen 500s otherwise. This one-shot chown runs before the
+  # backend starts and then exits.
+  settings-permissions:
+    image: busybox
+    command: chown -R 999:999 /data
+    user: root
+    volumes:
+      - sandbox-settings:/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: devsandbox/backend.sandbox.Dockerfile
+    environment:
+      AISUMMRY_DATABASE_URL: postgresql://summaries:summaries@db:5432/summaries
+      AISUMMRY_DATABASE_SCHEMA: mosaic_magen
+      # The explicit per-field overrides in the default Settings point at the
+      # real internal server; blank them so the URL above is what is used.
+      AISUMMRY_DATABASE_USER: ""
+      AISUMMRY_DATABASE_PASSWORD: ""
+      AISUMMRY_DATABASE_HOST: ""
+      AISUMMRY_DATABASE_NAME: ""
+      AISUMMRY_DATABASE_PORT: "5432"
+
+      AISUMMRY_RUNTIME_SETTINGS_FILE: /data/runtime-settings.json
+      AISUMMRY_ADMIN_PASSWORD: sandbox
+
+      # Host Ollama. `host.docker.internal` resolves to an unreachable IPv6
+      # address from this image, so the gateway alias is used instead.
+      AISUMMRY_LLM_BASE_URL: http://pghost:11434/v1
+      AISUMMRY_LLM_MODEL: gemma4:31b-cloud
+      AISUMMRY_LLM_DIET_MODE: "true"
+      OPENAI_API_KEY: ollama
+
+      # FLAPI credentials are validated before any package runs; the mock
+      # ignores their values but they must be non-empty.
+      AISUMMRY_FLAPI_USERNAME: sandbox
+      AISUMMRY_FLAPI_TOKEN: sandbox
+
+      AISUMMRY_COOKIE_SECRET: sandbox-cookie-secret-not-for-production
+      AISUMMRY_PACKAGE_TIMEOUT_SECONDS: "120"
+
+      # Mock behaviour knobs.
+      FLUNKS_MOCK_LATENCY_SECONDS: "0.4"
+      # Set to e.g. "PKG-RELATIONS" to exercise partial success.
+      FLUNKS_MOCK_FAIL_PACKAGES: ""
+    extra_hosts:
+      - "pghost:host-gateway"
+    volumes:
+      - sandbox-settings:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      settings-permissions:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../devsandbox/frontend.sandbox.Dockerfile
+      args:
+        # Must be a build arg: next.config.ts bakes the rewrite target into
+        # the build, so a runtime-only value never reaches the compiled app.
+        BACKEND_URL: http://backend:8000
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      # 3100, not 3000: a dev server of the user's own may already hold 3000,
+      # and the sandbox must never take a port out from under it.
+      - "3100:3000"
+    depends_on:
+      - backend
+
+volumes:
+  sandbox-db:
+  sandbox-settings:

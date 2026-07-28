@@ -1,0 +1,13 @@
+[project]
+name = "flunks"
+version = "0.0.0+mock"
+description = "LOCAL MOCK of the internal FLAPI client. Never publish."
+requires-python = ">=3.8"
+dependencies = ["pandas"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["flunks*"]
