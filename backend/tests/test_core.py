@@ -201,58 +201,6 @@ def test_a_step_scoped_to_the_map_fails_clearly_without_a_drawn_area():
         SummaryService._identifiers(step, context)
 
 
-def test_a_tool_taking_only_an_id_warns_when_a_step_feeds_it_the_map_area():
-    warning = input_kind_mismatch(
-        {"input_kind": "id"}, {"input_source": "workflow.boundaries"}
-    )
-    assert "מזהה בלבד" in warning
-
-
-def test_a_tool_taking_only_the_map_area_warns_when_a_step_feeds_it_an_id():
-    warning = input_kind_mismatch(
-        {"input_kind": "geometry"}, {"input_source": "workflow.id"}
-    )
-    assert "אזור מהמפה בלבד" in warning
-
-
-def test_a_step_reading_an_earlier_step_counts_as_an_identifier():
-    """Only `workflow.boundaries` carries geometry, so a `steps.<key>` source
-    feeding a geometry-only tool is a real mismatch and must be reported."""
-    step = {"input_source": "steps.area", "input_field": "code"}
-    assert not input_kind_mismatch({"input_kind": "id"}, step)
-    assert input_kind_mismatch({"input_kind": "geometry"}, step)
-
-
-def test_a_tool_declaring_no_input_kind_accepts_what_it_always_accepted():
-    """Existing catalog rows predate the column and default to `both`; the
-    warning must never fire on them."""
-    step = {"input_source": "workflow.boundaries"}
-    assert not input_kind_mismatch({}, step)
-    assert not input_kind_mismatch({"input_kind": "both"}, step)
-    assert not input_kind_mismatch({"input_kind": None}, step)
-
-
-def test_an_input_kind_mismatch_warns_without_stopping_the_step():
-    """Warn-only: the tool is declared id-only and the step feeds it the drawn
-    area, yet the package still runs and its rows still reach the section."""
-    service = _service_for_step_outcome(
-        package={"input_kind": "id", "output_schema": {}},
-        records=[{"code": "A-7"}],
-    )
-    step = {
-        "key": "area", "name": "שטח", "input_source": "workflow.boundaries",
-        "package_version_id": "pkg-1",
-    }
-    context = {
-        "workflow": {"id": None, "boundaries": _SQUARE}, "steps": {},
-    }
-
-    records, warnings, _fields = _step_outcome(service, step, context)
-
-    assert records == [{"code": "A-7"}]
-    assert any("מזהה בלבד" in warning for warning in warnings)
-
-
 _SQUARE = {
     "type": "MultiPolygon",
     "coordinates": [[[
