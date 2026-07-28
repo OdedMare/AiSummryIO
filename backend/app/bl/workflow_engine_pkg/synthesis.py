@@ -106,8 +106,16 @@ def _shared_summary(service, question, sections, safe_sections) -> dict:
 
 
 def _final_fallback(sections: List[dict]) -> dict:
+    completed = [item for item in sections if item["status"] == "completed"]
     return {
+        "headline": "סיכום חלקי: %d מתוך %d חלקים הושלמו." % (
+            len(completed), len(sections)
+        ),
         "summary": "\n\n".join(item["summary"] for item in sections),
+        "coverage": "; ".join(
+            "%s: %s" % (item["name"], item["coverage"])
+            for item in sections if item.get("coverage")
+        ),
         "key_findings": [fact for item in sections for fact in item["facts"]],
         "risks": [],
         "missing_data": [
@@ -118,6 +126,7 @@ def _final_fallback(sections: List[dict]) -> dict:
             for question in item["suggested_questions"]
         ],
         "skill_results": [],
+        "degraded": True,
     }
 
 

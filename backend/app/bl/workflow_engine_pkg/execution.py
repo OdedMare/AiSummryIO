@@ -416,7 +416,8 @@ def _numbers(values: List) -> List[float]:
 
 def empty_result(message: str) -> dict:
     return {
-        "summary": message, "key_findings": [], "risks": [],
+        "headline": message, "summary": message, "coverage": "לא נאספו נתונים",
+        "key_findings": [], "risks": [],
         "missing_data": [], "suggested_questions": [],
         "skill_results": [], "sections": [], "partial": True,
     }
