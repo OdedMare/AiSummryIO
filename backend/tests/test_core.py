@@ -1628,6 +1628,7 @@ def test_each_interview_sends_its_own_prompt_file():
     # A non-empty catalog, or the workflow planner answers without the model.
     service, llm = _chat_service(_workflow_answer(), tools=[{
         "id": "pkg-1", "name": "בעלות", "description": "",
+        "input_mode": "single", "input_cube_parameter": "identifier",
         "output_schema": {}, "example_output": [],
     }])
     service.plan_workflow_chat([{"role": "fde", "text": "שלום"}], {})

@@ -183,13 +183,19 @@ in sync from one place.
 
 ## Style Guidelines
 
-**Style:** Modern Dark (Cinema Mobile)
+**Style:** Warm Editorial (paper and ink)
 
-**Keywords:** dark mode, cinematic, ambient light, glassmorphism, deep black, indigo, glow, blur, atmospheric, reanimated, haptic, premium, layered, frosted glass, linear gradient
+**Keywords:** cream, terracotta, warm neutral, paper, calm, readable, generous
+whitespace, hairline borders, restrained, text-first, quiet
 
-**Best For:** Developer tools, pro productivity apps, fintech/trading dashboards, media/streaming platforms, AI tool interfaces, high-end gaming companion apps
+**Best For:** Reading-heavy AI tools, research and summary interfaces,
+document workspaces, professional Hebrew/RTL products
 
-**Key Effects:** Expo.out Bezier(0.16,1,0.3,1) easing; spring modals (damping:20 stiffness:90); haptic-linked press (Impact Light/Medium); animated ambient light blobs (Reanimated translateX/Y slow oscillation); BlurView glassmorphism headers/nav (intensity 20); scale press 0.97 → 1.0; avoid pure #000000 (OLED smear)
+**Key Effects:** Flat background — no ambient blobs or colour wash. Separation
+comes from `1px` borders and space. Translucent blur is allowed **only** on
+sticky headers and modal scrims, never as decoration, and never with a
+`saturate()` boost (it skews terracotta toward orange). Transitions are
+150–300ms `ease` on colour and border, not on layout.
 
 ### Page Pattern
 
