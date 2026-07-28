@@ -28,9 +28,6 @@ from app.dal.repository import Repository
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.bl.workflow_engine_pkg.execution import (
-    _step_outcome, input_kind_mismatch,
-)
 from app.api.models import (
     ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
 )
@@ -207,23 +204,6 @@ _SQUARE = {
         [34.75, 32.05], [34.80, 32.05], [34.80, 32.10], [34.75, 32.05],
     ]]],
 }
-
-
-def _service_for_step_outcome(package, records):
-    """A SummaryService stand-in with only what `_step_outcome` touches."""
-    class Repository:
-        def get_package(self, _version_id):
-            return package
-
-    class Service:
-        _repository = Repository()
-        # The real resolver, so the step genuinely produces WKT here.
-        _identifiers = SummaryService._identifiers
-
-        def _run_package(self, _package, _identifiers):
-            return records
-
-    return Service()
 
 
 def test_boundaries_must_be_a_closed_multipolygon():
