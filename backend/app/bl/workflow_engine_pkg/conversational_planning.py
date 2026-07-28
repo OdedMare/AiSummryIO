@@ -54,9 +54,10 @@ def plan_tool_chat(
 
 def plan_workflow_chat(
     service, messages: List[dict], draft: Optional[dict],
+    focus_field: str = "",
 ) -> dict:
     """One turn of workflow planning, validated like any other plan."""
-    return _WorkflowPlanner(service).turn(messages, draft)
+    return _WorkflowPlanner(service).turn(messages, draft, focus_field)
 
 
 class _Planner:
@@ -83,11 +84,22 @@ class _Planner:
         """An answer that needs no model call, or None to continue."""
         return None
 
+    # The fields a focused interview may be opened on. A focus on anything
+    # else is dropped: the prompt names the field to the FDE, so an unknown
+    # one would have the agent discussing a field that is not on their form.
+    focusable_fields: tuple = ()
+
     def _payload(self, messages, draft, *_extra) -> dict:
         return {
             "conversation": self._history(messages),
             "draft_so_far": as_dict(draft),
         }
+
+    def _focused(self, payload: dict, focus_field: str) -> dict:
+        """`payload` plus the focus, when it names a field this planner owns."""
+        if focus_field in self.focusable_fields:
+            payload["focus_field"] = focus_field
+        return payload
 
     def _ask(self, payload: dict) -> dict:
         if self._service._llm is None:
@@ -209,11 +221,10 @@ class _ToolPlanner(_Planner):
         "output_schema": dict, "example_input": list, "example_output": list,
     }
 
-    # The fields a focused interview may be opened on: what the interview
-    # authors, minus the connection it only carries. A focus on a field the
-    # agent is not allowed to write would ask the FDE to discuss something
-    # their answer cannot change.
-    _FOCUSABLE_FIELDS = (
+    # What the interview authors, minus the connection it only carries. A
+    # focus on a field the agent may not write would ask the FDE to discuss
+    # something their answer cannot change.
+    focusable_fields = (
         "name", "description", "agent_instructions", "output_schema",
         "example_input", "example_output", "agent_enabled",
     )
@@ -222,12 +233,7 @@ class _ToolPlanner(_Planner):
         payload = _Planner._payload(self, messages, draft)
         if inspection:
             payload["inspection_result"] = self._inspection(inspection)
-        # Unrecognized focus is dropped rather than passed through: the prompt
-        # names the field to the FDE, and an unknown one would have the agent
-        # discussing a field that does not exist on the form.
-        if focus_field in self._FOCUSABLE_FIELDS:
-            payload["focus_field"] = focus_field
-        return payload
+        return self._focused(payload, focus_field)
 
     # What the FDE is told when a JSON field had to be dropped. Named in
     # Hebrew because `open_points` is read straight off the screen.
@@ -365,11 +371,17 @@ class _WorkflowPlanner(_Planner):
             "draft": validated_plan({}, []),
         }
 
-    def _payload(self, messages, draft, *_extra) -> dict:
-        return dict(
+    # `steps` is focusable although it is not one input: the canvas and the
+    # step cards are the one part of this form an FDE most often cannot word
+    # alone, and the wiring question is what the interview is best at.
+    focusable_fields = ("name", "description", "role", "system_prompt", "steps")
+
+    def _payload(self, messages, draft, focus_field="", *_extra) -> dict:
+        payload = dict(
             _Planner._payload(self, messages, draft),
             available_tools=tool_catalog(self._tools),
         )
+        return self._focused(payload, focus_field)
 
     def _result(self, answer: dict, _draft) -> dict:
         plan = validated_plan(as_dict(answer.get("draft")), self._tools)

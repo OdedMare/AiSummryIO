@@ -52,9 +52,11 @@ class SummaryService:
             self, messages, draft, inspection, focus_field
         )
 
-    def plan_workflow_chat(self, messages: List[dict], draft: Dict) -> dict:
+    def plan_workflow_chat(
+        self, messages: List[dict], draft: Dict, focus_field: str = "",
+    ) -> dict:
         return conversational_planning.plan_workflow_chat(
-            self, messages, draft
+            self, messages, draft, focus_field
         )
 
     def preview_skill(

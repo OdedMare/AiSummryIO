@@ -80,6 +80,11 @@ class PlanChatCreate(BaseModel):
 
     messages: List[PlanChatMessage] = Field(default_factory=list)
     draft: Dict[str, Any] = Field(default_factory=dict)
+    # Which form field this interview is about, when it was opened from one.
+    # Empty means the whole tool or workflow, which is how the drawer has
+    # always opened. Each planner checks the name against the fields it may
+    # author, so an unknown one is ignored there rather than rejected here.
+    focus_field: str = ""
 
     @field_validator("messages")
     @classmethod
@@ -91,11 +96,6 @@ class PlanChatCreate(BaseModel):
 
 class ToolPlanChatCreate(PlanChatCreate):
     inspection: Dict[str, Any] = Field(default_factory=dict)
-    # Which form field this interview is about, when it was opened from one.
-    # Empty means the whole tool, which is how the drawer has always opened.
-    # The service checks the name against the fields it may author, so an
-    # unknown one is ignored rather than rejected here.
-    focus_field: str = ""
 
 
 class WorkflowPlanCreate(BaseModel):
