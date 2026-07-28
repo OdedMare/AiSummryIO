@@ -10,21 +10,23 @@
   --sidebar-2: #35342f;
   --text: #1f1e1d;
   --text-soft: #4a483f;
-  --text-muted: #7d7a70;
+  /* Light-mode ink runs darker than the terracotta brand fill: these carry
+     text and icons, so each clears 4.5:1 on both --bg and --surface. */
+  --text-muted: #726f66;
   --text-on-dark: #f5f4ee;
   --border: #e5e2d9;
   --border-strong: #cfcabb;
-  --primary: #c25f3f;
-  --primary-hover: #a94f32;
+  --primary: #a94f32;
+  --primary-hover: #8f3f24;
   --primary-soft: #f7ebe4;
-  --primary-action: #d97757;
-  --primary-action-end: #c25f3f;
-  --primary-action-hover: #c25f3f;
-  --primary-action-hover-end: #a94f32;
-  --accent: #b8563c;
-  --success: #4a7c59;
+  --primary-action: #b8563c;
+  --primary-action-end: #a94f32;
+  --primary-action-hover: #a94f32;
+  --primary-action-hover-end: #8f3f24;
+  --accent: #a94f32;
+  --success: #42704f;
   --success-soft: #eaf1ea;
-  --warning: #a1701c;
+  --warning: #946619;
   --warning-soft: #faf0dc;
   --danger: #b3402f;
   --danger-soft: #fbeae6;

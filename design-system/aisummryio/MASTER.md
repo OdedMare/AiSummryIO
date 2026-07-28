@@ -29,18 +29,27 @@ Depth comes from borders and generous space, **not** elevation and glow.
 | Surface | `#FFFFFF` | `#262624` | `--surface` |
 | Surface (raised) | `#FAF9F5` | `#2D2C2A` | `--surface-2` |
 | Text | `#1F1E1D` | `#F5F4EE` | `--text` |
-| Text muted | `#7D7A70` | `#A6A29A` | `--text-muted` |
+| Text muted | `#726F66` | `#A6A29A` | `--text-muted` |
 | Border | `#E5E2D9` | `#3A3937` | `--border` |
-| Primary | `#C25F3F` | `#E08A6B` | `--primary` |
-| Primary action | `#D97757` | `#D97757` | `--primary-action` |
+| Primary | `#A94F32` | `#E08A6B` | `--primary` |
+| Primary action | `#B8563C` | `#D97757` | `--primary-action` |
 | Sidebar | `#262624` | `#1A1917` | `--sidebar` |
-| Success | `#4A7C59` | `#7FAE87` | `--success` |
-| Warning | `#A1701C` | `#D9A94E` | `--warning` |
+| Success | `#42704F` | `#7FAE87` | `--success` |
+| Warning | `#946619` | `#D9A94E` | `--warning` |
 | Destructive | `#B3402F` | `#E07A63` | `--danger` |
 
-**Color Notes:** Terracotta `#D97757` is the single accent. There is no
-secondary hue — cyan/violet pairings do not belong in this theme. `--primary`
-is darkened in light mode so text and icons using it clear 4.5:1 on cream.
+**Color Notes:** Terracotta is the single accent — there is no secondary hue,
+and cyan/violet pairings do not belong in this theme.
+
+Light mode runs the terracotta **darker than the `#D97757` brand tone**, and
+this is deliberate: `--primary` and `--primary-action` carry text and icons,
+so each is tuned to clear **4.5:1** on both `--bg` and `--surface` (white on
+`#B8563C` is 4.74:1; `#D97757` would be only 3.12:1 and fails). The lighter
+`#D97757` survives in `--brand-gradient` and `--brand-glow`, which are
+decorative fills behind large shapes rather than text backgrounds.
+
+Every light-mode pair above is verified against WCAG AA. Re-check with a
+contrast tool before changing any of these values.
 
 ### Typography
 
@@ -199,34 +208,39 @@ sticky headers and modal scrims, never as decoration, and never with a
 
 ### Page Pattern
 
-**Pattern Name:** Newsletter / Content First
+**Pattern Name:** Workspace / Answer First
 
-- **Conversion Strategy:** Single field form (Email only). Show 'Join X, 000 readers'. Read sample link.
-- **CTA Placement:** Hero inline form + Sticky header form
-- **Section Order:** 1. Hero (Value Prop + Form), 2. Recent Issues/Archives, 3. Social Proof (Subscriber count), 4. About Author
+This is an application shell, not a landing page: dark navigation rail, a
+bounded reading column, and a bottom composer.
+
+- **Reading column:** the answer comes first and owns the widest, quietest
+  space on the page. Supporting detail sits below it, never beside it.
+- **Progressive disclosure:** summary → sections → raw evidence on demand.
+- **RTL:** Hebrew is primary. Use logical properties (`inset-inline-start`,
+  `padding-inline`) so the layout mirrors correctly. IDs, URLs, JSON, and
+  model names stay LTR inside an RTL page.
 
 ---
 
 ## Motion
 
-**Scroll Reveal** (Subtle) — Trigger: scroll (viewport enter) | Duration: 300-400ms | Easing: `power1.out`
+Motion is 3/10 — it confirms an action, it is never decoration. No scroll
+reveals, no ambient oscillation, no GSAP.
 
-```js
-gsap.from(el, { opacity: 0, y: 12, duration: 0.35, ease: 'power1.out', scrollTrigger: { trigger: el, start: 'top 90%', toggleActions: 'play none none reverse' } });
-```
-
-**Framework notes:** Requires the ScrollTrigger plugin registered once via gsap.registerPlugin(ScrollTrigger)
-
-- ✅ Keep the y offset small (8-16px) so it reads as a fade, not a slide
-- ❌ Don't reveal below-the-fold content needed for SEO/crawlers as invisible-by-default without a no-JS fallback
-- ⚡ toggleActions 'play none none reverse' avoids re-triggering on every scroll direction change
+- Colour, border, and opacity transitions at 150–300ms `ease`.
+- Entrances (modals, drawers) fade with an 8–12px offset, ~200ms.
+- Never animate layout-affecting properties on hover.
+- Every animation must be disabled under `prefers-reduced-motion: reduce`.
 
 ---
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Flat design without depth
-- ❌ Text-heavy pages
+- ❌ **A second accent hue** — terracotta is the only accent; no violet/cyan
+- ❌ **Glow, ambient blobs, or decorative glassmorphism** — depth is borders
+- ❌ **Heavy drop shadows** — prefer a hairline border
+- ❌ **Hardcoded hex in components** — always reference a token
+- ❌ **Pure `#000` or pure cool grey** — neutrals are warm
 
 ### Additional Forbidden Patterns
 
