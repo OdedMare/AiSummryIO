@@ -54,8 +54,7 @@ export default function PackageCatalog({
       description: item.description, package_id: item.package_id,
       input_cube_name: item.input_cube_name,
       input_cube_parameter: item.input_cube_parameter,
-      input_mode: item.input_mode, input_kind: item.input_kind || "both",
-      output_cube_name: item.output_cube_name,
+      input_mode: item.input_mode, output_cube_name: item.output_cube_name,
       query_name: item.query_name, agent_enabled: item.agent_enabled,
       agent_instructions: item.agent_instructions,
       output_schema: JSON.stringify(item.output_schema || {}, null, 2),
@@ -270,11 +269,6 @@ function connectionDraft(form: PackageForm): Partial<ToolPlanDraft> {
     // real modes, and "" is how the interview says "not decided".
     input_mode: form.input_mode === "many" ? "many"
       : form.input_mode === "single" ? "single" : "",
-    // Same narrowing, and the same reason: what the cube parameter accepts is
-    // the FDE's connection knowledge, so the interview receives it as fact.
-    input_kind: form.input_kind === "id" ? "id"
-      : form.input_kind === "geometry" ? "geometry"
-      : form.input_kind === "both" ? "both" : "",
     query_name: form.query_name,
   };
 }
@@ -360,12 +354,6 @@ function PackageFields({
           onChange={(e) => update("input_mode", e.target.value)}>
           <option value="single">מזהה יחיד בכל הרצה</option>
           <option value="many">רשימת מזהים בהרצה אחת</option>
-        </select></label>
-        <label><span>סוג הקלט</span><select value={form.input_kind}
-          onChange={(e) => update("input_kind", e.target.value)}>
-          <option value="both">מזהה או אזור</option>
-          <option value="id">מזהה בלבד</option>
-          <option value="geometry">אזור מהמפה בלבד (MULTIPOLYGON)</option>
         </select></label>
         <label><span>Output cube *</span><input dir="ltr"
           value={form.output_cube_name}

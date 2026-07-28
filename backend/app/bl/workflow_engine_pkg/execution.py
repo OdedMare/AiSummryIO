@@ -247,35 +247,6 @@ def run_package(service, package: dict, identifiers: List[str]) -> List[dict]:
     ]
 
 
-def source_kind(source: str) -> str:
-    """The kind of value an ``input_source`` produces.
-
-    ``steps.<key>`` reads a field out of an earlier package's rows, which is
-    an identifier by construction — the drawn area only ever enters a run
-    through ``workflow.boundaries``.
-    """
-    return "geometry" if source == "workflow.boundaries" else "id"
-
-
-def input_kind_mismatch(package: dict, step: dict) -> str:
-    """A Hebrew warning when a step feeds a tool a shape it does not accept.
-
-    Deliberately a warning rather than a hard failure: ``input_kind`` was
-    added after tools were already in the catalog, so a wrong declaration on
-    an existing tool must not take down a workflow that has been running.
-    The step still executes and FLAPI remains the authority on the value.
-    """
-    declared = package.get("input_kind") or "both"
-    if declared == "both":
-        return ""
-    actual = source_kind(step.get("input_source", "workflow.id"))
-    if declared == actual:
-        return ""
-    if declared == "id":
-        return "הכלי מוגדר לקבל מזהה בלבד, והשלב מזין אזור מהמפה"
-    return "הכלי מוגדר לקבל אזור מהמפה בלבד, והשלב מזין מזהה"
-
-
 def identifiers(step: dict, context: dict) -> List[str]:
     source = step["input_source"]
     if source == "workflow.id":

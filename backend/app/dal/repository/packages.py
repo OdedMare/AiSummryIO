@@ -51,8 +51,7 @@ def _package_values(row_id, package_key, version, data):
         row_id, package_key, version, data["name"],
         data.get("description", ""), str(data["package_id"]),
         data["input_cube_name"], data["input_cube_parameter"],
-        data.get("input_mode", "single"), data.get("input_kind", "both"),
-        data["output_cube_name"],
+        data.get("input_mode", "single"), data["output_cube_name"],
         data.get("query_name", ""), data.get("timeout_seconds"),
         data.get("agent_enabled", True), data.get("agent_instructions", ""),
         Jsonb(data.get("output_schema", {})),
@@ -64,9 +63,9 @@ def _package_values(row_id, package_key, version, data):
 _INSERT_PACKAGE = """
     INSERT INTO summary_packages (
         id, package_key, version, name, description, package_id,
-        input_cube_name, input_cube_parameter, input_mode, input_kind,
+        input_cube_name, input_cube_parameter, input_mode,
         output_cube_name, query_name, timeout_seconds,
         agent_enabled, agent_instructions,
         output_schema, example_input, example_output
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """

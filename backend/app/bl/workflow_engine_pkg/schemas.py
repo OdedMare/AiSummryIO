@@ -174,9 +174,6 @@ TOOL_PLAN_CHAT_SCHEMA = {
                 "input_mode": {
                     "type": "string", "enum": ["single", "many"],
                 },
-                "input_kind": {
-                    "type": "string", "enum": ["id", "geometry", "both"],
-                },
                 "description": {"type": "string"},
                 "agent_instructions": {"type": "string"},
                 # The rest of the save form. The interview used to stop at the
@@ -193,7 +190,7 @@ TOOL_PLAN_CHAT_SCHEMA = {
             "required": [
                 "name", "package_id", "input_cube_name",
                 "input_cube_parameter", "output_cube_name", "input_mode",
-                "input_kind", "description", "agent_instructions",
+                "description", "agent_instructions",
                 "package_key", "query_name", "agent_enabled",
                 "output_schema", "example_input", "example_output",
             ],

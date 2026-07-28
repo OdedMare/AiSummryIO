@@ -67,7 +67,6 @@ def _catalog_item(tool: dict) -> dict:
         "description": tool.get("description", ""),
         "agent_instructions": tool.get("agent_instructions", ""),
         "input_mode": tool["input_mode"],
-        "input_kind": tool.get("input_kind") or "both",
         "input_parameter": tool["input_cube_parameter"],
         "output_fields": _output_fields(tool),
         "summary_fields": summary_fields(tool),

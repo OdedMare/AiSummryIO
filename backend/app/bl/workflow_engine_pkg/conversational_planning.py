@@ -155,7 +155,6 @@ class _ToolPlanner(_Planner):
     # model-invented value has to be caught before the draft is saved.
     _ENUM_FIELDS = {
         "input_mode": ("single", "many"),
-        "input_kind": ("id", "geometry", "both"),
     }
     # JSON arrives from the model as a string so the FDE can edit it in the
     # same textarea they always could; it is only checked for shape here.
