@@ -186,25 +186,38 @@ function canvasNodes(
   const sources: Node[] = SOURCE_NODES.map((item, index) => ({
     id: item.id,
     type: "sourceNode",
-    position: { x: 0, y: index * 110 },
+    position: { x: 0, y: index * 96 },
     data: item,
     draggable: true,
   }));
   const stepNodes: Node[] = [];
   levels.forEach((level, column) => {
-    level.forEach((step, row) => {
+    // Nodes in a column vary in height with their field list, so rows are
+    // stacked by measuring what came before rather than by a fixed pitch —
+    // a uniform pitch overlapped tall nodes onto the one below.
+    let offset = 0;
+    level.forEach((step) => {
+      const data = stepNodeData(step, steps, packages, selectedKey);
       stepNodes.push({
         id: step.key,
         type: "stepNode",
         // RTL reads right-to-left, but React Flow's x axis does not flip, so
         // the layout runs left-to-right and the handles are mirrored instead.
-        position: { x: 260 * (column + 1), y: row * 110 },
-        data: stepNodeData(step, packages, selectedKey),
+        position: { x: 290 * (column + 1), y: offset },
+        data,
         draggable: true,
       });
+      offset += nodeHeight(data) + 26;
     });
   });
   return [...sources, ...stepNodes];
+}
+
+/** Approximate rendered height, used only to space a column's rows. */
+function nodeHeight(data: StepNodeData): number {
+  const rows = data.outputFields.length + (data.hiddenFieldCount > 0 ? 1 : 0);
+  const body = rows ? rows * 19 + 8 : 26;
+  return 52 + body + (data.incompleteReason ? 22 : 0);
 }
 
 const VISIBLE_FIELD_LIMIT = 6;
