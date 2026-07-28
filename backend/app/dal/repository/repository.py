@@ -26,9 +26,9 @@ class Repository(
     def initialize(self) -> None:
         ensure_schema(self._store)
         with connect(self._store) as connection:
-            for statement in SCHEMA.split(";"):
-                if statement.strip():
-                    connection.execute(statement)
+            # Sent as one script: splitting on ";" would cut inside comments
+            # and string literals, which is not something SQL text guarantees.
+            connection.execute(SCHEMA)
             connection.execute(
                 "DELETE FROM conversations WHERE expires_at <= NOW()"
             )

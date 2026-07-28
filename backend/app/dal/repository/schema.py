@@ -32,7 +32,7 @@ ALTER TABLE summary_packages
 ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS output_schema JSONB NOT NULL DEFAULT '{}';
 -- 'both' keeps every already-published tool accepting what it accepted
--- before this column existed; narrowing one is an explicit FDE decision.
+-- before this column existed. Narrowing one is an explicit FDE decision.
 ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS input_kind TEXT NOT NULL DEFAULT 'both';
 
