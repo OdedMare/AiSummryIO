@@ -22,6 +22,11 @@ export default function SectionCard({ section }: { section: SummarySection }) {
         {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
       <p>{section.summary}</p>
+      {section.coverage && <p className="section-coverage">{section.coverage}</p>}
+      {section.degraded &&
+        <p className="section-degraded" role="status">
+          הסיכום הופק ללא מודל השפה — מוצגות ספירות בלבד.
+        </p>}
       {open && <SectionDetails section={section} />}
     </article>
   );
@@ -30,12 +35,23 @@ export default function SectionCard({ section }: { section: SummarySection }) {
 function SectionDetails({ section }: { section: SummarySection }) {
   return (
     <div className="section-details">
-      {!!section.facts.length &&
-        <ul>{section.facts.map((fact) => <li key={fact}>{fact}</li>)}</ul>}
+      <FactList title="ממצאים" items={section.facts} />
+      <FactList title="התפלגויות ודפוסים" items={section.patterns} />
+      <FactList title="חריגים" items={section.outliers} />
       {!!section.warnings.length &&
         <div className="warning-box" role="status">
           {section.warnings.map((warning) => <p key={warning}>{warning}</p>)}
         </div>}
+    </div>
+  );
+}
+
+function FactList({ title, items }: { title: string; items?: string[] }) {
+  if (!items?.length) return null;
+  return (
+    <div className="fact-group">
+      <h4>{title}</h4>
+      <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>
     </div>
   );
 }

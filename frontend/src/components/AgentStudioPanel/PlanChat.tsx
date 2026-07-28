@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import {
@@ -191,6 +191,13 @@ export function PlanChat<TDraft>({
  *
  * Accepting the recommendation is one click because that is the common case;
  * the FDE's own answer is always available in the composer below.
+ *
+ * When the agent could enumerate the real alternatives it sends `options`,
+ * and they replace the lone recommendation button: the first option *is* the
+ * recommendation, so accepting it and picking another are the same gesture
+ * rather than two competing controls. Options are a shortcut past typing, not
+ * a closed menu — the composer stays open underneath, and the agent leaves
+ * `options` empty on questions where the FDE's own words are the point.
  */
 function QuestionCard({
   question, onAnswer,
@@ -198,20 +205,42 @@ function QuestionCard({
   question: PlanQuestion;
   onAnswer: (text: string) => void;
 }) {
+  const options = question.options ?? [];
   return (
     <div className="plan-question" role="group"
       aria-label="השאלה הפתוחה של הסוכן">
       <p className="plan-question-text">{question.question}</p>
-      {question.recommendation &&
+      {question.recommendation && !options.length &&
         <p className="plan-question-recommendation">
           <strong>המלצה:</strong> {question.recommendation}
         </p>}
       {question.why && <p className="plan-question-why">{question.why}</p>}
-      {question.recommendation &&
-        <button type="button" className="planner-button"
-          onClick={() => onAnswer(question.recommendation)}>
-          <ThumbsUp size={16} aria-hidden="true" /> מקבל את ההמלצה
-        </button>}
+      {options.length
+        ? <ul className="plan-options">
+            {options.map((option, index) => (
+              <li key={`${option.label}-${index}`}>
+                <button type="button"
+                  className={index === 0 ? "plan-option recommended"
+                    : "plan-option"}
+                  onClick={() => onAnswer(option.answer)}>
+                  {/* The agent puts its recommendation first, so the badge
+                      is positional rather than a separate flag to keep in
+                      sync with the backend. */}
+                  {index === 0 &&
+                    <ThumbsUp size={14} aria-hidden="true" />}
+                  <span>{option.label}</span>
+                  {index === 0 && <small>מומלץ</small>}
+                </button>
+              </li>))}
+            <li className="plan-options-other">
+              או כתבו תשובה משלכם למטה
+            </li>
+          </ul>
+        : question.recommendation &&
+          <button type="button" className="planner-button"
+            onClick={() => onAnswer(question.recommendation)}>
+            <ThumbsUp size={16} aria-hidden="true" /> מקבל את ההמלצה
+          </button>}
     </div>
   );
 }
@@ -302,6 +331,109 @@ export function PlanChatDrawer({
             aria-label="סגירת השיחה">
             <X size={17} aria-hidden="true" />
           </button>
+          {children}
+        </div>,
+        document.body)}
+    </>
+  );
+}
+
+/**
+ * The agent attached to one field: a small button by the label, and the
+ * conversation in a popover anchored beside it.
+ *
+ * This is the per-field counterpart to `PlanChatDrawer`. The drawer covers the
+ * form to discuss the whole tool; here the FDE points at the field they cannot
+ * word, and the agent talks about that field alone with the form still on
+ * screen behind it — so the value being negotiated stays next to the field it
+ * lands in.
+ *
+ * It carries the same two hazards as the drawer, for the same reason: it
+ * mounts inside the editor's `<form>`, so it is portalled out of that DOM
+ * nesting, and because a portal still propagates through the React tree it
+ * also stops `submit` and `Enter` at its own boundary. Without both, sending a
+ * message would save the draft under discussion.
+ */
+export function FieldAgentPopover({
+  open, onOpen, onClose, label, field, busy, disabled, disabledHint, children,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  /** The field's own label, so the button names what it will discuss. */
+  label: string;
+  /** Distinguishes this popover's ids from every other field's. */
+  field: string;
+  busy?: boolean;
+  disabled?: boolean;
+  disabledHint?: string;
+  children: ReactNode;
+}) {
+  const anchor = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+
+  // The popover is portalled to the body, so it cannot be positioned by the
+  // anchor's containing block — it is placed from viewport coordinates, and
+  // those change whenever the studio form scrolls or the window resizes.
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const place = () => {
+      const box = anchor.current?.getBoundingClientRect();
+      if (box) setAt({ top: box.bottom + 8, left: box.left });
+    };
+    place();
+    // `true` catches the studio form's own scrolling, not just the window's:
+    // scroll does not bubble, so a listener on window alone would leave the
+    // popover behind while the field it points at moves away.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
+  // Esc closes, matching the expanded canvas and every other layer here.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open, onClose]);
+
+  const hintId = `field-agent-hint-${field}`;
+  return (
+    <>
+      <div className="field-agent-anchor" ref={anchor}>
+        <button type="button" className="field-agent-button" onClick={onOpen}
+          aria-expanded={open} disabled={disabled}
+          aria-describedby={disabled && disabledHint ? hintId : undefined}
+          aria-label={`שאלו את הסוכן על ${label}`}
+          title={disabled ? disabledHint : `שאלו את הסוכן על ${label}`}>
+          {busy
+            ? <LoaderCircle className="spin" size={15} aria-hidden="true" />
+            : <Sparkles size={15} aria-hidden="true" />}
+        </button>
+        {disabled && disabledHint &&
+          <span id={hintId} className="field-agent-hint">{disabledHint}</span>}
+      </div>
+      {open && at !== null && createPortal(
+        <div className="field-agent-popover" role="dialog" aria-modal="false"
+          aria-label={`הסוכן · ${label}`}
+          style={{ top: at.top, left: at.left }}
+          onSubmit={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.stopPropagation();
+          }}>
+          <header className="field-agent-popover-header">
+            <span>{label}</span>
+            <button type="button" className="agent-chat-close" onClick={onClose}
+              aria-label="סגירת השיחה">
+              <X size={16} aria-hidden="true" />
+            </button>
+          </header>
           {children}
         </div>,
         document.body)}

@@ -115,11 +115,14 @@ export const api = {
     }),
   planToolChat: (
     messages: PlanChatMessage[], draft: Partial<ToolPlanDraft>,
-    inspection: PackageInspection | null,
+    inspection: PackageInspection | null, focusField = "",
   ) =>
     request<ToolPlanChatTurn>("/api/packages/plan-chat", {
       method: "POST",
-      body: JSON.stringify({ messages, draft, inspection: inspection ?? {} }),
+      body: JSON.stringify({
+        messages, draft, inspection: inspection ?? {},
+        focus_field: focusField,
+      }),
     }),
   workflows: () => request<WorkflowVersion[]>("/api/workflows"),
   createWorkflow: (data: Record<string, unknown>) =>

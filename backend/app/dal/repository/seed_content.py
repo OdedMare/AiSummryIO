@@ -518,6 +518,173 @@ Say so in `summary`, and use `items` to note which conclusions rest on a
 single source.""",
     },
     {
+        "content_key": "summary-data-profile",
+        "kind": "skill",
+        "name": "פרופיל הנתונים",
+        "description": "מה נאסף, בכמה רשומות, ואיפה הכיסוי חזק או דליל.",
+        "user_selectable": True,
+        "content": """# Data profile
+
+## What you produce
+A picture of the dataset behind the summary: its size, its shape, and where
+it is thick or thin.
+
+**Language:** input sections are Hebrew and your output must be Hebrew. Keep
+section names and field names exactly as supplied.
+
+## Method
+1. Read each section's `coverage` — it states what that section rests on.
+2. Note which sections carry most of the volume and which contribute little.
+3. Mark fields the sections describe as frequently empty.
+4. Separate a section reporting zero rows from a section that failed.
+
+## The distinction you must never blur
+"No rows returned" and "the package failed" are not the same. The first is a
+finding about the entity; the second is a finding about the collection. Never
+present a failure as evidence of absence.
+
+## Evidence rules
+- Report only volumes the sections state. Where a section gives no count, say
+  the volume was not reported — never estimate one.
+- Do not add counts across sections into a total unless they describe the same
+  unit. Rows from different packages are not addable.
+- In `sources`, list only names of summary sections that were supplied.
+
+## Format
+`summary` = the dataset in one or two sentences: overall size and the main
+coverage weakness.
+`items` = one line per section, shaped as
+"section — volume — coverage note".
+
+## Worked example
+Sections: "תיקים" covers 412 rows, department empty in 38; "אינטראקציות"
+covers 27 rows; "שעבודים" returned zero rows.
+`summary`: "עיקר הנתונים מגיעים מחלק התיקים (412 רשומות); שאר החלקים דלילים,
+וחלק השעבודים לא החזיר רשומות כלל."
+`items`: [
+"תיקים — 412 רשומות — שדה המחלקה ריק ב-38 מהן",
+"אינטראקציות — 27 רשומות — כיסוי דליל ביחס לתיקים",
+"שעבודים — 0 רשומות — אין רישום לישות זו; אין זו כשלת חבילה"
+]
+
+## If volumes are not reported
+Say so plainly in `summary` and name in `items` which sections omitted them.
+Never fabricate a number to fill the profile.""",
+    },
+    {
+        "content_key": "summary-distribution",
+        "kind": "skill",
+        "name": "התפלגויות ודפוסים",
+        "description": "הרוב, המיעוט והריכוזים — מה הדפוס החוזר בנתונים.",
+        "user_selectable": True,
+        "content": """# Distribution and patterns
+
+## What you produce
+The dominant patterns in the data: what most records look like, and how the
+rest divide.
+
+**Language:** input sections are Hebrew and your output must be Hebrew. Keep
+category values exactly as written; never translate a category name.
+
+## Method
+1. Read each section's `patterns` — distributions and ranges are collected
+   there.
+2. For each, name the dominant category and the share it holds.
+3. Note concentration in time — a period holding an unusual share.
+4. Note a category conspicuously rare where you would expect balance.
+
+## Proportion rules
+- Use a proportion only where the section supplies it, or supplies both the
+  part and the whole. Never derive a percentage from a count whose denominator
+  you do not have.
+- "Most" means more than half and must be visible in the data. Do not use it
+  loosely.
+- Do not compare shares across sections describing different units.
+
+## Evidence rules
+- A pattern is a description, never a prediction. Do not extrapolate forward.
+- Do not explain why a pattern exists. The data shows what, not why.
+- In `sources`, list only names of summary sections that were supplied.
+
+## Format
+`summary` = the single strongest pattern, in one or two sentences.
+`items` = one pattern per line, shaped as
+"field or dimension — the split — what stands out".
+
+## Worked example
+Patterns: "412 תיקים, 263 פתוחים"; "רישוי 188, פיקוח 140, אחר 84"; "ריכוז
+ב-2023: 147 תיקים".
+`summary`: "רוב התיקים פתוחים (263 מתוך 412), ופעילות הפתיחה מתרכזת בבירור
+בשנת 2023."
+`items`: [
+"סטטוס — 263 פתוחים מתוך 412 — הרוב אינו סגור",
+"סוג תיק — רישוי 188, פיקוח 140, אחר 84 — שני סוגים מכסים כ-80%",
+"שנת פתיחה — 147 מתוך 412 ב-2023 — ריכוז חריג בשנה אחת"
+]
+
+## If no distribution is reported
+Say so in `summary` and return an empty `items`. Never invent a split.""",
+    },
+    {
+        "content_key": "summary-outliers",
+        "kind": "skill",
+        "name": "חריגים ואנומליות",
+        "description": "רשומות יוצאות דופן, ערכים בלתי אפשריים וכפילויות.",
+        "user_selectable": True,
+        "content": """# Outliers and anomalies
+
+## What you produce
+The records that do not fit: extreme values, impossible values, and
+duplicates.
+
+**Language:** input sections are Hebrew and your output must be Hebrew. Quote
+values exactly as written.
+
+## Method — scan for these four, in this order
+1. **Impossible** — a future date, a negative duration, a closing date before
+   its opening date.
+2. **Extreme** — a value far outside the range the section describes.
+3. **Duplicate** — the same identifier or record appearing more than once.
+4. **Structurally odd** — a field empty in almost every row, or one entity
+   holding a disproportionate share of records.
+
+Sections collect these under `outliers`. Rank by certainty: an impossible
+value is a fact, an extreme value is a question.
+
+## The distinction you must never blur
+Rare is not wrong. A single unusual record may be entirely legitimate. Say
+what makes it stand out and what would confirm it — never assert it is an
+error.
+
+## Evidence rules
+- Report an anomaly only where the sections give enough to see it. Do not
+  infer one from a summary that reports no range.
+- Do not estimate how many anomalies exist beyond those described.
+- In `sources`, list only names of summary sections that were supplied.
+
+## Format
+`summary` = whether the data looks clean overall, and the most serious
+anomaly.
+`items` = one anomaly per line, shaped as
+"what was found — why it stands out — what to check".
+
+## Worked example
+Outliers: "תיק C-2023-0041 נסגר ב-2022 ונפתח ב-2023"; "38 רשומות ללא מחלקה";
+"ישות אחת מחזיקה 94 מתוך 412 התיקים".
+`summary`: "הנתונים תקינים ברובם, אך נמצאה רשומה עם סדר תאריכים בלתי אפשרי
+המחייבת בדיקה."
+`items`: [
+"תיק C-2023-0041 נסגר ב-2022 לפני פתיחתו ב-2023 — סדר תאריכים בלתי אפשרי —
+לאמת מול מקור התיקים",
+"38 רשומות ללא ערך במחלקה — כ-9% מהתיקים — לברר אם השדה אינו חובה",
+"ישות אחת מחזיקה 94 מתוך 412 תיקים — ריכוז חריג — לוודא שאין כפילות רישום"
+]
+
+## If nothing stands out
+Say so explicitly in `summary` and return an empty `items`. Never promote an
+ordinary record to an anomaly to fill the list.""",
+    },
+    {
         "content_key": "final-summary",
         "kind": "prompt",
         "name": "סיכום מלא",

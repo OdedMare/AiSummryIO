@@ -6,16 +6,26 @@ export interface SummarySection {
   name: string;
   status: "completed" | "partial" | "failed";
   summary: string;
+  /** What this section rests on, stated rather than left to be inferred. */
+  coverage?: string;
   facts: string[];
+  /** Distributions and ranges, kept apart from individual facts. */
+  patterns?: string[];
+  outliers?: string[];
   warnings: string[];
   suggested_questions: string[];
   /** Extra fields declared by the workflow's own output_schema. */
   fields?: Record<string, unknown>;
+  /** The model did not answer; the text is counts, not a summary. */
+  degraded?: boolean;
   evidence_ids: string[];
 }
 
 export interface SummaryResult {
+  /** One-line answer, shown before any detail. */
+  headline?: string;
   summary: string;
+  coverage?: string;
   key_findings: string[];
   risks: string[];
   missing_data: string[];
@@ -23,6 +33,7 @@ export interface SummaryResult {
   skill_results: SkillResult[];
   sections: SummarySection[];
   partial: boolean;
+  degraded?: boolean;
   needs_clarification?: boolean;
 }
 
@@ -170,11 +181,25 @@ export interface ToolPlanDraft {
   example_output: string;
 }
 
+/** One answer offered for clicking, instead of typing it. */
+export interface PlanOption {
+  /** The button caption. */
+  label: string;
+  /** Sent verbatim as the FDE's message when the option is clicked. */
+  answer: string;
+}
+
 /** The single question a turn may ask, always with a recommended answer. */
 export interface PlanQuestion {
   question: string;
   recommendation: string;
   why: string;
+  /**
+   * Concrete answers to click, the first being `recommendation`. Empty
+   * whenever the honest answer is open-ended, so the composer is the only
+   * way to reply — never assume there is something to click.
+   */
+  options: PlanOption[];
 }
 
 interface PlanChatTurn {
