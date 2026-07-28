@@ -34,6 +34,8 @@
      surfaces so the brand reads as a single system. */
   --brand-gradient: linear-gradient(135deg, #7c5cf5, #4f7ce8 55%, #22c3d6);
   --brand-glow: 0 14px 40px rgba(112, 86, 232, 0.32);
+  /* Dims the area of the workflow minimap that is off-screen. */
+  --canvas-minimap-mask: rgba(233, 237, 244, 0.72);
 }
 
 :root[data-theme="dark"] {
@@ -66,6 +68,7 @@
   --shadow-soft: 0 12px 36px rgba(0, 0, 0, 0.24);
   --brand-gradient: linear-gradient(135deg, #9a87f7, #5b8bf0 55%, #3bc5d6);
   --brand-glow: 0 14px 44px rgba(112, 86, 232, 0.42);
+  --canvas-minimap-mask: rgba(9, 11, 17, 0.72);
 }
 
 * {
@@ -2414,18 +2417,118 @@ select:focus {
    content-driven: React Flow measures its container, and a container that
    grows with the graph would resize on every pan. */
 .workflow-canvas {
-  height: 340px;
   margin-bottom: 12px;
+}
+
+.workflow-canvas-surface {
+  position: relative;
+  height: 340px;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
 }
 
+/* Fullscreen. The overlay owns the viewport, so the surface stops being a
+   fixed 340px box and fills whatever is left beside the hint. */
+.canvas-overlay {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  inset: 0;
+  padding: 18px;
+  background: var(--bg);
+}
+
+.canvas-overlay .workflow-canvas {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+.canvas-overlay .workflow-canvas-surface {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  box-shadow: var(--shadow);
+}
+
+/* Sits above the graph, clear of the bottom-left Controls and the minimap. */
+.canvas-expand {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.canvas-expand:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.canvas-expand:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.workflow-canvas .react-flow__minimap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
 .workflow-canvas .react-flow__renderer {
   /* The app is RTL, but the graph is laid out along a left-to-right x axis,
      so the canvas opts back out for its own coordinate space. */
   direction: ltr;
+}
+
+/* Panning reads as moving the sheet under the pointer, so the background
+   carries a grab cursor while nodes and handles keep their own. */
+.workflow-canvas .react-flow__pane {
+  cursor: grab;
+}
+
+.workflow-canvas .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* A dragged node lifts off the sheet; the shadow is the only motion cue that
+   survives a reduced-motion preference. */
+.workflow-canvas .react-flow__node.dragging .canvas-node {
+  box-shadow: var(--shadow);
+}
+
+.workflow-canvas .react-flow__node {
+  transition: filter 120ms ease;
+}
+
+.workflow-canvas .react-flow__node:hover {
+  filter: brightness(1.02);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-canvas .react-flow__node {
+    transition: none;
+  }
+
+  /* The marching-ants dash on a mapped edge is decorative, and it never
+     stops — exactly the kind of motion this preference asks to remove. */
+  .workflow-canvas .react-flow__edge-path {
+    animation: none;
+  }
 }
 
 .workflow-canvas .react-flow__background {

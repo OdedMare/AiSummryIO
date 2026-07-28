@@ -11,13 +11,16 @@
  * be saved.
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactFlow, {
-  Background, Controls, Handle, MarkerType, Position,
+  Background, Controls, Handle, MarkerType, MiniMap, Position,
   type Connection, type Edge, type EdgeChange, type Node, type NodeProps,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { AlertTriangle, Map as MapIcon, Package, Tag } from "lucide-react";
+import {
+  AlertTriangle, Map as MapIcon, Maximize2, Minimize2, Package, Tag,
+} from "lucide-react";
 import type { PackageVersion, WorkflowStep } from "@/types";
 
 /** The two workflow-level inputs, drawn as fixed source nodes. */
@@ -92,35 +95,125 @@ export default function WorkflowCanvas({
     );
   }, [steps, onConnectStep, onDisconnectStep]);
 
-  return (
-    <div className="workflow-canvas" aria-label="עריכת חיבורי התהליך">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        onConnect={onConnect}
-        onEdgeUpdate={onEdgeUpdate}
-        edgeUpdaterRadius={14}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={(_, node) => {
-          if (!isSourceNode(node.id)) onSelectStep(node.id);
-        }}
-        fitView
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable
-        nodesConnectable
-        deleteKeyCode={["Backspace", "Delete"]}
-      >
-        <Background gap={18} size={1} />
-        <Controls showInteractive={false} position="bottom-left" />
-      </ReactFlow>
+  const [expanded, setExpanded] = useState(false);
+  useEscapeToClose(expanded, () => setExpanded(false));
+  useLockedBodyScroll(expanded);
+
+  const graph = (
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={NODE_TYPES}
+      onConnect={onConnect}
+      onEdgeUpdate={onEdgeUpdate}
+      edgeUpdaterRadius={14}
+      onEdgesChange={onEdgesChange}
+      onNodeClick={(_, node) => {
+        if (!isSourceNode(node.id)) onSelectStep(node.id);
+      }}
+      fitView
+      // Refit when the graph is re-parented into the overlay, so opening
+      // fullscreen frames the whole workflow instead of keeping the inline
+      // viewport's crop.
+      key={expanded ? "expanded" : "inline"}
+      fitViewOptions={FIT_VIEW_OPTIONS}
+      proOptions={{ hideAttribution: true }}
+      nodesDraggable
+      nodesConnectable
+      // Drag anywhere to pan, and reserve the wheel for zoom. Panning by
+      // scroll made a two-finger gesture over the canvas fight the studio
+      // form scrolling underneath it.
+      panOnDrag
+      panOnScroll={false}
+      zoomOnScroll
+      zoomOnDoubleClick={false}
+      minZoom={0.25}
+      maxZoom={1.75}
+      deleteKeyCode={["Backspace", "Delete"]}
+    >
+      <Background gap={18} size={1} />
+      <Controls showInteractive={false} position="bottom-left" />
+      {expanded && <MiniMap pannable zoomable
+        nodeColor={minimapNodeColor} maskColor="var(--canvas-minimap-mask)" />}
+    </ReactFlow>
+  );
+
+  const canvas = (
+    <div className={`workflow-canvas${expanded ? " is-expanded" : ""}`}>
+      <div className="workflow-canvas-surface" aria-label="עריכת חיבורי התהליך">
+        {graph}
+        <button type="button" className="canvas-expand"
+          onClick={() => setExpanded((current) => !current)}
+          aria-expanded={expanded}
+          aria-label={expanded ? "יציאה ממסך מלא" : "עריכה במסך מלא"}
+          title={expanded ? "יציאה ממסך מלא (Esc)" : "עריכה במסך מלא"}>
+          {expanded
+            ? <Minimize2 size={16} aria-hidden="true" />
+            : <Maximize2 size={16} aria-hidden="true" />}
+        </button>
+      </div>
       <p className="canvas-hint">
         גררו משדה פלט אל שלב אחר כדי להזרים אליו את השדה הזה — החיבור קובע
         גם את שדה המזהה. אפשר לגרור קצה של חיבור קיים אל שדה אחר כדי להזיז
         אותו, ומחיקת חיבור מחזירה את השלב למזהה הראשי.
+        {expanded && " גרירה על הרקע מזיזה את התצוגה, וגלגלת מקרבת ומרחיקה."}
       </p>
     </div>
   );
+
+  if (!expanded) return canvas;
+  // Portalled out of the studio form so the overlay is not clipped by its
+  // scroll container. A portal escapes the DOM but not the React tree, so —
+  // as with the interview drawer — submit and Enter are stopped here, or
+  // deleting a node with the keyboard would submit the draft being edited.
+  return createPortal(
+    <div className="canvas-overlay" role="dialog" aria-modal="true"
+      aria-label="עריכת חיבורי התהליך במסך מלא"
+      onSubmit={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.stopPropagation();
+      }}>
+      {canvas}
+    </div>,
+    document.body);
+}
+
+const FIT_VIEW_OPTIONS = { padding: 0.18, maxZoom: 1 };
+
+/** Minimap tint: the step's state, matching the node borders it stands for. */
+function minimapNodeColor(node: Node) {
+  if (isSourceNode(node.id)) return "var(--border-strong)";
+  return (node.data as StepNodeData)?.incomplete
+    ? "var(--warning)" : "var(--primary)";
+}
+
+/**
+ * Hold the page still behind the overlay.
+ *
+ * The canvas covers the viewport, so a wheel gesture that misses it would
+ * otherwise scroll the studio form underneath and leave the FDE somewhere
+ * else entirely once they closed fullscreen. The previous inline value is
+ * restored rather than assumed to be `""`.
+ */
+function useLockedBodyScroll(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [active]);
+}
+
+/** Esc leaves fullscreen, the exit every overlay is expected to have. */
+function useEscapeToClose(active: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    const handle = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [active, onClose]);
 }
 
 /* ---------- nodes ---------- */

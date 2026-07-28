@@ -76,6 +76,13 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - Steps are sorted by dependency level in `workflowPayload`, because the
   backend resolves `steps.<key>` only against steps earlier in the array
   while the canvas lets an FDE wire a node backwards.
+- The canvas expands to a fullscreen overlay, portalled to `document.body`
+  so the studio form's scroll container cannot clip it. Like the interview
+  drawer, it must stop `submit` and `Enter` at its own boundary — the canvas
+  sits inside the editor `<form>`, so deleting a node by keyboard would
+  otherwise save the draft. Esc closes it and body scroll is locked while it
+  is open. Drag pans and the wheel zooms; panning by scroll would fight the
+  form scrolling underneath. Remounting on expand refits the view.
 - The tool interview ("שאלו את הסוכן") opens only after Fetch 1 ID has
   returned rows, and the disabled button carries a visible reason. The FDE owns
   the connection: it is seeded into every turn as fact, and the interview
