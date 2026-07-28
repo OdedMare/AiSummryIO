@@ -18,9 +18,14 @@ examples; users provide one identifier and receive a progressive full summary.
   evidence is available separately from the Hebrew summary.
 - Users can add up to three published summary Skills to a run. The built-in
   Skills produce an executive brief, risk review, recommended actions, a
-  timeline, cross-source contradictions, an entity map, or an evidence-quality
-  audit. Each Skill runs in its own model call with its full instructions, and
-  each result names the summary sections it used.
+  timeline, cross-source contradictions, an entity map, an evidence-quality
+  audit, a data profile, a distribution read, or an outlier scan. Each Skill
+  runs in its own model call with its full instructions, and each result names
+  the summary sections it used.
+- The summary reads as one continuous answer — a headline, then prose that
+  merges every workflow — rather than a card per workflow. The workflows it
+  rests on appear as source chips underneath, and a chip opens that workflow's
+  own raw evidence.
 
 There are no GIS providers or map dependencies.
 
@@ -218,7 +223,16 @@ version:
 6. Publish the workflow. The server blocks workflows without valid mappings or
    publishable examples.
 
-The studio is preloaded with seven user-facing summary Skills and separate
+The agent is also reachable **per field**: every prose field on the tool and
+workflow forms carries its own small agent button, which opens the interview
+beside that field and writes back only that field. On the workflow editor the
+route itself (`steps`) is one of those focuses — accepting it loads the whole
+step array onto the canvas without touching the name and description already
+written. Interview questions may offer two to four clickable answers, the first
+being the agent's own recommendation; typing a different answer is always
+available.
+
+The studio is preloaded with ten user-facing summary Skills and separate
 operator guidance for building, testing, and diagnosing workflows. A manager
 can publish more Skills and choose which ones appear on the summary screen.
 
