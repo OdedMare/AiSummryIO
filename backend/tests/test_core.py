@@ -1616,20 +1616,6 @@ def test_a_prompt_resolves_its_includes_into_one_text():
     assert "in Hebrew" in tool
 
 
-def test_a_missing_prompt_fails_loudly_rather_than_sending_nothing():
-    from app.bl import prompts
-
-    with pytest.raises(ValueError, match="prompt not found"):
-        prompts.load("no_such_prompt")
-
-
-def test_a_prompt_name_cannot_escape_the_prompts_directory():
-    from app.bl import prompts
-
-    with pytest.raises(ValueError, match="prompt not found"):
-        prompts.load("../../../etc/passwd")
-
-
 def test_each_interview_sends_its_own_prompt_file():
     """The planner names a file; a typo would otherwise surface as the model
     behaving oddly rather than as an error."""

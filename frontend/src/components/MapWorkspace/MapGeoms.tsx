@@ -11,7 +11,7 @@ interface MapGeomsProps {
   onChange: (geometry: GeoJSONPolygon, bbox: BBox) => void;
 }
 
-const SHAPE = { color: "#7455e9", fillColor: "#7455e9", fillOpacity: 0.3 };
+const SHAPE = { color: "#d97757", fillColor: "#d97757", fillOpacity: 0.3 };
 
 /** Draws the active shape tool and reports the finished polygon upward. */
 export default function MapGeoms({ mode, value, onChange }: MapGeomsProps) {

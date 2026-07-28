@@ -7,9 +7,12 @@
 ---
 
 **Project:** AiSummryIO
-**Generated:** 2026-07-26 14:01:38
 **Category:** No-code / Low-code Builder
 **Design Dials:** Variance 4/10 (Balanced / Modern) | Motion 3/10 (Subtle) | Density 7/10 (Standard)
+
+> **Source of truth:** the tokens below mirror the `:root` block in
+> `frontend/src/styles/globals.css`. That file is authoritative — if the two
+> disagree, fix this document.
 
 ---
 
@@ -17,20 +20,27 @@
 
 ### Color Palette
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#7C3AED` | `--color-primary` |
-| On Primary | `#FFFFFF` | `--color-on-primary` |
-| Secondary | `#6366F1` | `--color-secondary` |
-| Accent/CTA | `#0891B2` | `--color-accent` |
-| Background | `#0F172A` | `--color-background` |
-| Foreground | `#FFFFFF` | `--color-foreground` |
-| Muted | `#171939` | `--color-muted` |
-| Border | `rgba(255,255,255,0.08)` | `--color-border` |
-| Destructive | `#DC2626` | `--color-destructive` |
-| Ring | `#7C3AED` | `--color-ring` |
+Warm, paper-like. Cream ground, terracotta accent, warm near-black text.
+Depth comes from borders and generous space, **not** elevation and glow.
 
-**Color Notes:** Editor violet + filter cyan on dark
+| Role | Light | Dark | CSS Variable |
+|------|-------|------|--------------|
+| Background | `#F5F4EE` | `#1F1E1D` | `--bg` |
+| Surface | `#FFFFFF` | `#262624` | `--surface` |
+| Surface (raised) | `#FAF9F5` | `#2D2C2A` | `--surface-2` |
+| Text | `#1F1E1D` | `#F5F4EE` | `--text` |
+| Text muted | `#7D7A70` | `#A6A29A` | `--text-muted` |
+| Border | `#E5E2D9` | `#3A3937` | `--border` |
+| Primary | `#C25F3F` | `#E08A6B` | `--primary` |
+| Primary action | `#D97757` | `#D97757` | `--primary-action` |
+| Sidebar | `#262624` | `#1A1917` | `--sidebar` |
+| Success | `#4A7C59` | `#7FAE87` | `--success` |
+| Warning | `#A1701C` | `#D9A94E` | `--warning` |
+| Destructive | `#B3402F` | `#E07A63` | `--danger` |
+
+**Color Notes:** Terracotta `#D97757` is the single accent. There is no
+secondary hue — cyan/violet pairings do not belong in this theme. `--primary`
+is darkened in light mode so text and icons using it clear 4.5:1 on cream.
 
 ### Typography
 
@@ -60,12 +70,14 @@
 
 ### Shadow Depths
 
-| Level | Value | Usage |
-|-------|-------|-------|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
-| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
+| Token | Value (light) | Usage |
+|-------|---------------|-------|
+| `--shadow-soft` | `0 2px 8px rgba(31,30,29,0.05)` | Cards, section surfaces |
+| `--shadow` | `0 12px 32px rgba(31,30,29,0.09)` | Modals, dropdowns, popovers |
+| `--brand-glow` | `0 6px 18px rgba(217,119,87,0.22)` | Primary action only |
+
+Shadows are deliberately quiet. Prefer a `1px solid var(--border)` to a
+shadow when separating two surfaces.
 
 ---
 
@@ -73,33 +85,41 @@
 
 ### Buttons
 
+Always reference tokens, never literals — that is what keeps light and dark
+in sync from one place.
+
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #0891B2;
-  color: white;
+  background: var(--primary-action);
+  color: #fff;
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
-  transition: all 200ms ease;
+  box-shadow: var(--brand-glow);
+  transition: background-color 200ms ease, box-shadow 200ms ease;
   cursor: pointer;
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+  background: var(--primary-action-hover);
 }
 
 /* Secondary Button */
 .btn-secondary {
-  background: transparent;
-  color: #7C3AED;
-  border: 2px solid #7C3AED;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, border-color 200ms ease;
   cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--surface-2);
+  border-color: var(--primary);
 }
 ```
 
@@ -107,17 +127,16 @@
 
 ```css
 .card {
-  background: #0F172A;
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 24px;
-  box-shadow: var(--shadow-md);
-  transition: all 200ms ease;
-  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: border-color 200ms ease;
 }
 
 .card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  border-color: var(--border-strong);
 }
 ```
 
@@ -126,16 +145,18 @@
 ```css
 .input {
   padding: 12px 16px;
-  border: 1px solid #E2E8F0;
-  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
   font-size: 16px;
-  transition: border-color 200ms ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
-.input:focus {
-  border-color: #7C3AED;
+.input:focus-visible {
+  border-color: var(--primary);
   outline: none;
-  box-shadow: 0 0 0 3px #7C3AED20;
+  box-shadow: var(--focus);
 }
 ```
 
@@ -143,15 +164,16 @@
 
 ```css
 .modal-overlay {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background: rgba(31, 30, 29, 0.78);
+  backdrop-filter: blur(12px);
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px;
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow);
   max-width: 500px;
   width: 90%;
 }
