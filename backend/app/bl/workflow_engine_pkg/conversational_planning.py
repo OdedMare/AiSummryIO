@@ -156,6 +156,16 @@ class _ToolPlanner(_Planner):
     _ENUM_FIELDS = {
         "input_mode": ("single", "many"),
     }
+    # The connection. The FDE typed these and a real run confirmed them, so
+    # they are facts the interview carries — never something it may rewrite.
+    # The schema still requires the model to echo them, and a model that
+    # paraphrases one into Hebrew would otherwise replace a FLAPI identifier
+    # with a display label, which FLAPI rejects as an opaque server error far
+    # from here. The FDE's value therefore wins whenever it exists.
+    _FDE_OWNED_FIELDS = (
+        "package_id", "input_cube_name", "input_cube_parameter",
+        "output_cube_name", "package_key", "query_name",
+    )
     # JSON arrives from the model as a string so the FDE can edit it in the
     # same textarea they always could; it is only checked for shape here.
     _JSON_FIELDS = {
@@ -214,6 +224,12 @@ class _ToolPlanner(_Planner):
                 continue
             agreed = bounded_text(previous.get(field))
             merged[field] = agreed if agreed in allowed else ""
+        # Reversed precedence: what the FDE established outranks this turn's
+        # echo of it, so the model can never edit the connection.
+        for field in cls._FDE_OWNED_FIELDS:
+            agreed = bounded_text(previous.get(field))
+            if agreed:
+                merged[field] = agreed
         for field in cls._BOOL_FIELDS:
             value = draft.get(field, previous.get(field))
             merged[field] = True if value is None else bool(value)

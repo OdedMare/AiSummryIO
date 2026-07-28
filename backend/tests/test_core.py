@@ -1321,6 +1321,57 @@ def test_a_summary_awaiting_confirmation_is_not_yet_ready():
     assert result["ready"] is False
 
 
+def test_the_interview_cannot_rewrite_the_connection_the_fde_established():
+    """The FDE typed the connection and a real run confirmed it, but the
+    schema still makes the model echo it back. A model that paraphrases a cube
+    name into Hebrew would replace a FLAPI identifier with a display label,
+    and FLAPI answers that with an opaque server error far from here.
+    """
+    agreed = {
+        "package_id": "PKG-IDENTITY",
+        "input_cube_name": "entity_cube",
+        "input_cube_parameter": "entity_id",
+        "output_cube_name": "entity_details",
+        "package_key": "identity",
+        "query_name": "identity_lookup",
+    }
+    service, _llm = _chat_service(_tool_answer(draft=dict(
+        {key: "" for key in _TOOL_DRAFT_KEYS},
+        name="פרטי ישות",
+        # The model paraphrasing the connection into Hebrew display text.
+        package_id="חבילת זיהוי",
+        input_cube_name="קוביית ישויות",
+        input_cube_parameter="מזהה ישות",
+        output_cube_name="פרטי הישות",
+        package_key="זיהוי",
+        query_name="חיפוש זיהוי",
+    )))
+
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "נמשיך"}], agreed, {},
+    )
+
+    for field, established in agreed.items():
+        assert result["draft"][field] == established
+    # What the interview genuinely owns still comes from this turn.
+    assert result["draft"]["name"] == "פרטי ישות"
+
+
+def test_the_interview_still_fills_a_connection_field_the_fde_left_empty():
+    """Precedence protects what the FDE established; it must not freeze an
+    empty field, or a draft opened from scratch could never be filled."""
+    service, _llm = _chat_service(_tool_answer(draft=dict(
+        {key: "" for key in _TOOL_DRAFT_KEYS},
+        query_name="identity_lookup",
+    )))
+
+    result = service.plan_tool_chat(
+        [{"role": "fde", "text": "נמשיך"}], {"query_name": ""}, {},
+    )
+
+    assert result["draft"]["query_name"] == "identity_lookup"
+
+
 def test_a_turn_that_both_asks_and_claims_confirmation_is_still_asking():
     service, _llm = _chat_service(_tool_answer(
         question={

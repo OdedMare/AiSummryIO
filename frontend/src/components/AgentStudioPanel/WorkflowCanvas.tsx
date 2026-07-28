@@ -17,7 +17,7 @@ import ReactFlow, {
   type Connection, type Edge, type EdgeChange, type Node, type NodeProps,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { Map as MapIcon, Package, Tag } from "lucide-react";
+import { AlertTriangle, Map as MapIcon, Package, Tag } from "lucide-react";
 import type { PackageVersion, WorkflowStep } from "@/types";
 
 /** The two workflow-level inputs, drawn as fixed source nodes. */
@@ -107,32 +107,74 @@ function SourceNode({ data }: NodeProps<{ label: string; hint: string }>) {
   );
 }
 
+/**
+ * One step, showing the tool it runs and the output that tool produces.
+ *
+ * The output list is the point of the node: wiring a step is choosing one
+ * field out of another step's output, and until that list was on the canvas
+ * an FDE had to open the step form to remember what a tool even emits.
+ * Fields consumed downstream are marked, so a glance answers both "what does
+ * this produce" and "what is actually being used".
+ */
 function StepNode({ data }: NodeProps<StepNodeData>) {
   return (
     <div className={`canvas-node canvas-node-step${
       data.selected ? " is-selected" : ""}${data.incomplete ? " is-incomplete" : ""}`}>
       <Handle type="target" position={Position.Right} />
-      <span className="canvas-node-icon">
-        <Package size={15} aria-hidden="true" />
-      </span>
-      <div>
-        <strong>{data.name}</strong>
-        <small dir="ltr">{data.packageName}</small>
-        {data.mapping && <small className="canvas-node-mapping" dir="ltr">
-          → {data.mapping}
-        </small>}
-      </div>
+      <header className="canvas-node-head">
+        <span className="canvas-node-icon">
+          <Package size={15} aria-hidden="true" />
+        </span>
+        <div>
+          <strong>{data.name}</strong>
+          <small dir="ltr">{data.packageName}</small>
+        </div>
+      </header>
+      {data.incompleteReason && <p className="canvas-node-warning">
+        <AlertTriangle size={12} aria-hidden="true" />
+        {data.incompleteReason}
+      </p>}
+      <OutputFieldList data={data} />
       <Handle type="source" position={Position.Left} />
     </div>
   );
 }
 
+/** The tool's output contract, or why there isn't one to show. */
+function OutputFieldList({ data }: { data: StepNodeData }) {
+  if (!data.outputFields.length) {
+    return <p className="canvas-node-empty">
+      {data.packageChosen
+        ? "לטול אין עדיין חוזה פלט או דוגמאות"
+        : "בחרו טול כדי לראות את הפלט"}
+    </p>;
+  }
+  return (
+    <ul className="canvas-node-fields" dir="ltr">
+      {data.outputFields.map((field) =>
+        <li key={field.name}
+          className={field.consumed ? "is-consumed" : undefined}>
+          <b>{field.name}</b>
+          <span>{field.type}</span>
+        </li>)}
+      {data.hiddenFieldCount > 0 && <li className="canvas-node-more" dir="rtl">
+        ועוד {data.hiddenFieldCount} שדות
+      </li>}
+    </ul>
+  );
+}
+
+type OutputField = { name: string; type: string; consumed: boolean };
+
 type StepNodeData = {
   name: string;
   packageName: string;
-  mapping: string;
+  packageChosen: boolean;
+  outputFields: OutputField[];
+  hiddenFieldCount: number;
   selected: boolean;
   incomplete: boolean;
+  incompleteReason: string;
 };
 
 const NODE_TYPES = { sourceNode: SourceNode, stepNode: StepNode };
@@ -165,20 +207,90 @@ function canvasNodes(
   return [...sources, ...stepNodes];
 }
 
+const VISIBLE_FIELD_LIMIT = 6;
+
 function stepNodeData(
-  step: WorkflowStep, packages: PackageVersion[], selectedKey: string,
+  step: WorkflowStep, steps: WorkflowStep[], packages: PackageVersion[],
+  selectedKey: string,
 ): StepNodeData {
   const item = packages.find((candidate) => candidate.id === step.package_version_id);
+  const consumed = consumedFields(step.key, steps);
+  const fields = outputFields(item).map((field) => ({
+    ...field, consumed: consumed.has(field.name),
+  }));
+  // A consumed field must stay visible even past the cap, or the node hides
+  // the one field the FDE most needs to see: the one carrying the next step.
+  const shown = prioritized(fields);
   return {
     name: step.name || step.key,
     packageName: item ? `${item.name} · v${item.version}` : "לא נבחר טול",
-    mapping: mappedStep(step) ? step.input_field : "",
+    packageChosen: Boolean(item),
+    outputFields: shown,
+    hiddenFieldCount: fields.length - shown.length,
     selected: step.key === selectedKey,
-    // A mapped step with no chosen field, or a step with no package, cannot
-    // be published — the canvas says so before the FDE reaches the button.
-    incomplete: !step.package_version_id ||
-      (mappedStep(step) && !step.input_field.trim()),
+    incomplete: Boolean(incompleteReason(step)),
+    incompleteReason: incompleteReason(step),
   };
+}
+
+/** Why this step cannot be published yet, or "" when it is complete. */
+function incompleteReason(step: WorkflowStep): string {
+  if (!step.package_version_id) return "לא נבחר טול";
+  if (mappedStep(step) && !step.input_field.trim()) return "לא נבחר שדה מזהה";
+  return "";
+}
+
+/** Field names of this step's output that a later step reads. */
+function consumedFields(key: string, steps: WorkflowStep[]): Set<string> {
+  return new Set(steps
+    .filter((step) => step.input_source === `steps.${key}`)
+    .map((step) => step.input_field.trim())
+    .filter(Boolean));
+}
+
+function prioritized(fields: OutputField[]): OutputField[] {
+  if (fields.length <= VISIBLE_FIELD_LIMIT) return fields;
+  const consumed = fields.filter((field) => field.consumed);
+  const rest = fields.filter((field) => !field.consumed);
+  return [...consumed, ...rest].slice(0, VISIBLE_FIELD_LIMIT);
+}
+
+/**
+ * A package's output fields with their declared types.
+ *
+ * Mirrors the backend's `_output_fields`: schema properties unioned with the
+ * keys actually seen in the examples, so the canvas, the field picker, and
+ * the planning agent all agree on what a tool emits.
+ */
+function outputFields(item?: PackageVersion): OutputField[] {
+  if (!item) return [];
+  const schema = item.output_schema as {
+    properties?: Record<string, { type?: unknown }>;
+  };
+  const properties = schema?.properties;
+  const types = new Map<string, string>();
+  if (properties && typeof properties === "object") {
+    Object.entries(properties).forEach(([name, definition]) =>
+      types.set(name, fieldType(definition)));
+  }
+  for (const row of item.example_output ?? []) {
+    if (row && typeof row === "object") {
+      Object.keys(row).forEach((name) => {
+        if (!types.has(name)) types.set(name, "");
+      });
+    }
+  }
+  return [...types.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, type]) => ({ name, type, consumed: false }));
+}
+
+/** A schema type, which may be a union the backend emitted as an array. */
+function fieldType(definition: { type?: unknown }): string {
+  const type = definition && typeof definition === "object"
+    ? definition.type : undefined;
+  if (Array.isArray(type)) return type.filter(Boolean).join(" | ");
+  return typeof type === "string" ? type : "";
 }
 
 /* ---------- edges ---------- */
