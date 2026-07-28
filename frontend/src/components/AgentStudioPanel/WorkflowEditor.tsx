@@ -10,7 +10,9 @@ import type {
   PackageVersion, WorkflowPlan, WorkflowStep, WorkflowVersion,
 } from "@/types";
 import { emptyWorkflow, parseJson } from "./forms";
-import { PlanChat, PlanChatDrawer, usePlanChat } from "./PlanChat";
+import {
+  FieldAgentPopover, PlanChat, PlanChatDrawer, usePlanChat,
+} from "./PlanChat";
 import WorkflowCanvas, { mappedStep, orderedSteps } from "./WorkflowCanvas";
 
 export default function WorkflowEditor({
@@ -120,13 +122,27 @@ function useWorkflowEditor(
     setForm(planForm(plan)); setSteps(plan.steps.map((step) => ({ ...step })));
     setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
   };
+
+  /**
+   * The steps alone, from an interview opened on the route itself.
+   *
+   * `loadPlan` replaces the whole form because it follows a conversation about
+   * the whole workflow. Here the FDE asked only what the route should do, so
+   * the name and description they already wrote stay as they are.
+   */
+  const loadPlanSteps = (plan: WorkflowPlan) => {
+    if (!plan.can_build) return;
+    setSteps(plan.steps.map((step) => ({ ...step })));
+    setSelectedKey("");
+    setMessage("שלבי הסוכן נטענו לקנבס. יש לבדוק את החיבורים לפני השמירה.");
+  };
   const reset = () => { setForm(emptyWorkflow); setSteps([]); };
 
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
     libraryError, selectedKey, setSelectedKey, update, edit, addStep,
     updateStep, removeStep, connectStep, disconnectStep, save, publish,
-    dryRun, loadPlan, reset,
+    dryRun, loadPlan, loadPlanSteps, reset,
   };
 }
 
@@ -256,19 +272,113 @@ function WorkflowFields({ editor }: { editor: Editor }) {
   return (
     <>
       <div className="form-grid two">
-        <label><span>שם התהליך *</span><input value={form.name}
-          onChange={(e) => update("name", e.target.value)} /></label>
-        <label><span>תפקיד</span><select value={form.role}
-          onChange={(e) => update("role", e.target.value)}>
-          <option value="baseline">בסיס — תמיד בריצה הראשונה</option>
-          <option value="detail">פירוט — לשאלות המשך</option>
-          <option value="both">שניהם</option>
-        </select></label>
+        <label><span>שם התהליך *
+          <WorkflowFieldAgent field="name" editor={editor} /></span>
+          <input value={form.name}
+            onChange={(e) => update("name", e.target.value)} /></label>
+        <label><span>תפקיד
+          <WorkflowFieldAgent field="role" editor={editor} /></span>
+          <select value={form.role}
+            onChange={(e) => update("role", e.target.value)}>
+            <option value="baseline">בסיס — תמיד בריצה הראשונה</option>
+            <option value="detail">פירוט — לשאלות המשך</option>
+            <option value="both">שניהם</option>
+          </select></label>
       </div>
-      <label><span>מתי להשתמש בתהליך</span><textarea value={form.description}
-        onChange={(e) => update("description", e.target.value)} rows={2} />
+      <label><span>מתי להשתמש בתהליך
+        <WorkflowFieldAgent field="description" editor={editor} /></span>
+        <textarea value={form.description}
+          onChange={(e) => update("description", e.target.value)} rows={2} />
       </label>
     </>
+  );
+}
+
+/** What each focused workflow interview is about, in the FDE's words. */
+const WORKFLOW_FIELD_LABELS: Record<WorkflowFocus, string> = {
+  name: "שם התהליך",
+  role: "תפקיד",
+  description: "מתי להשתמש בתהליך",
+  system_prompt: "הנחיית סיכום לתהליך",
+  steps: "מה המסלול עושה",
+};
+
+/** The focused fields, and what the agent writes back for each. */
+type WorkflowFocus =
+  "name" | "role" | "description" | "system_prompt" | "steps";
+
+/**
+ * The agent for one part of the workflow form.
+ *
+ * `steps` is the reason this exists on more than the text fields: "what the
+ * route does" is a question about the wiring, not about a sentence, so that
+ * conversation applies the plan's whole step array — the same thing the
+ * drawer's "load into the form" button does, scoped to one question. Every
+ * other focus writes its single field and nothing else, so a conversation
+ * about the summary instruction cannot quietly re-wire the canvas.
+ */
+function WorkflowFieldAgent({
+  field, editor,
+}: {
+  field: WorkflowFocus;
+  editor: Editor;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = WORKFLOW_FIELD_LABELS[field];
+  const chat = usePlanChat<WorkflowPlan>(
+    (messages, draft) => api.planWorkflowChat(messages, draft, field),
+  );
+  const plan = chat.draft;
+  // A step plan is only offerable once the shared validation gate accepted it;
+  // `can_build` false means it names a tool that is not in the catalog.
+  const offerSteps = field === "steps" && !!plan?.steps.length
+    && plan.can_build;
+  const value = field === "steps" ? "" : (plan?.[field] ?? "");
+  return (
+    <FieldAgentPopover open={open} field={field} label={label}
+      busy={chat.pending}
+      onOpen={() => setOpen(true)} onClose={() => setOpen(false)}>
+      <PlanChat chat={chat} title={label}
+        hint={field === "steps"
+          ? "ספרו מה המסלול צריך לענות עליו. הסוכן יציע שלבים מהקטלוג ואת החיבור ביניהם."
+          : `שוחחו עם הסוכן על "${label}" בלבד.`}>
+        {plan && <div className="planner-result" aria-live="polite">
+          {field === "steps" && plan.rationale && <p>{plan.rationale}</p>}
+          {offerSteps && <ol className="plan-chat-steps">
+            {plan.steps.map((step) =>
+              <li key={step.key}>
+                <b dir="ltr">{step.key}</b> <span>{step.name}</span>
+                <small dir="ltr">
+                  {step.input_source}
+                  {step.input_field ? ` → ${step.input_field}` : ""}
+                </small>
+              </li>)}
+          </ol>}
+          {field === "steps" && !!plan.missing_tools.length && <section>
+            <strong>מה חסר כדי להשלים את הבקשה</strong>
+            <ul>{plan.missing_tools.map((item, index) =>
+              <li key={`${item.name}-${index}`}><b>{item.name}</b>
+                <span>{item.reason}</span>
+              </li>)}
+            </ul>
+          </section>}
+          {value && <>
+            <p className="field-agent-proposal-label">ההצעה לשדה:</p>
+            <p className="field-agent-proposal">{value}</p>
+          </>}
+          {chat.ready && (offerSteps || !!value) &&
+            <button type="button" className="planner-button"
+              onClick={() => {
+                if (field === "steps") editor.loadPlanSteps(plan);
+                else editor.update(field, value);
+                setOpen(false);
+              }}>
+              <Sparkles size={16} aria-hidden="true" />
+              {field === "steps" ? " טעינת השלבים לקנבס" : " טעינה לשדה"}
+            </button>}
+        </div>}
+      </PlanChat>
+    </FieldAgentPopover>
   );
 }
 
@@ -280,7 +390,8 @@ function StepEditor({
 }) {
   return (
     <section className="step-editor">
-      <header><div><h4>שלבי התהליך</h4>
+      <header><div><h4>שלבי התהליך
+        <WorkflowFieldAgent field="steps" editor={editor} /></h4>
         <p>גררו חיבור בין שלבים בקנבס, או ערכו כל שלב בטופס שמתחתיו.</p>
       </div><button type="button" className="secondary-button"
         onClick={editor.addStep} disabled={!packages.length}>
@@ -441,7 +552,9 @@ function AdvancedWorkflowFields({ editor }: { editor: Editor }) {
   return (
     <details className="advanced-block">
       <summary><Sparkles size={16} /> הנחיה, חוזה פלט ודוגמאות</summary>
-      <label><span>הנחיית סיכום לתהליך</span>
+      <label><span>הנחיית סיכום לתהליך
+        <small>איך לקרוא את מה שחזר — נקרא על ידי המודל שמנסח את הסעיף</small>
+        <WorkflowFieldAgent field="system_prompt" editor={editor} /></span>
         <textarea value={editor.form.system_prompt}
           onChange={(e) => editor.update("system_prompt", e.target.value)}
           rows={5} />

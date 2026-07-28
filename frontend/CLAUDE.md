@@ -102,9 +102,9 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - The interview drawer is portalled to `document.body`, but a portal still
   propagates events through the React tree — it must stop `submit` and `Enter`
   at its own boundary, or sending a message saves the editor's form.
-- **The agent is also reachable per field.** Each prose field on the tool form
-  carries its own small agent button (`FieldAgentPopover`), which opens the
-  interview in a popover beside that field rather than in the drawer that
+- **The agent is also reachable per field**, on both studio editors. Each
+  field carries its own small agent button (`FieldAgentPopover`), which opens
+  the interview in a popover beside that field rather than in the drawer that
   covers the form — the value being negotiated stays next to the field it
   lands in. The client sends `focus_field`, the prompt scopes the interview to
   it, and **only that field is written back**: the turn carries the whole
@@ -114,6 +114,19 @@ ID/evidence, and reuse the conversation's stored boundaries.
   `submit`/`Enter` guards for the same reason; being portalled, it is also
   positioned from viewport coordinates and must re-place on `scroll`
   (capturing, since scroll does not bubble) and `resize`.
+- On the workflow editor the focusable parts are `name`, `role`,
+  `description`, `system_prompt`, and **`steps` — the route itself**. `steps`
+  is the one focus that does not write a string: it applies the plan's whole
+  step array through `loadPlanSteps`, which unlike `loadPlan` leaves the name
+  and description the FDE already wrote. It is offered only when the shared
+  validation gate passed (`can_build`), since a plan naming a tool outside the
+  catalog cannot be loaded onto the canvas.
+- `description` and `system_prompt` answer two different questions and the UI
+  must keep them apart: `description` is **what the route does** (read by an
+  FDE choosing between routes), `system_prompt` is **how to read what came
+  back** (read by the model that writes the section). The latter's label
+  carries that as a visible hint, because the distinction is what makes the
+  field fillable.
 - A question may carry `options` — 2–4 clickable answers, the first being the
   agent's `recommendation`, which replace the lone "accept the recommendation"
   button when present. They are a shortcut past typing, never a closed menu:

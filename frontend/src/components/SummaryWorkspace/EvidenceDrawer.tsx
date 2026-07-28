@@ -8,10 +8,14 @@ import type { Evidence } from "@/types";
 type LoadedEvidence = { runId: string; items: Evidence[]; error: string };
 
 export default function EvidenceDrawer({
-  runId, open,
+  runId, open, evidenceIds, title,
 }: {
   runId: string;
   open: boolean;
+  /** When set, only these records show — a source chip opens its own evidence
+      rather than the whole run's. */
+  evidenceIds?: string[];
+  title?: string;
 }) {
   const [loaded, setLoaded] = useState<LoadedEvidence | null>(null);
   useEvidence(runId, open, setLoaded);
@@ -21,7 +25,15 @@ export default function EvidenceDrawer({
   if (!current) return <p className="loading-line">
     <LoaderCircle size={16} /> טוען ראיות…
   </p>;
-  return <EvidenceList items={current.items} />;
+  const items = evidenceIds
+    ? current.items.filter((item) => evidenceIds.includes(item.id))
+    : current.items;
+  return (
+    <div className="evidence-panel">
+      {title && <h3 className="evidence-title">{title}</h3>}
+      <EvidenceList items={items} />
+    </div>
+  );
 }
 
 function useEvidence(
