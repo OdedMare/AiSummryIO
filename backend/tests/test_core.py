@@ -28,6 +28,7 @@ from app.dal.repository import Repository
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
+from app.bl.workflow_engine_pkg.execution import chunk_facts
 from app.api.models import (
     ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
 )
@@ -1684,3 +1685,91 @@ def test_reload_picks_up_an_edit_without_a_restart():
     finally:
         path.unlink()
         _loader.clear_cache()
+
+
+def test_fact_chunks_keep_whole_rows_so_values_stay_correlated():
+    """Grouping values per field destroyed which value belonged to which row.
+
+    A summary cannot say "the open case is the 2023 one" from five names and
+    five dates listed separately.
+    """
+    records = [
+        {"case": "C-1", "state": "פתוח"},
+        {"case": "C-2", "state": "סגור"},
+    ]
+
+    chunk = chunk_facts({"cases": records})[0]
+
+    assert chunk["rows"] == records
+    assert chunk["row_count"] == 2
+
+
+def test_chunk_statistics_are_computed_over_every_row_not_a_sample():
+    """Frequency is arithmetic, so it is derived in Python and cannot be
+    hallucinated. This is what lets a section say "2 of 3"."""
+    records = [{"state": "פתוח"}, {"state": "פתוח"}, {"state": "סגור"}]
+
+    stats = chunk_facts({"cases": records})[0]["stats"]["state"]
+
+    assert stats["counts"] == {"פתוח": 2, "סגור": 1}
+    assert stats["present"] == 3
+    assert stats["missing"] == 0
+    assert stats["distinct"] == 2
+
+
+def test_missing_values_are_counted_rather_than_silently_dropped():
+    records = [{"department": "רישוי"}, {"department": None}, {}]
+
+    stats = chunk_facts({"cases": records})[0]["stats"]["department"]
+
+    assert stats["present"] == 1
+    assert stats["missing"] == 2
+
+
+def test_numeric_fields_report_range_and_mean():
+    records = [{"amount": 10}, {"amount": 20}, {"amount": 30}]
+
+    stats = chunk_facts({"cases": records})[0]["stats"]["amount"]
+
+    assert (stats["min"], stats["max"], stats["mean"]) == (10.0, 30.0, 20.0)
+
+
+def test_high_cardinality_fields_omit_counts_to_keep_the_payload_small():
+    """Counting every value of an identifier column tells the model nothing
+    and would bloat the prompt."""
+    records = [{"case": "C-%d" % index} for index in range(40)]
+
+    stats = chunk_facts({"cases": records})[0]["stats"]["case"]
+
+    assert "counts" not in stats
+    assert stats["distinct"] == 40
+
+
+def test_summary_fields_policy_still_hides_internal_columns_from_rows():
+    """`x-summary: false` must hold for the new row payload too, or a field
+    kept out of the summary would leak through `rows`."""
+    records = [{"owner_name": "דנה", "internal_code": "SECRET"}]
+
+    chunk = chunk_facts({"owners": records}, {"owners": ["owner_name"]})[0]
+
+    assert chunk["rows"] == [{"owner_name": "דנה"}]
+    assert "internal_code" not in chunk["stats"]
+
+
+def test_a_section_falling_back_is_marked_degraded_rather_than_looking_thin():
+    """Without the flag a reader cannot tell "the model failed" from
+    "there is little data", and wrongly concludes the latter."""
+    class FailingLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AgentError("model unavailable")
+
+    service = SummaryService(None, None, FailingLlm(), None)
+    workflow = {"name": "בעלות", "system_prompt": "", "output_schema": {}}
+
+    section = service._section_summary(
+        workflow, [{"step": "owners", "row_count": 3}], []
+    )
+
+    assert section["degraded"] is True
+    assert section["warnings"]
