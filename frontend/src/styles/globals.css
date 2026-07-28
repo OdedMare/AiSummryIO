@@ -806,27 +806,6 @@ button:disabled {
   transition: width 240ms ease;
 }
 
-.executive-summary {
-  position: relative;
-  padding: 22px 24px;
-  margin-bottom: 16px;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 85%, var(--surface)), var(--surface));
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
-  border-radius: var(--radius);
-}
-
-.executive-summary::after {
-  position: absolute;
-  inset: -80px auto auto -60px;
-  width: 180px;
-  height: 180px;
-  content: "";
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  border-radius: 50%;
-}
-
 .eyebrow {
   color: var(--primary);
   font-size: 11px;
@@ -834,114 +813,180 @@ button:disabled {
   letter-spacing: 0.06em;
 }
 
-.executive-summary p {
-  position: relative;
-  z-index: 1;
-  margin: 9px 0 0;
+/* One continuous answer, not a stack of panels. No card, no border, no fill:
+   the measure and the rhythm carry it, so a reader follows a single thread. */
+.answer-body {
+  max-width: 68ch;
+  margin-bottom: 22px;
+}
+
+.answer-body > p {
+  margin: 0 0 14px;
   font-size: 16px;
-  line-height: 1.8;
+  line-height: 1.85;
   white-space: pre-line;
 }
 
 /* The one-line answer. Heavier than the body so a reader who stops after it
    still has the answer. */
-.executive-summary p.headline {
-  font-size: 18px;
+.answer-headline {
+  font-size: 21px;
   font-weight: 700;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 /* What the summary rests on: supporting, never competing with the answer. */
-.executive-summary p.coverage-note,
-.section-coverage {
+.answer-coverage {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.6;
 }
 
-.section-coverage {
-  margin: 6px 0 0;
+.answer-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
-.section-degraded {
-  margin: 8px 0 0;
+.answer-list {
+  margin: 0 0 16px;
+}
+
+.answer-list h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.answer-list ul {
+  padding-inline-start: 20px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.answer-list li {
+  margin-bottom: 4px;
+}
+
+.answer-list.risk h3 {
+  color: var(--danger);
+}
+
+.answer-list.gap h3 {
+  color: var(--warning);
+}
+
+/* Section warnings lost their card; they collect here so a partial source
+   still says so inside the answer rather than only on its chip. */
+.answer-warnings {
+  padding-top: 14px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.answer-warnings h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
   color: var(--warning);
   font-size: 13px;
-  line-height: 1.6;
+  font-weight: 700;
 }
 
-.fact-group + .fact-group {
-  margin-top: 12px;
-}
-
-.fact-group h4 {
-  margin: 0 0 6px;
+.answer-warnings ul {
+  padding-inline-start: 20px;
+  margin: 0;
   color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+/* Provenance for the merged prose above: which workflows it rests on. */
+.source-row {
+  padding-top: 16px;
+  margin-bottom: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.source-row h2 {
+  margin: 0 0 10px;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
 
-.list-block {
-  padding: 14px 16px;
-  margin-bottom: 18px;
+.source-row ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.source-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 999px;
+  text-align: right;
 }
 
-.list-block h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 700;
+.source-chip:hover {
+  border-color: var(--border-strong);
 }
 
-.list-block ul {
-  padding-inline-start: 20px;
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.7;
+.source-chip.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: var(--primary);
 }
 
-.list-block.risk {
-  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
-}
-
-.list-block.risk h3 {
-  color: var(--danger);
-}
-
-.list-block.gap {
-  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
-}
-
-.list-block.gap h3 {
+.source-chip svg {
   color: var(--warning);
 }
 
-.finding-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-  margin-bottom: 18px;
+.source-chip .source-name {
+  font-weight: 600;
 }
 
-.finding-grid > div {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 12px 14px;
-  color: var(--text-soft);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  line-height: 1.55;
+.source-chip small {
+  color: var(--text-muted);
 }
 
-.finding-grid svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--success);
+.source-chip.active small {
+  color: inherit;
+}
+
+.source-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--success);
+  border-radius: 50%;
+}
+
+.source-dot.partial {
+  background: var(--warning);
+}
+
+.source-dot.failed {
+  background: var(--danger);
+}
+
+.evidence-title {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .skill-results {
@@ -984,80 +1029,6 @@ button:disabled {
   margin-top: 12px;
   color: var(--text-muted);
   border-top: 1px solid var(--border);
-}
-
-.section-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.summary-section {
-  padding: 0 18px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-soft);
-}
-
-.section-toggle {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 24px;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 62px;
-  padding: 8px 0;
-  text-align: right;
-  background: transparent;
-  border: 0;
-}
-
-.section-toggle > span:nth-child(2) {
-  display: flex;
-  flex-direction: column;
-}
-
-.section-toggle small {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-}
-
-.section-status {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  color: var(--success);
-  background: var(--success-soft);
-  border-radius: 9px;
-}
-
-.section-status.partial,
-.section-status.failed {
-  color: var(--warning);
-  background: var(--warning-soft);
-}
-
-.summary-section > p {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.7;
-  white-space: pre-line;
-}
-
-.section-details {
-  padding-top: 12px;
-  margin-top: 14px;
-  border-top: 1px solid var(--border);
-}
-
-.section-details ul {
-  margin: 0;
-  padding-inline-start: 20px;
-  color: var(--text-soft);
-  line-height: 1.7;
 }
 
 .warning-box,
@@ -3211,10 +3182,6 @@ select:focus {
   .workspace {
     width: calc(100% - 24px);
     padding-top: 24px;
-  }
-
-  .finding-grid {
-    grid-template-columns: 1fr;
   }
 
   .skill-hint-list,

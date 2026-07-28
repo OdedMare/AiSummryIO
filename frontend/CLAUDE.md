@@ -45,6 +45,23 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - All icon buttons have an accessible name and at least a 44px target.
 - Status changes use text/icons, not color alone; errors use `role="alert"`.
 - Evidence is progressive disclosure: summary first, raw records on demand.
+- **The summary is one continuous answer, not a card per workflow.** `.answer-body`
+  merges every section into flowing prose (headline, summary, findings, risks,
+  gaps) at a capped measure, and `SourceRow` below it is where the section model
+  survives — as provenance. A source chip opens that workflow's own evidence by
+  filtering the drawer on its `evidence_ids`; "הצגת ראיות" clears the filter back
+  to the whole run.
+- Citations are **section-level, never per-claim**, because `_safe_section` in
+  `synthesis.py` passes only `workflow_key/name/status/summary/facts/warnings` to
+  the final-summary model — `evidence_ids` never reaches it, so the model cannot
+  tag a claim with a source. Do not render per-claim citation chips off the
+  current API; they would be guesses, and every claim must stay traceable.
+- Section `warnings` and `degraded` lost their card, so they collect in
+  `.answer-warnings` at the end of the answer. A partial source has to say so in
+  the prose, not only as a dot on its chip.
+- Before synthesis finishes `result` is null while sections stream in, so
+  `PendingAnswer` renders the arrived section summaries as paragraphs. The answer
+  assembles as sources land instead of staying blank and popping in whole.
 - FDE language is concrete: “טול”, “חבילת FLAPI”, “קלט”, “פלט”, “שלב”,
   “טיוטה”, “פורסם”.
 - AI workflow proposals are labeled as suggestions and loaded only as drafts
