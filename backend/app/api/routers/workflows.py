@@ -23,6 +23,7 @@ def build(context) -> APIRouter:
     def plan_workflow_chat(payload: PlanChatCreate):
         return context.service.plan_workflow_chat(
             [item.model_dump() for item in payload.messages], payload.draft,
+            payload.focus_field,
         )
 
     @router.post("/{workflow_id}/publish")

@@ -131,11 +131,13 @@ export const api = {
       body: JSON.stringify(data),
     }),
   planWorkflowChat: (
-    messages: PlanChatMessage[], draft: WorkflowPlan | null,
+    messages: PlanChatMessage[], draft: WorkflowPlan | null, focusField = "",
   ) =>
     request<WorkflowPlanChatTurn>("/api/workflows/plan-chat", {
       method: "POST",
-      body: JSON.stringify({ messages, draft: draft ?? {} }),
+      body: JSON.stringify({
+        messages, draft: draft ?? {}, focus_field: focusField,
+      }),
     }),
   publishWorkflow: (id: string) =>
     request<WorkflowVersion>(`/api/workflows/${id}/publish`, { method: "POST" }),
