@@ -44,12 +44,18 @@ export default function WorkflowCanvas({
   const edges = useMemo(() => canvasEdges(steps), [steps]);
 
   // A step carries exactly one `input_source`, so a new connection replaces
-  // whatever fed that node rather than adding a second incoming edge.
+  // whatever fed that node rather than adding a second incoming edge. The
+  // source handle names the output field, so one drag sets both halves of
+  // the mapping.
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
     if (connection.source === connection.target) return;
     if (createsCycle(steps, connection.source, connection.target)) return;
-    onConnectStep(connection.target, sourceExpression(connection.source));
+    onConnectStep(
+      connection.target,
+      sourceExpression(connection.source),
+      connectedField(connection.sourceHandle),
+    );
   }, [steps, onConnectStep]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
@@ -59,6 +65,29 @@ export default function WorkflowCanvas({
       }
     });
   }, [onDisconnectStep]);
+
+  /**
+   * Dragging an existing edge's endpoint elsewhere — moving a string.
+   *
+   * React Flow reports this as an update rather than a remove plus a
+   * connect, so without it an edge dragged onto another field snapped back.
+   */
+  const onEdgeUpdate = useCallback((previous: Edge, connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    if (connection.source === connection.target) return;
+    if (createsCycle(steps, connection.source, connection.target)) return;
+    // A moved edge can leave its old target unfed; release it first so the
+    // step falls back to the main identifier instead of keeping a mapping
+    // nothing points at any more.
+    if (previous.target !== connection.target) {
+      onDisconnectStep(previous.target);
+    }
+    onConnectStep(
+      connection.target,
+      sourceExpression(connection.source),
+      connectedField(connection.sourceHandle),
+    );
+  }, [steps, onConnectStep, onDisconnectStep]);
 
   return (
     <div className="workflow-canvas" aria-label="עריכת חיבורי התהליך">
@@ -135,19 +164,32 @@ function StepNode({ data }: NodeProps<StepNodeData>) {
         {data.incompleteReason}
       </p>}
       <OutputFieldList data={data} />
-      <Handle type="source" position={Position.Left} />
     </div>
   );
 }
 
-/** The tool's output contract, or why there isn't one to show. */
+/**
+ * The tool's output contract — and the connection points themselves.
+ *
+ * Every field carries its own source handle, so dragging from `site_id` to
+ * another step sets both `input_source` and `input_field` in one gesture.
+ * The field a step reads used to be a separate dropdown, which meant wiring
+ * a step was two disconnected acts: draw the edge, then remember which field
+ * carried the identifier.
+ */
 function OutputFieldList({ data }: { data: StepNodeData }) {
   if (!data.outputFields.length) {
-    return <p className="canvas-node-empty">
-      {data.packageChosen
-        ? "לטול אין עדיין חוזה פלט או דוגמאות"
-        : "בחרו טול כדי לראות את הפלט"}
-    </p>;
+    return (
+      <p className="canvas-node-empty">
+        {data.packageChosen
+          ? "לטול אין עדיין חוזה פלט או דוגמאות"
+          : "בחרו טול כדי לראות את הפלט"}
+        {/* Without a contract there is still something to connect: the whole
+            output, with the field named by hand in the step form. */}
+        <Handle type="source" position={Position.Left}
+          id={ANY_FIELD_HANDLE} />
+      </p>
+    );
   }
   return (
     <ul className="canvas-node-fields" dir="ltr">
@@ -156,6 +198,8 @@ function OutputFieldList({ data }: { data: StepNodeData }) {
           className={field.consumed ? "is-consumed" : undefined}>
           <b>{field.name}</b>
           <span>{field.type}</span>
+          <Handle type="source" position={Position.Left} id={field.name}
+            title={`חיבור מהשדה ${field.name}`} />
         </li>)}
       {data.hiddenFieldCount > 0 && <li className="canvas-node-more" dir="rtl">
         ועוד {data.hiddenFieldCount} שדות
@@ -163,6 +207,9 @@ function OutputFieldList({ data }: { data: StepNodeData }) {
     </ul>
   );
 }
+
+/** Source handle for a package with no declared output contract. */
+const ANY_FIELD_HANDLE = "*";
 
 type OutputField = { name: string; type: string; consumed: boolean };
 
