@@ -2410,60 +2410,139 @@ select:focus {
   color: var(--danger);
 }
 
-.graph-preview {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  overflow-x: auto;
+/* The drag-to-connect authoring canvas. Its height is fixed rather than
+   content-driven: React Flow measures its container, and a container that
+   grows with the graph would resize on every pan. */
+.workflow-canvas {
+  height: 340px;
+  margin-bottom: 12px;
+  overflow: hidden;
   background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
 }
 
-.graph-preview span {
+.workflow-canvas .react-flow__renderer {
+  /* The app is RTL, but the graph is laid out along a left-to-right x axis,
+     so the canvas opts back out for its own coordinate space. */
+  direction: ltr;
+}
+
+.workflow-canvas .react-flow__background {
+  background: var(--surface-2);
+}
+
+.workflow-canvas .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text-soft);
+}
+
+.workflow-canvas .react-flow__controls-button:hover {
+  background: var(--surface-3);
+}
+
+.workflow-canvas .react-flow__edge-path {
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+
+.workflow-canvas .react-flow__edge.selected .react-flow__edge-path,
+.workflow-canvas .react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--primary);
+}
+
+.workflow-canvas .react-flow__edge-text {
+  fill: var(--text-muted);
+  font-size: 10px;
+}
+
+.workflow-canvas .react-flow__edge-textbg {
+  fill: var(--surface-2);
+}
+
+.workflow-canvas .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--primary);
+  border: 2px solid var(--surface);
+}
+
+.canvas-node {
   display: flex;
   align-items: center;
-  gap: 8px;
-  white-space: nowrap;
+  gap: 9px;
+  width: 210px;
+  padding: 9px 11px;
+  direction: rtl;
+  text-align: right;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  box-shadow: var(--shadow-soft);
 }
 
-.graph-preview b {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 7px 9px;
+.canvas-node strong {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.canvas-node small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.canvas-node-mapping {
+  color: var(--primary);
+}
+
+.canvas-node-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   color: var(--primary);
   background: var(--primary-soft);
-  border-radius: 7px;
+  border-radius: 8px;
+}
+
+/* The two workflow-level inputs. Dashed, because they are given to the
+   workflow rather than produced by a step. */
+.canvas-node-source {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.canvas-node-step.is-selected {
+  border-color: var(--primary);
+  box-shadow: var(--focus);
+}
+
+/* A step that cannot be published yet: no tool chosen, or a mapped step with
+   no field. Marked by a border and an icon tint, never by color alone --
+   the missing value is also visible in the node's own text. */
+.canvas-node-step.is-incomplete {
+  border-color: var(--warning);
+}
+
+.canvas-node-step.is-incomplete .canvas-node-icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.canvas-hint {
+  margin: 8px 2px 0;
+  color: var(--text-muted);
   font-size: 11px;
+  line-height: 1.6;
 }
 
-/* The mapping a step reads through, under its name. */
-.graph-preview b small {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 400;
-}
-
-/* One dependency level: its steps stack vertically because they run in
-   parallel, while levels themselves flow along the row in order. */
-.graph-level {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.graph-level-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.graph-level-label {
-  color: var(--text-muted);
-  font-size: 10px;
-  white-space: nowrap;
+.step-card.is-selected {
+  border-color: var(--primary);
 }
 
 .panel-empty {

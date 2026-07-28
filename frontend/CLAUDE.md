@@ -55,8 +55,17 @@ ID/evidence, and reuse the conversation's stored boundaries.
   suggestions. Schema field chips support drag/drop plus a keyboard/touch click
   alternative; `x-summary: false` excludes a field only from model-facing
   summary facts, never from raw evidence.
-- Agent Studio uses structured forms and a read-only dependency preview,
+- Agent Studio uses structured forms and a drag-to-connect step canvas,
   never an arbitrary code/SQL/HTTP editor.
+- `WorkflowCanvas` is a view over the step array, not a second source of
+  truth: an edge writes `input_source` and `depends_on` on the target step,
+  and the step cards below it stay the place every field is labeled and
+  edited. A step holds one `input_source`, so a new edge replaces the old
+  one; deleting an edge returns the step to `workflow.id`. Cycles are
+  refused at drag time rather than at publish. Steps are sorted by
+  dependency level in `workflowPayload`, because the backend resolves
+  `steps.<key>` only against steps earlier in the array while the canvas
+  lets an FDE wire a node backwards.
 - The tool interview ("שאלו את הסוכן") opens only after Fetch 1 ID has
   returned rows, and the disabled button carries a visible reason. The FDE owns
   the connection: it is seeded into every turn as fact, and the interview

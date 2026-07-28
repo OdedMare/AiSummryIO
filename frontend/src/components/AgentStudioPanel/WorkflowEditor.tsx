@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import {
-  CheckCircle2, ChevronDown, GitFork, Play, Plus, Save, Send, Sparkles,
+  CheckCircle2, ChevronDown, Play, Plus, Save, Send, Sparkles,
   Trash2, Workflow,
 } from "lucide-react";
 import { api } from "@/services/api";
@@ -11,6 +11,7 @@ import type {
 } from "@/types";
 import { emptyWorkflow, parseJson } from "./forms";
 import { PlanChat, PlanChatDrawer, usePlanChat } from "./PlanChat";
+import WorkflowCanvas, { mappedStep, orderedSteps } from "./WorkflowCanvas";
 
 export default function WorkflowEditor({
   packages, workflows, onRefresh,
@@ -42,6 +43,9 @@ function useWorkflowEditor(
   const [dryRunId, setDryRunId] = useState("");
   const [dryResult, setDryResult] = useState("");
   const [saving, setSaving] = useState(false);
+  // The canvas and the step cards are two views of one selection: clicking a
+  // node scrolls its card into view and highlights both.
+  const [selectedKey, setSelectedKey] = useState("");
 
   const update = (key: keyof typeof emptyWorkflow, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -49,14 +53,28 @@ function useWorkflowEditor(
     setForm(workflowForm(item));
     setSteps(item.steps.map((step) => ({ ...step }))); setDryResult("");
   };
-  const addStep = () => setSteps((current) => [
-    ...current, newStep(current, packages)
-  ]);
+  const addStep = () => setSteps((current) => {
+    const step = newStep(current, packages);
+    setSelectedKey(step.key);
+    return [...current, step];
+  });
   const updateStep = (index: number, patch: Partial<WorkflowStep>) =>
     setSteps((current) => current.map((step, position) =>
       position === index ? patchedStep(step, patch) : step));
   const removeStep = (index: number) =>
-    setSteps((current) => current.filter((_, position) => position !== index));
+    setSteps((current) => releaseDependents(
+      current.filter((_, position) => position !== index),
+      current[index]?.key ?? "",
+    ));
+
+  /** Point one step at a new source; the canvas draws this as an edge. */
+  const connectStep = (targetKey: string, source: string) =>
+    setSteps((current) => current.map((step) =>
+      step.key === targetKey
+        ? patchedStep(step, { input_source: source })
+        : step));
+  const disconnectStep = (targetKey: string) =>
+    connectStep(targetKey, "workflow.id");
 
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
@@ -97,7 +115,8 @@ function useWorkflowEditor(
 
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
-    libraryError, update, edit, addStep, updateStep, removeStep, save, publish,
+    libraryError, selectedKey, setSelectedKey, update, edit, addStep,
+    updateStep, removeStep, connectStep, disconnectStep, save, publish,
     dryRun, loadPlan, reset,
   };
 }
@@ -253,17 +272,22 @@ function StepEditor({
   return (
     <section className="step-editor">
       <header><div><h4>שלבי התהליך</h4>
-        <p>מיפוי הקלט מגדיר את חיבורי התלות.</p>
+        <p>גררו חיבור בין שלבים בקנבס, או ערכו כל שלב בטופס שמתחתיו.</p>
       </div><button type="button" className="secondary-button"
         onClick={editor.addStep} disabled={!packages.length}>
         <Plus size={16} /> הוספת שלב
       </button></header>
+      {!!editor.steps.length && <WorkflowCanvas
+        steps={editor.steps} packages={packages}
+        selectedKey={editor.selectedKey}
+        onSelectStep={editor.setSelectedKey}
+        onConnectStep={editor.connectStep}
+        onDisconnectStep={editor.disconnectStep} />}
       {editor.steps.map((step, index) =>
         <StepCard key={`${step.key}-${index}`} step={step} index={index}
           packages={packages} editor={editor} />)}
       {!editor.steps.length &&
         <p className="panel-empty">הוסיפו שלב ראשון ובחרו טול מהקטלוג.</p>}
-      {!!editor.steps.length && <GraphPreview steps={editor.steps} />}
     </section>
   );
 }
@@ -276,8 +300,10 @@ function StepCard({
   packages: PackageVersion[];
   editor: Editor;
 }) {
+  const selected = step.key === editor.selectedKey;
   return (
-    <article className="step-card">
+    <article className={`step-card${selected ? " is-selected" : ""}`}
+      onFocusCapture={() => editor.setSelectedKey(step.key)}>
       <span className="step-number">{index + 1}</span>
       <div className="form-grid two">
         <label><span>מפתח שלב</span><input dir="ltr" value={step.key}
@@ -402,67 +428,6 @@ function outputFields(item: PackageVersion) {
   return [...names].sort();
 }
 
-function GraphPreview({ steps }: { steps: WorkflowStep[] }) {
-  const levels = stepLevels(steps);
-  return (
-    <div className="graph-preview" aria-label="תצוגה מקדימה של התהליך">
-      {levels.map((level, index) =>
-        <div className="graph-level" key={index}>
-          <span className="graph-level-label">
-            {level.length > 1 ? `שלב ${index + 1} · ${level.length} במקביל`
-              : `שלב ${index + 1}`}
-          </span>
-          <div className="graph-level-steps">
-            {level.map((step) =>
-              <b key={step.key}>{step.name}
-                {/* The wiring, spelled out: which earlier step this reads and
-                    through which field, so a mapping is visible without
-                    opening the step. */}
-                {mappedStep(step) && <small dir="ltr">
-                  {sourceName(step, steps)}
-                  {step.input_field ? ` → ${step.input_field}` : " → ?"}
-                </small>}
-              </b>)}
-          </div>
-          {index < levels.length - 1 && <GitFork size={15} />}
-        </div>)}
-    </div>
-  );
-}
-
-/** The display name of the step a mapped step reads from. */
-function sourceName(step: WorkflowStep, steps: WorkflowStep[]) {
-  const key = step.input_source.split(".")[1] ?? "";
-  return steps.find((prior) => prior.key === key)?.name || key;
-}
-
-// Mirrors the backend's step_levels: steps whose dependencies are all
-// satisfied by earlier levels share a level and run concurrently.
-function stepLevels(steps: WorkflowStep[]) {
-  const levels: WorkflowStep[][] = [];
-  const placed = new Set<string>();
-  let remaining = [...steps];
-  while (remaining.length) {
-    const level = remaining.filter((step) =>
-      dependencies(step).every((key) => placed.has(key)));
-    if (!level.length) {
-      levels.push(remaining);
-      break;
-    }
-    level.forEach((step) => placed.add(step.key));
-    levels.push(level);
-    remaining = remaining.filter((step) => !level.includes(step));
-  }
-  return levels;
-}
-
-function dependencies(step: WorkflowStep) {
-  const declared = new Set(step.depends_on ?? []);
-  const parts = (step.input_source || "workflow.id").split(".");
-  if (parts.length >= 2 && parts[0] === "steps") declared.add(parts[1]);
-  return [...declared];
-}
-
 function AdvancedWorkflowFields({ editor }: { editor: Editor }) {
   return (
     <details className="advanced-block">
@@ -521,8 +486,26 @@ function workflowPayload(form: typeof emptyWorkflow, steps: WorkflowStep[]) {
     ...form, workflow_key: form.workflow_key || undefined,
     output_schema: parseJson<Record<string, unknown>>(form.output_schema, {}),
     examples: parseJson<Array<Record<string, unknown>>>(form.examples, []),
-    steps,
+    // The canvas allows wiring a node backwards into one drawn earlier, but
+    // the backend reads a step's source from the steps already seen in the
+    // array. Ordering by dependency level here is what makes an arbitrary
+    // drag order savable.
+    steps: orderedSteps(steps),
   };
+}
+
+/**
+ * Reset any step that read a now-deleted step back to the main identifier.
+ *
+ * Without this a removed step leaves its dependents pointing at a key that no
+ * longer exists, which the canvas cannot draw and publish validation rejects
+ * with a message about a step the FDE can no longer see.
+ */
+function releaseDependents(steps: WorkflowStep[], removedKey: string) {
+  if (!removedKey) return steps;
+  return steps.map((step) => step.input_source === `steps.${removedKey}`
+    ? patchedStep(step, { input_source: "workflow.id" })
+    : step);
 }
 
 // A new step reads the main identifier, so steps stay independent and run in
@@ -542,11 +525,6 @@ function patchedStep(step: WorkflowStep, patch: Partial<WorkflowStep>) {
   next.depends_on = next.input_source.startsWith("steps.")
     ? [next.input_source.split(".")[1]] : [];
   return next;
-}
-
-function mappedStep(step: WorkflowStep) {
-  return step.input_source !== "workflow.id" &&
-    step.input_source !== "workflow.boundaries";
 }
 
 function errorMessage(reason: unknown, fallback: string) {

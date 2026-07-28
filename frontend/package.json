@@ -16,7 +16,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
-    "react-leaflet-draw": "^0.20.6"
+    "react-leaflet-draw": "^0.20.6",
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
