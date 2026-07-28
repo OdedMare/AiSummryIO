@@ -10,10 +10,37 @@ from app.bl.workflow_engine_pkg.schemas import (
 )
 
 
+# How to read the payload `chunk_facts` produces. Appended to the workflow's
+# own prompt rather than replacing it: an FDE writes domain instructions, and
+# these describe the data's shape, which is the same for every workflow.
+_TABULAR_GUIDANCE = """
+מבנה הנתונים: כל פריט ב-facts הוא מקטע של עד 100 שורות, ובו `row_count`,
+`rows` (השורות עצמן), ו-`stats` לכל שדה. `stats` מחושב בקוד על כל שורות
+המקטע: `present`/`missing`, `distinct`, `counts` (שכיחות, לשדות עם עד 15
+ערכים), ו-`min`/`max`/`mean` לשדות מספריים.
+
+כללי קריאה:
+1. פתח בהיקף — כמה שורות ובאילו שלבים. `coverage` יכיל זאת במפורש.
+2. העדף התפלגות על דוגמה. "263 מתוך 412 פתוחים" הוא ממצא; שורה בודדת אינה.
+3. השתמש במספרים מ-`stats` כפי שהם. אל תספור בעצמך ואל תחשב אחוז ללא מכנה.
+4. `missing` גבוה בשדה הוא ממצא על כיסוי — ציין אותו.
+5. חריגים חשובים מהטיפוסי: תאריך עתידי, סגירה לפני פתיחה, כפילות, ערך קיצוני.
+
+חלוקת הפלט:
+- `facts` — ממצאים קונקרטיים על שורות או ישויות.
+- `patterns` — התפלגויות, טווחי זמן וריכוזים.
+- `outliers` — רשומות חריגות בלבד. ריק אם אין.
+- `coverage` — כמה נאסף ומה נכלל, במשפט אחד.
+
+אסור: למנות שורות אחת-אחת; להציג שם שדה כממצא; לקבוע ספירה שאינה ב-`stats`;
+להסיק סיבתיות; להתייחס ל-`row_count` כמספר ישויות ייחודיות.
+"""
+
+
 def section_summary(service, workflow, facts, warnings) -> dict:
-    system = workflow.get("system_prompt") or (
+    system = (workflow.get("system_prompt") or (
         "סכם בעברית את עובדות תהליך העבודה. אל תוסיף מידע שלא קיים."
-    )
+    )) + _TABULAR_GUIDANCE
     user = json.dumps(
         {"workflow": workflow["name"], "facts": facts, "warnings": warnings},
         ensure_ascii=False,
@@ -95,7 +122,17 @@ def _shared_summary(service, question, sections, safe_sections) -> dict:
     prompt = service._repository.published_content(
         "final-summary", "סכם בעברית על סמך העובדות בלבד והחזר JSON."
     )
-    prompt += "\nהחזר skill_results כמערך ריק. כל Skill מופעל בקריאה נפרדת."
+    prompt += (
+        "\nהחזר skill_results כמערך ריק. כל Skill מופעל בקריאה נפרדת."
+        "\n`headline` הוא משפט אחד שעונה על השאלה — מי שקורא רק אותו קיבל"
+        " את התשובה. אל תפתח בתיאור התהליך או במה שחופש."
+        "\n`coverage` מסכם במשפט אחד על כמה נתונים הסיכום נשען, על סמך"
+        " שדות ה-coverage של החלקים. אל תרמוז לכיסוי מלא כשחלק נכשל."
+        "\n`key_findings` מדורג לפי השפעה על החלטה, לא לפי סדר החלקים."
+        " מזג ממצאים חופפים; אל תחזור על ממצא."
+        "\nהשתמש ב-patterns וב-outliers של החלקים: התפלגות רחבה שייכת"
+        " ל-key_findings רק אם היא משנה מסקנה, וחריג שייך ל-risks."
+    )
     payload = json.dumps(
         {"question": question, "sections": safe_sections}, ensure_ascii=False
     )

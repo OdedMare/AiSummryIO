@@ -97,7 +97,10 @@ def _failed_section(workflow: dict, exc: Exception) -> dict:
         "name": workflow["name"],
         "status": "failed",
         "summary": "תהליך העבודה נכשל.",
+        "coverage": "לא נאספו נתונים",
         "facts": [],
+        "patterns": [],
+        "outliers": [],
         "warnings": [str(exc)],
         "suggested_questions": [],
         "evidence_ids": [],
@@ -228,10 +231,16 @@ def _section(workflow, generated, warnings, evidence_ids) -> dict:
         "name": workflow["name"],
         "status": "partial" if warnings else "completed",
         "summary": generated["summary"],
+        "coverage": generated.get("coverage", ""),
         "facts": generated["facts"],
+        "patterns": generated.get("patterns", []),
+        "outliers": generated.get("outliers", []),
         "warnings": warnings + generated["warnings"],
         "suggested_questions": generated["suggested_questions"],
         "fields": generated.get("fields", {}),
+        # True when the section came from `_section_fallback` — the model did
+        # not answer and these are counts, not a summary.
+        "degraded": generated.get("degraded", False),
         "evidence_ids": evidence_ids,
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }

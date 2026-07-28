@@ -148,14 +148,37 @@ WORKFLOW_PLAN_SCHEMA = {
 # One question per turn, and it carries its own recommended answer. Several
 # questions at once is bewildering to answer, and a question without a
 # recommendation makes the FDE do the thinking the agent should have done.
+#
+# `options` are that same recommendation offered as concrete answers to click.
+# The first one is the recommendation itself, so accepting the agent's pick and
+# choosing an alternative are the same gesture rather than two different ones.
+# They are a shortcut, never a menu: free text stays available on every turn,
+# and the model is told to leave `options` empty when the real answers are not
+# enumerable.
 _PLAN_QUESTION_SCHEMA = {
     "type": ["object", "null"],
     "properties": {
         "question": {"type": "string"},
         "recommendation": {"type": "string"},
         "why": {"type": "string"},
+        "options": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    # What the FDE reads on the button.
+                    "label": {"type": "string"},
+                    # Sent as their answer when they click it. Usually a fuller
+                    # sentence than the label, so the interview reads back as a
+                    # conversation rather than a form.
+                    "answer": {"type": "string"},
+                },
+                "required": ["label", "answer"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["question", "recommendation", "why"],
+    "required": ["question", "recommendation", "why", "options"],
     "additionalProperties": False,
 }
 

@@ -37,14 +37,19 @@ _MAX_MESSAGE_CHARS = 4000
 _MAX_SAMPLE_ROWS = 25
 _MAX_SAMPLE_FIELDS = 20
 _MAX_VALUE_CHARS = 200
+# Clickable answers per question. Past four the FDE is reading a list instead
+# of choosing, which is the deliberation the options exist to save.
+_MAX_OPTIONS = 4
+# A label is a button caption; the full sentence lives in `answer`.
+_MAX_OPTION_CHARS = 120
 
 
 def plan_tool_chat(
     service, messages: List[dict], draft: Optional[dict],
-    inspection: Optional[dict],
+    inspection: Optional[dict], focus_field: str = "",
 ) -> dict:
     """One turn of tool planning, optionally carrying Fetch 1 ID results."""
-    return _ToolPlanner(service).turn(messages, draft, inspection)
+    return _ToolPlanner(service).turn(messages, draft, inspection, focus_field)
 
 
 def plan_workflow_chat(
@@ -109,8 +114,8 @@ class _Planner:
                 bool(answer.get("awaiting_confirmation")) and question is None,
         }
 
-    @staticmethod
-    def _question(value) -> Optional[dict]:
+    @classmethod
+    def _question(cls, value) -> Optional[dict]:
         """The single question for this turn, or None when none is asked."""
         value = as_dict(value)
         asked = bounded_text(value.get("question"))
@@ -120,7 +125,38 @@ class _Planner:
             "question": asked,
             "recommendation": bounded_text(value.get("recommendation")),
             "why": bounded_text(value.get("why")),
+            "options": cls._options(value),
         }
+
+    @staticmethod
+    def _options(question: dict) -> List[dict]:
+        """Clickable answers, bounded and deduplicated.
+
+        A clicked option is sent verbatim as the FDE's own message, so an
+        option missing its `answer` has nothing to send and is dropped rather
+        than falling back to the label — the label is a button caption, and
+        sending it would put a fragment in the thread where a sentence belongs.
+
+        One option is not a choice: the FDE would be reading a menu with a
+        single item next to the recommendation that already says the same
+        thing. Below two, the recommendation button carries the turn on its
+        own.
+        """
+        offered = question.get("options")
+        if not isinstance(offered, list):
+            return []
+        options, seen = [], set()
+        for item in offered:
+            item = as_dict(item)
+            label = bounded_text(item.get("label"), _MAX_OPTION_CHARS)
+            answer = bounded_text(item.get("answer"))
+            if not label or not answer or label in seen:
+                continue
+            seen.add(label)
+            options.append({"label": label, "answer": answer})
+            if len(options) == _MAX_OPTIONS:
+                break
+        return options if len(options) > 1 else []
 
     @staticmethod
     def _history(messages) -> List[dict]:
@@ -173,10 +209,24 @@ class _ToolPlanner(_Planner):
         "output_schema": dict, "example_input": list, "example_output": list,
     }
 
-    def _payload(self, messages, draft, inspection=None) -> dict:
+    # The fields a focused interview may be opened on: what the interview
+    # authors, minus the connection it only carries. A focus on a field the
+    # agent is not allowed to write would ask the FDE to discuss something
+    # their answer cannot change.
+    _FOCUSABLE_FIELDS = (
+        "name", "description", "agent_instructions", "output_schema",
+        "example_input", "example_output", "agent_enabled",
+    )
+
+    def _payload(self, messages, draft, inspection=None, focus_field="") -> dict:
         payload = _Planner._payload(self, messages, draft)
         if inspection:
             payload["inspection_result"] = self._inspection(inspection)
+        # Unrecognized focus is dropped rather than passed through: the prompt
+        # names the field to the FDE, and an unknown one would have the agent
+        # discussing a field that does not exist on the form.
+        if focus_field in self._FOCUSABLE_FIELDS:
+            payload["focus_field"] = focus_field
         return payload
 
     # What the FDE is told when a JSON field had to be dropped. Named in

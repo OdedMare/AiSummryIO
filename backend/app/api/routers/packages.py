@@ -29,7 +29,7 @@ def build(context) -> APIRouter:
     def plan_tool_chat(payload: ToolPlanChatCreate):
         return context.service.plan_tool_chat(
             [item.model_dump() for item in payload.messages],
-            payload.draft, payload.inspection,
+            payload.draft, payload.inspection, payload.focus_field,
         )
 
     return router

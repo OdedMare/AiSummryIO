@@ -91,6 +91,11 @@ class PlanChatCreate(BaseModel):
 
 class ToolPlanChatCreate(PlanChatCreate):
     inspection: Dict[str, Any] = Field(default_factory=dict)
+    # Which form field this interview is about, when it was opened from one.
+    # Empty means the whole tool, which is how the drawer has always opened.
+    # The service checks the name against the fields it may author, so an
+    # unknown one is ignored rather than rejected here.
+    focus_field: str = ""
 
 
 class WorkflowPlanCreate(BaseModel):
@@ -137,7 +142,10 @@ class SkillPreviewSection(BaseModel):
     name: str
     status: str = "completed"
     summary: str = ""
+    coverage: str = ""
     facts: List[str] = []
+    patterns: List[str] = []
+    outliers: List[str] = []
     warnings: List[str] = []
 
 

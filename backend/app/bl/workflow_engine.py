@@ -45,10 +45,11 @@ class SummaryService:
         return planning.inspect_tool(self, package, root_id)
 
     def plan_tool_chat(
-        self, messages: List[dict], draft: Dict, inspection: Dict
+        self, messages: List[dict], draft: Dict, inspection: Dict,
+        focus_field: str = "",
     ) -> dict:
         return conversational_planning.plan_tool_chat(
-            self, messages, draft, inspection
+            self, messages, draft, inspection, focus_field
         )
 
     def plan_workflow_chat(self, messages: List[dict], draft: Dict) -> dict:
