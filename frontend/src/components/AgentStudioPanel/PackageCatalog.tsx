@@ -93,6 +93,20 @@ export default function PackageCatalog({
     setMessage("הצעת הסוכן נטענה לטופס. יש לערוך ולאשר לפני השמירה.");
   };
 
+  /**
+   * One field, from the interview opened on that field.
+   *
+   * Unlike `applyDraft` this overwrites rather than filling only what is
+   * empty: the FDE opened the agent *on this field* and accepted its wording,
+   * so declining to replace what is there would ignore what they just asked
+   * for. Nothing else on the form is touched.
+   */
+  const applyField = (field: keyof ToolPlanDraft, value: string) => {
+    if (!(field in emptyPackage) || !value) return;
+    setForm((current) => ({ ...current, [field]: value }));
+    setMessage("הצעת הסוכן נטענה לשדה. יש לבדוק אותה לפני השמירה.");
+  };
+
   const save = async (event: FormEvent) => {
     // TEMP DIAGNOSTIC — remove once the drawer navigation bug is pinned.
     console.warn("[diag] studio-form save fired", {
@@ -155,7 +169,8 @@ export default function PackageCatalog({
           inspection={inspection} onApply={applyDraft} />
         <PackageFields form={form} update={update}
           onDropField={(event, target) =>
-            dropTextField(event, target, setForm)} />
+            dropTextField(event, target, setForm)}
+          inspection={inspection} onApplyField={applyField} />
         <Inspector form={form} inspectId={inspectId} setInspectId={setInspectId}
           inspecting={inspecting} inspect={inspect} inspection={inspection} />
         <FieldPalette form={form} update={update} target={fieldTarget}
@@ -435,7 +450,7 @@ function PackageFields({
           onChange={(e) => update("output_cube_name", e.target.value)} /></label>
       </div>
       <label className="field-drop-target"><span>מתי הטול שימושי
-        <small>אפשר לגרור לכאן שדות</small></span>
+        <small>אפשר לגרור לכאן שדות</small>{agent("description")}</span>
         <textarea value={form.description}
           onDragOver={allowFieldDrop}
           onDrop={(event) => onDropField(event, "description")}
@@ -443,7 +458,8 @@ function PackageFields({
       </label>
       <label className="field-drop-target">
         <span>איך לסכם את תוצאות הטול
-          <small>אפשר לגרור לכאן שדות</small></span>
+          <small>אפשר לגרור לכאן שדות</small>
+          {agent("agent_instructions")}</span>
         <textarea value={form.agent_instructions}
           onDragOver={allowFieldDrop}
           onDrop={(event) => onDropField(event, "agent_instructions")}

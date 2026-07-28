@@ -88,11 +88,27 @@ once per identifier and concatenates. The provider itself never sees
 `_section_summary` summarizes one workflow's facts; `_final_summary` merges
 sections into the answer. Both call the LLM with a JSON schema:
 
-- `_SECTION_SCHEMA` — `summary`, `facts`, `warnings`, `suggested_questions`.
-  A workflow's own `output_schema` **extends** this shared contract, and the
-  extra fields come back under `section.fields` (`_merge_output_schema`).
-- `_FINAL_SCHEMA` — adds `key_findings`, `risks`, `missing_data`, and
-  `skill_results`.
+- `_SECTION_SCHEMA` — `summary`, `coverage`, `facts`, `patterns`, `outliers`,
+  `warnings`, `suggested_questions`. `patterns` (distributions, ranges) and
+  `outliers` are separate from `facts` so a 300-record split does not read as
+  the equal of one record. A workflow's own `output_schema` **extends** this
+  shared contract, and the extra fields come back under `section.fields`
+  (`_merge_output_schema`).
+- `_FINAL_SCHEMA` — adds `headline` (the one-line answer), `coverage`,
+  `key_findings`, `risks`, `missing_data`, and `skill_results`.
+
+### What the summary call receives
+
+`chunk_facts` sends each 100-row chunk as `rows` (whole rows, so values stay
+correlated) plus `stats` computed in Python over **every** row of the chunk:
+`present`/`missing`, `distinct`, `counts` for fields with ≤15 distinct values,
+and `min`/`max`/`mean` for numeric ones. Frequency and range are arithmetic —
+deriving them in code is exact and cannot be hallucinated, which is what lets
+a section state "263 of 412" rather than naming a few values. A field excluded
+by `x-summary: false` is absent from `rows` and `stats` alike.
+
+A fallback section (the model failed) is marked `degraded: true`, so a reader
+is never left to mistake it for a genuinely thin result.
 
 ### Skills — one LLM call each
 

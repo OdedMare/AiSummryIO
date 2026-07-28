@@ -102,4 +102,22 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - The interview drawer is portalled to `document.body`, but a portal still
   propagates events through the React tree — it must stop `submit` and `Enter`
   at its own boundary, or sending a message saves the editor's form.
+- **The agent is also reachable per field.** Each prose field on the tool form
+  carries its own small agent button (`FieldAgentPopover`), which opens the
+  interview in a popover beside that field rather than in the drawer that
+  covers the form — the value being negotiated stays next to the field it
+  lands in. The client sends `focus_field`, the prompt scopes the interview to
+  it, and **only that field is written back**: the turn carries the whole
+  draft, so applying all of it would let a conversation about one field
+  overwrite text the FDE edited by hand elsewhere. Each field keeps its own
+  conversation. The popover is portalled like the drawer and carries the same
+  `submit`/`Enter` guards for the same reason; being portalled, it is also
+  positioned from viewport coordinates and must re-place on `scroll`
+  (capturing, since scroll does not bubble) and `resize`.
+- A question may carry `options` — 2–4 clickable answers, the first being the
+  agent's `recommendation`, which replace the lone "accept the recommendation"
+  button when present. They are a shortcut past typing, never a closed menu:
+  the composer stays available, and the agent returns `options` empty on
+  questions whose honest answers are open-ended. A single option is dropped
+  server-side, since one choice is not a choice.
 - Respect reduced motion and preserve visible focus rings.

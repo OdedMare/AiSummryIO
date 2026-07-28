@@ -3495,6 +3495,168 @@ select:focus {
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* The per-field agent: a small button on the field's own label. */
+.field-agent-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.field-agent-button {
+  display: grid;
+  place-items: center;
+  /* Smaller than the 44px minimum on purpose: this sits inline in a field
+     label, and the label itself is a much larger target for the same field.
+     The full-size control for the same agent is the header's launch button. */
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.field-agent-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+.field-agent-button:disabled {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.field-agent-hint {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.field-agent-popover {
+  position: fixed;
+  z-index: 45;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(70vh, 620px);
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 24%);
+}
+
+.field-agent-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field-agent-popover-header .agent-chat-close {
+  margin-inline-start: auto;
+}
+
+/* The popover already names the field in its header. */
+.field-agent-popover .plan-chat > header {
+  display: none;
+}
+
+.field-agent-popover .plan-chat-thread {
+  max-height: 220px;
+}
+
+.field-agent-proposal-label {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field-agent-proposal {
+  margin: 0 0 8px;
+  padding: 9px 11px;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .field-agent-popover {
+    animation: popover-in 140ms ease-out;
+  }
+}
+
+@keyframes popover-in {
+  from { transform: translateY(-6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Clickable answers, in place of the lone recommendation button. */
+.plan-options {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--text);
+  text-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.plan-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised, var(--surface));
+}
+
+/* The agent's own pick, first in the list and marked as such. */
+.plan-option.recommended {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  font-weight: 700;
+}
+
+.plan-option.recommended:hover {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+.plan-option small {
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* Options are a shortcut, never the only way to answer. */
+.plan-options-other {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .plan-chat {
   display: grid;
   gap: 12px;
