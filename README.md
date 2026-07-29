@@ -64,6 +64,54 @@ docker compose down -v                # stop and DELETE the database volume
 and piece of evidence in it. Use plain `down` unless a clean database is the
 goal.
 
+### Nginx reverse proxy
+
+[nginx/nginx.conf](nginx/nginx.conf) puts the whole system behind a single
+port: `/api/` goes to `backend:8000` and everything else to `frontend:3000`.
+Add it to `docker-compose.yml` as a fourth service:
+
+```yaml
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+```
+
+The whole app is then on http://localhost, and the `3000`/`8000` port mappings
+on the other services become optional — drop them to expose only the proxy.
+
+Two settings in that config are load-bearing:
+
+- `proxy_buffering off` on `/api/` — summaries render progressively, and
+  buffering would withhold the response until the run finished.
+- 300s read/send timeouts — a package run is bounded backend-side by
+  `run_bounded` (120s default, per-package overrides) and the provider retries
+  once, so a shorter proxy timeout would cut off a run that is still valid.
+
+### Exporting the images as a tar
+
+For transfer into an air-gapped environment:
+
+```bash
+docker compose build
+docker compose images          # confirm the generated image names first
+docker save -o aisummryio-full.tar \
+  aisummryio-backend aisummryio-frontend nginx:1.27-alpine postgres:16
+```
+
+Load it on the target host with `docker load -i aisummryio-full.tar`.
+
+Compose prefixes image names with the project directory, so check
+`docker compose images` rather than assuming the names above. The archive runs
+roughly 1.5–2.5 GB, which is over GitHub's 100 MB per-file limit — keep it out
+of git and move it out of band. Confirm no FLAPI credentials from `.env` were
+captured into a layer before the file leaves the build machine.
+
 ### Backend image on its own
 
 Compose runs its own throwaway PostgreSQL. To point the backend at a different
