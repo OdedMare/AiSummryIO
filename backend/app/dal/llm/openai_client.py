@@ -15,6 +15,7 @@ Robustness policy, matching LocatoAI:
 """
 
 import json
+import time
 
 import httpx
 from openai import BadRequestError, OpenAI
@@ -28,6 +29,7 @@ from app.dal.llm.model_id_extractor import extract_model_ids
 # One initial attempt + one retry with the parse error appended.
 _MAX_JSON_ATTEMPTS = 2
 _DIET_MAX_COMPLETION_TOKENS = 1200
+_DEFAULT_TIMEOUT_SECONDS = 120
 # The SDK requires a non-empty key; local servers/gateways ignore it.
 _LOCAL_SERVER_KEY_PLACEHOLDER = "null"
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
@@ -53,9 +55,16 @@ class OpenAIJsonClient:
         max_tokens = (
             _DIET_MAX_COMPLETION_TOKENS if settings.llm_diet_mode else None
         )
+        timeout = max(
+            1, int(getattr(
+                settings, "llm_timeout_seconds", _DEFAULT_TIMEOUT_SECONDS
+            )),
+        )
+        deadline = time.monotonic() + timeout
         for _attempt in range(_MAX_JSON_ATTEMPTS):
             content, current = self._complete(
                 client, settings.llm_model, messages, max_tokens, schema,
+                deadline,
             )
             for key in usage:
                 usage[key] += current.get(key, 0)
@@ -101,19 +110,24 @@ class OpenAIJsonClient:
             self._cached_client = OpenAI(
                 api_key=api_key or _LOCAL_SERVER_KEY_PLACEHOLDER,
                 base_url=base_url or None,
+                # completion_retry.py owns the one explicit retry. Leaving
+                # the SDK default enabled multiplies attempts invisibly.
+                max_retries=0,
             )
             self._cached_key = cache_key
         return self._cached_client
 
     @staticmethod
-    def _complete(client, model, messages, max_tokens, schema):
+    def _complete(client, model, messages, max_tokens, schema, deadline=None):
         # Degradation ladder for OpenAI-compatible servers:
         # schema → JSON mode → plain → plain with the system prompt merged
         # into the user turn (some Gemma deployments reject a system role).
         last_bad_request = None
         for kwargs in OpenAIJsonClient._attempts(messages, max_tokens, schema):
             try:
-                response = create_with_retry(client, model, kwargs)
+                response = create_with_retry(
+                    client, model, kwargs, deadline=deadline
+                )
             except BadRequestError as exc:
                 last_bad_request = exc
                 continue
@@ -156,4 +170,3 @@ class OpenAIJsonClient:
             "completion_tokens": usage.completion_tokens if usage else 0,
             "total_tokens": usage.total_tokens if usage else 0,
         }
-

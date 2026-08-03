@@ -145,12 +145,19 @@ function useRunPolling(
   setError: Setter<string>,
   loadHistory: () => void,
 ) {
+  const runId = run?.id;
+  const active = isActive(run);
   useEffect(() => {
-    if (!run || !isActive(run)) return;
+    if (!runId || !active) return;
     const startedAt = Date.now();
-    console.debug(`[poll] watching run ${run.id} (status=${run.status})`);
-    const timer = window.setInterval(() => {
-      api.run(run.id).then((next) => {
+    let timer: number | undefined;
+    let stopped = false;
+    let warned = false;
+    console.debug(`[poll] watching run ${runId}`);
+
+    const poll = () => {
+      api.run(runId).then((next) => {
+        if (stopped) return;
         const age = (Date.now() - startedAt) / 1000;
         const done = next.progress?.completed ?? 0;
         const total = next.progress?.total ?? 0;
@@ -160,10 +167,11 @@ function useRunPolling(
           `[poll] run ${next.id} status=${next.status} ` +
           `progress=${done}/${total} age=${age.toFixed(0)}s`,
         );
-        if (isActive(next) && age > 180) {
+        if (isActive(next) && age > 180 && !warned) {
+          warned = true;
           console.warn(
             `[poll] run ${next.id} has been ${next.status} for ${age.toFixed(0)}s ` +
-            "with no completion — check the backend console for a FLAPI timeout.",
+            "with no completion — check the backend console for an external-call timeout.",
           );
         }
         setRun(next);
@@ -178,14 +186,23 @@ function useRunPolling(
             `after ${age.toFixed(1)}s`,
           );
           loadHistory();
+          return;
         }
+        timer = window.setTimeout(poll, 1500);
       }).catch((reason) => {
-        console.error(`[poll] run ${run.id} poll failed`, reason);
+        if (stopped) return;
+        console.error(`[poll] run ${runId} poll failed`, reason);
         setError(reason.message);
+        timer = window.setTimeout(poll, 1500);
       });
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [run, setRun, setRuns, setError, loadHistory]);
+    };
+
+    timer = window.setTimeout(poll, 1500);
+    return () => {
+      stopped = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [runId, active, setRun, setRuns, setError, loadHistory]);
 }
 
 function detectIdentifier(

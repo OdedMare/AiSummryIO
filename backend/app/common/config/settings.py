@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     llm_diet_mode: bool = False
     """Use compact prompts, schema samples, and bounded completion output."""
 
+    llm_timeout_seconds: int = 120
+    """Maximum wall time for one logical model call, including retries."""
+
     llm_base_url: Optional[str] = "http://localhost:11434/v1"
     """OpenAI-compatible endpoint. Default: local Ollama. From inside the
     backend container use http://pghost:11434/v1 (see runtime-settings)."""
@@ -64,4 +67,3 @@ class Settings(BaseSettings):
 
     runtime_settings_file: str = "runtime-settings.json"
     request_log_path: str = "logs/requests.jsonl"
-

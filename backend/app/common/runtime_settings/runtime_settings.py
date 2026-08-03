@@ -13,6 +13,7 @@ class RuntimeSettings:
     database_schema: str
     llm_model: str
     llm_diet_mode: bool
+    llm_timeout_seconds: int
     llm_base_url: Optional[str]
     openai_api_key: str
     flapi_username: Optional[str]
@@ -23,4 +24,3 @@ class RuntimeSettings:
     conversation_retention_days: int
     log_retention_days: int
     cookie_secret: str
-

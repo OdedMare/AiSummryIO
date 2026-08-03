@@ -39,6 +39,7 @@ class RuntimeSettingsStore:
             ),
             llm_model=env.llm_model,
             llm_diet_mode=env.llm_diet_mode,
+            llm_timeout_seconds=env.llm_timeout_seconds,
             llm_base_url=env.llm_base_url,
             openai_api_key=env.openai_api_key,
             flapi_username=env.flapi_username,
@@ -102,7 +103,8 @@ class RuntimeSettingsStore:
                 elif key == "llm_base_url":
                     value = normalize_llm_base_url(value)
                 elif key in (
-                    "max_parallel_workflows", "package_timeout_seconds",
+                    "llm_timeout_seconds", "max_parallel_workflows",
+                    "package_timeout_seconds",
                     "conversation_retention_days", "log_retention_days",
                 ):
                     value = max(1, int(value))
