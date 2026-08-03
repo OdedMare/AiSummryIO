@@ -35,6 +35,18 @@ export interface SummaryResult {
   partial: boolean;
   degraded?: boolean;
   needs_clarification?: boolean;
+  /** On a clarification: what the agent would look at first, and why. */
+  recommendation?: string;
+  /** Clickable answers to the clarifying question. Empty when the honest
+      answers were not a short list — free text stays the way out. */
+  options?: ClarifyOption[];
+}
+
+export interface ClarifyOption {
+  /** Short button caption. */
+  label: string;
+  /** Sent verbatim as the user's next question. */
+  answer: string;
 }
 
 export interface SummaryRun {
