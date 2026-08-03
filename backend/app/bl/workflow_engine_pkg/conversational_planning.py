@@ -323,8 +323,10 @@ class _ToolPlanner(_Planner):
     @staticmethod
     def _inspection(inspection: dict) -> dict:
         """Fetch 1 ID output, bounded to what the agent needs to name fields."""
+        inspection = as_dict(inspection)
+        offered = inspection.get("records")
         records = [
-            row for row in as_dict(inspection).get("records", [])
+            row for row in (offered if isinstance(offered, list) else [])
             if isinstance(row, dict)
         ]
         fields = sorted({

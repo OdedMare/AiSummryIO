@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactFlow, {
   Background, Controls, Handle, MarkerType, MiniMap, Position,
+  applyNodeChanges,
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
   type NodeProps, type XYPosition,
 } from "reactflow";
@@ -71,24 +72,48 @@ export default function WorkflowCanvas({
       .filter(([key]) => keys.has(key)));
   }, [moved, steps]);
 
-  const nodes = useMemo(
+  const derived = useMemo(
     () => canvasNodes(steps, packages, selectedKey, live),
     [steps, packages, selectedKey, live]);
   const edges = useMemo(
     () => canvasEdges(steps, packages), [steps, packages]);
 
   /**
-   * Drag, selection, and removal of nodes.
+   * The nodes actually handed to React Flow, carrying their measured size.
+   *
+   * `derived` is rebuilt from `steps` on every render and so has `width` and
+   * `height` of null. React Flow measures a node once and reports it as a
+   * `dimensions` change; in a controlled graph that measurement lives nowhere
+   * unless it is applied back. Dropping it left every node permanently
+   * unmeasured, and an unmeasured node fails React Flow's viewport
+   * intersection test the moment a transform is applied — so the graph
+   * rendered until the first pan or zoom and then vanished.
+   *
+   * Layout still comes from `derived`: the measurement is merged onto it, so
+   * a step renamed or rewired below still updates the node it belongs to.
+   */
+  const [measured, setMeasured] = useState<Node[]>(derived);
+  const nodes = useMemo(
+    () => mergeMeasurements(derived, measured), [derived, measured]);
+
+  /**
+   * Drag, measurement, selection, and removal of nodes.
    *
    * `deleteKeyCode` was already set, but React Flow only *reports* a deletion
    * — with no `onNodesChange` the change was dropped and the key did
    * nothing. Removing a step here is what makes Delete work, and it routes
    * through the editor's own `removeStep` so dependents are released exactly
    * as they are when the step card's delete button is used.
+   *
+   * Every other change is applied through `applyNodeChanges` rather than
+   * cherry-picked, which is what keeps `dimensions` — the one this handler
+   * used to discard — from being lost again.
    */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const positions: Record<string, XYPosition> = {};
     changes.forEach((change) => {
+      // `add`/`reset` carry `item` instead of `id`, so the guarded types are
+      // narrowed before either field is read.
       if (change.type === "position" && change.position) {
         positions[change.id] = change.position;
       }
@@ -99,6 +124,7 @@ export default function WorkflowCanvas({
     if (Object.keys(positions).length) {
       setMoved((current) => ({ ...current, ...positions }));
     }
+    setMeasured((current) => applyNodeChanges(changes, current));
   }, [onRemoveStep]);
 
   const resetLayout = useCallback(() => setMoved({}), []);

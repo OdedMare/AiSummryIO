@@ -173,22 +173,60 @@ def summary_fields(tool: dict) -> List[str]:
 
 
 def validated_plan(plan: dict, tools: List[dict]) -> dict:
-    missing = list(plan.get("missing_tools", []))
-    steps = _known_steps(plan.get("steps", []), tools, missing)
+    """Shape one model-proposed plan into a draft the form can always load.
+
+    The JSON schema sent with the request is a *request*, not a guarantee:
+    ``OpenAIJsonClient`` degrades from `json_schema` to `json_object` to plain
+    text, so against a server that ignores strict schemas every field here can
+    arrive as the wrong type. Coercing rather than trusting is what keeps a
+    malformed reply a rejected draft instead of an uncaught ``AttributeError``
+    that reaches the FDE as a bare 500.
+    """
+    plan = plan if isinstance(plan, dict) else {}
+    missing = _missing_tools(plan.get("missing_tools"))
+    steps = _known_steps(plan.get("steps"), tools, missing)
     steps = _valid_steps(steps, missing)
     return {
         "can_build": bool(steps),
-        "name": str(plan.get("name", "")),
-        "description": str(plan.get("description", "")),
+        "name": _text(plan.get("name")),
+        "description": _text(plan.get("description")),
         "role": _role(plan.get("role")),
-        "rationale": str(plan.get("rationale", "")),
-        "system_prompt": str(plan.get("system_prompt", "")),
+        "rationale": _text(plan.get("rationale")),
+        "system_prompt": _text(plan.get("system_prompt")),
         "steps": steps,
         "missing_tools": missing,
     }
 
 
+def _text(value) -> str:
+    """A model-supplied string, or "" — never `str()` of a dict or None.
+
+    `str(None)` would put the literal "None" in a field the FDE reads, and
+    `str({...})` a Python repr; both are worse than an empty field.
+    """
+    return value if isinstance(value, str) else ""
+
+
+def _missing_tools(value) -> List[dict]:
+    """The model's own gap report, kept only where it is really a list."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def _known_steps(steps, tools, missing) -> List[dict]:
+    # A non-list `steps`, or an entry that is not an object, is a malformed
+    # reply rather than a plan naming an unknown tool — but the FDE outcome is
+    # the same either way: nothing loadable, and a stated reason.
+    if not isinstance(steps, list) or not all(
+        isinstance(step, dict) for step in steps
+    ):
+        missing.append({
+            "name": "מבנה שלבים לא תקין",
+            "reason": "הצעת המודל לא הוחזרה במבנה שלבים תקין.",
+            "input_description": "", "output_description": "",
+        })
+        return []
     steps = list(steps)
     valid_ids = {tool["id"] for tool in tools}
     if all(step.get("package_version_id") in valid_ids for step in steps):
@@ -202,16 +240,24 @@ def _known_steps(steps, tools, missing) -> List[dict]:
 
 
 def _valid_steps(steps, missing) -> List[dict]:
+    # `validate_steps` indexes `step["key"]` and calls `.split` on
+    # `input_source`, so a step missing a key or carrying a non-string source
+    # raises KeyError/AttributeError/TypeError rather than ValueError. Those
+    # are the same situation to the FDE — an unusable proposal — so they are
+    # reported the same way instead of escaping as a 500.
     try:
         Repository._validate_steps(steps)
         return steps
     except ValueError as exc:
-        missing.append({
-            "name": "מיפוי שלבים", "reason": str(exc),
-            "input_description": "פלט משלב מוקדם",
-            "output_description": "מזהה קלט לשלב הבא",
-        })
-        return []
+        reason = str(exc)
+    except (AttributeError, KeyError, TypeError):
+        reason = "הצעת המודל כללה שלב עם מבנה שדות לא תקין."
+    missing.append({
+        "name": "מיפוי שלבים", "reason": reason,
+        "input_description": "פלט משלב מוקדם",
+        "output_description": "מזהה קלט לשלב הבא",
+    })
+    return []
 
 
 def _role(value: str) -> str:
