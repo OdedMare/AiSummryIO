@@ -11,11 +11,13 @@
  * be saved.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactFlow, {
   Background, Controls, Handle, MarkerType, MiniMap, Position,
-  type Connection, type Edge, type EdgeChange, type Node, type NodeProps,
+  applyNodeChanges,
+  type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
+  type NodeProps, type XYPosition,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import {
