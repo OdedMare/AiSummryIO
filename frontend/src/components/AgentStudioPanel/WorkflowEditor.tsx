@@ -605,9 +605,9 @@ function StepCard({
             <option key={item.id} value={item.id}>
               {item.name} · v{item.version}
             </option>)}
-        </select>
+          </select>
           <small className="field-hint">
-            חבילת ה-FLAPI שתורץ בשלב הזה.
+            חבילת FLAPI שתורץ בשלב הזה.
           </small>
         </label>
         <label><span>מקור המזהה</span><select value={step.input_source}

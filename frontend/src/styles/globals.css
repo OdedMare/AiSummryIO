@@ -3060,7 +3060,6 @@ select:focus {
   font-weight: 800;
 }
 
-.canvas-node-more,
 .canvas-node-empty {
   color: var(--text-muted);
   font-size: 10px;
@@ -3744,27 +3743,6 @@ select:focus {
    rather than push the heading's own baseline around. */
 .step-editor h4 .field-agent-anchor {
   vertical-align: baseline;
-}
-
-/* A label carrying both a hint and an agent button: the hint takes its own
-   row, so the button must stay up on the label line rather than being pushed
-   below it. Scoped with :has() to labels that actually have the button, so
-   the drop-target labels in the same block keep their own layout. */
-.advanced-block label > span:has(> .field-agent-anchor) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 6px;
-}
-
-.advanced-block label > span:has(> .field-agent-anchor) > small {
-  flex: 1 1 100%;
-  order: 2;
-}
-
-.advanced-block label > span > .field-agent-anchor {
-  order: 1;
-  margin-inline-start: 0;
 }
 
 .field-agent-popover {

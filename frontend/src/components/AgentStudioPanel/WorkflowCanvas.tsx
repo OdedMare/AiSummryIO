@@ -471,9 +471,6 @@ function OutputFieldList({ data }: { data: StepNodeData }) {
           <Handle type="source" position={Position.Left} id={field.name}
             title={`חיבור מהשדה ${field.name}`} />
         </li>)}
-      {data.hiddenFieldCount > 0 && <li className="canvas-node-more" dir="rtl">
-        ועוד {data.hiddenFieldCount} שדות
-      </li>}
     </ul>
   );
 }
@@ -488,7 +485,6 @@ type StepNodeData = {
   packageName: string;
   packageChosen: boolean;
   outputFields: OutputField[];
-  hiddenFieldCount: number;
   selected: boolean;
   incomplete: boolean;
   incompleteReason: string;
@@ -560,12 +556,10 @@ function canvasNodes(
 
 /** Approximate rendered height, used only to space a column's rows. */
 function nodeHeight(data: StepNodeData): number {
-  const rows = data.outputFields.length + (data.hiddenFieldCount > 0 ? 1 : 0);
+  const rows = data.outputFields.length;
   const body = rows ? rows * 19 + 8 : 26;
   return 52 + body + (data.incompleteReason ? 22 : 0);
 }
-
-const VISIBLE_FIELD_LIMIT = 6;
 
 function stepNodeData(
   step: WorkflowStep, steps: WorkflowStep[], packages: PackageVersion[],
@@ -573,18 +567,18 @@ function stepNodeData(
 ): StepNodeData {
   const item = packages.find((candidate) => candidate.id === step.package_version_id);
   const consumed = consumedFields(step.key, steps);
+  // Every field is listed, in the order the tool declares them. Each row is a
+  // connection point, so a capped list hid drag targets the FDE had no other
+  // way to reach, and reordering by consumption moved a field out from where
+  // the schema said it would be.
   const fields = outputFields(item).map((field) => ({
     ...field, consumed: consumed.has(field.name),
   }));
-  // A consumed field must stay visible even past the cap, or the node hides
-  // the one field the FDE most needs to see: the one carrying the next step.
-  const shown = prioritized(fields);
   return {
     name: step.name || step.key,
     packageName: item ? `${item.name} · v${item.version}` : "לא נבחר טול",
     packageChosen: Boolean(item),
-    outputFields: shown,
-    hiddenFieldCount: fields.length - shown.length,
+    outputFields: fields,
     selected: step.key === selectedKey,
     incomplete: Boolean(incompleteReason(step)),
     incompleteReason: incompleteReason(step),
@@ -604,13 +598,6 @@ function consumedFields(key: string, steps: WorkflowStep[]): Set<string> {
     .filter((step) => step.input_source === `steps.${key}`)
     .map((step) => step.input_field.trim())
     .filter(Boolean));
-}
-
-function prioritized(fields: OutputField[]): OutputField[] {
-  if (fields.length <= VISIBLE_FIELD_LIMIT) return fields;
-  const consumed = fields.filter((field) => field.consumed);
-  const rest = fields.filter((field) => !field.consumed);
-  return [...consumed, ...rest].slice(0, VISIBLE_FIELD_LIMIT);
 }
 
 /**
