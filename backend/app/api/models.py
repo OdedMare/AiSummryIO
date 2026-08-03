@@ -49,7 +49,7 @@ class WorkflowStep(BaseModel):
     @classmethod
     def valid_key(cls, value: str) -> str:
         cleaned = value.strip()
-        if not cleaned or not cleaned.replace("-", "_").isalnum():
+        if not cleaned or not cleaned.replace("-", "").replace("_", "").isalnum():
             raise ValueError("מפתח שלב חייב להכיל אותיות, מספרים, _ או -")
         return cleaned
 

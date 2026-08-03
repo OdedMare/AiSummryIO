@@ -33,6 +33,7 @@ from app.bl.workflow_engine_pkg import history
 from app.bl.workflow_engine_pkg.execution import chunk_facts
 from app.api.models import (
     ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
+    WorkflowStep,
 )
 
 
@@ -230,6 +231,13 @@ def test_invalid_workflow_cannot_reference_a_future_step():
                 "depends_on": [],
             },
         ])
+
+
+def test_workflow_step_keys_accept_the_separators_generated_by_the_ui():
+    for key in ("step-1", "step_2"):
+        assert WorkflowStep(
+            key=key, name="step", package_version_id="package"
+        ).key == key
 
 
 def test_step_reading_earlier_output_must_declare_it_as_a_dependency():
