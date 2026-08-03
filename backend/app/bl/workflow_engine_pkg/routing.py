@@ -50,13 +50,65 @@ def _skills(service, run):
 
 
 def _clarification_result(selected, workflows, tools) -> dict:
+    """The agent asking one question back, rather than listing its catalog.
+
+    `suggested_questions` used to be every workflow and tool name, which asked
+    the user to choose from an inventory they did not write and could not
+    interpret. Options are real answers to the question actually asked; when
+    the router could not name any, the names remain as the honest fallback —
+    something to click beats a dead end.
+    """
+    options = _clarify_options(selected)
     return {
         "summary": selected["clarification"],
         "key_findings": [], "risks": [], "missing_data": [],
-        "suggested_questions": [item["name"] for item in workflows + tools],
+        "suggested_questions": (
+            [option["answer"] for option in options]
+            or [item["name"] for item in workflows + tools]
+        ),
         "skill_results": [], "sections": [], "partial": False,
         "needs_clarification": True,
+        "recommendation": _text(selected.get("recommendation")),
+        "options": options,
     }
+
+
+# Past four the user is reading a list instead of choosing, which is the
+# deliberation the options exist to save. Mirrors the FDE interview's bound.
+_MAX_OPTIONS = 4
+_MAX_OPTION_CHARS = 120
+_MAX_ANSWER_CHARS = 400
+
+
+def _clarify_options(selected: dict) -> List[dict]:
+    """Clickable answers, bounded and deduplicated.
+
+    A clicked option is sent verbatim as the user's next question, so one
+    missing its `answer` has nothing to send and is dropped rather than
+    falling back to the label — a caption in the composer is a fragment where
+    a question belongs. One option is not a choice, so a lone survivor goes
+    too: the question itself already says the same thing.
+    """
+    offered = selected.get("options")
+    if not isinstance(offered, list):
+        return []
+    options, seen = [], set()
+    for item in offered:
+        if not isinstance(item, dict):
+            continue
+        label = _text(item.get("label"), _MAX_OPTION_CHARS)
+        answer = _text(item.get("answer"), _MAX_ANSWER_CHARS)
+        if not label or not answer or label in seen:
+            continue
+        seen.add(label)
+        options.append({"label": label, "answer": answer})
+        if len(options) == _MAX_OPTIONS:
+            break
+    return options if len(options) > 1 else []
+
+
+def _text(value, limit: int = _MAX_ANSWER_CHARS) -> str:
+    return value.strip()[:limit] if isinstance(value, str) else ""
 
 
 def _chosen_workflows(service, selected, workflows, tools) -> List[dict]:
@@ -141,16 +193,35 @@ def _evidence_summary(evidence: List[dict]) -> List[dict]:
 
 
 def _validate_selection(selected, workflows, tools, evidence) -> dict:
+    """The router's choice, or a clarify when it named something unavailable.
+
+    A rejected selection is a dead end unless the user is given somewhere to
+    go, so these clarifies carry the options the router should have chosen
+    from — the one case where the real alternatives are known exactly.
+    """
     action = selected.get("action")
     workflow_keys = {item["workflow_key"] for item in workflows}
     tool_ids = {item["id"] for item in tools}
     if action == "workflow" and selected.get("workflow_key") not in workflow_keys:
-        return _clarify()
+        return _clarify(options=_catalog_options(workflows, tools))
     if action == "tool" and selected.get("tool_version_id") not in tool_ids:
-        return _clarify()
+        return _clarify(options=_catalog_options(workflows, tools))
     if action == "use_cached" and not evidence:
         return _single_selection(workflows, tools)
     return selected
+
+
+def _catalog_options(workflows, tools) -> List[dict]:
+    """Each available route as a clickable question.
+
+    The label is the route's name; the answer is a question phrased as the
+    user would ask it, since a clicked option is sent verbatim as their next
+    message and the name alone would arrive as a fragment.
+    """
+    return [
+        {"label": item["name"], "answer": "ספר לי על " + item["name"]}
+        for item in list(workflows) + list(tools)
+    ][:_MAX_OPTIONS]
 
 
 def _fallback_selection(workflows, tools, evidence) -> dict:
@@ -160,8 +231,14 @@ def _fallback_selection(workflows, tools, evidence) -> dict:
 
 
 def _single_selection(workflows, tools) -> dict:
+    """The only available route, or a clarify offering the several there are.
+
+    This is the fallback when the model is unavailable, so the options are
+    built in Python from the catalog rather than asked for — the one path
+    that has to work with no model at all.
+    """
     if len(workflows) + len(tools) != 1:
-        return _clarify()
+        return _clarify(options=_catalog_options(workflows, tools))
     if workflows:
         return {
             "action": "workflow",
@@ -174,12 +251,14 @@ def _single_selection(workflows, tools) -> dict:
     }
 
 
-def _clarify(message="לאיזה נושא תרצו להעמיק?") -> dict:
+def _clarify(message="לאיזה נושא תרצו להעמיק?", options=None) -> dict:
     return {
         "action": "clarify",
         "workflow_key": None,
         "tool_version_id": None,
         "clarification": message,
+        "recommendation": "",
+        "options": options or [],
     }
 
 

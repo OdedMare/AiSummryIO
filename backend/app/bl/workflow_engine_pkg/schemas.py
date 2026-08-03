@@ -275,6 +275,28 @@ ROUTER_SCHEMA = {
         "workflow_key": {"type": ["string", "null"]},
         "tool_version_id": {"type": ["string", "null"]},
         "clarification": {"type": ["string", "null"]},
+        # A `clarify` used to return bare text plus every workflow name, which
+        # asked the user to pick from a catalog they did not write. These let
+        # the same router call ask one answerable question instead: what it
+        # would choose, and the two-to-four real alternatives. Both stay
+        # optional — a router that cannot enumerate honest options sends none
+        # rather than inventing them, and free text is always available.
+        "recommendation": {"type": ["string", "null"]},
+        "options": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    # The button caption.
+                    "label": {"type": "string"},
+                    # Sent verbatim as the user's next question, so it has to
+                    # be a whole question rather than the caption again.
+                    "answer": {"type": "string"},
+                },
+                "required": ["label", "answer"],
+                "additionalProperties": False,
+            },
+        },
     },
     "required": [
         "action", "workflow_key", "tool_version_id", "clarification"

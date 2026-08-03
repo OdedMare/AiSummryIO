@@ -2105,3 +2105,179 @@ def test_a_thread_title_breaks_between_words_rather_than_mid_word():
     assert len(title) <= 81
     assert title.endswith("…")
     assert "  " not in title
+
+
+def _clarifying_service(selection, workflows=None, tools=None):
+    """A service whose router returns `selection` for any question."""
+    class FakeRepository:
+        @staticmethod
+        def published_workflows(_roles):
+            return workflows or []
+
+        @staticmethod
+        def agent_tools():
+            return tools or []
+
+        @staticmethod
+        def run_evidence(_run_id):
+            return []
+
+        @staticmethod
+        def conversation_history(_conversation_id, _limit):
+            return []
+
+    service = SummaryService(FakeRepository(), None, None, None)
+    service._select_detail = lambda *_args, **_kwargs: selection
+    return service
+
+
+def test_a_clarifying_question_offers_answers_rather_than_a_catalog():
+    """Listing every workflow name asked the user to choose from an inventory
+    they did not write; an option is an answer to the question asked."""
+    service = _clarifying_service({
+        "action": "clarify",
+        "clarification": "מה מעניין אותך בנכס?",
+        "recommendation": "הייתי מתחיל בבעלות.",
+        "options": [
+            {"label": "בעלות", "answer": "מי הבעלים של הנכס?"},
+            {"label": "עסקאות", "answer": "אילו עסקאות בוצעו בנכס?"},
+        ],
+    })
+
+    result = service.follow_up(
+        {"id": "run-1", "question": "ספר לי עוד"},
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert result["needs_clarification"] is True
+    assert result["recommendation"] == "הייתי מתחיל בבעלות."
+    assert [option["label"] for option in result["options"]] == [
+        "בעלות", "עסקאות",
+    ]
+    # The clicked option is sent verbatim, so it must be a whole question.
+    assert result["suggested_questions"] == [
+        "מי הבעלים של הנכס?", "אילו עסקאות בוצעו בנכס?",
+    ]
+
+
+def test_a_lone_option_is_dropped_because_one_choice_is_not_a_choice():
+    """A single-item menu sits beside a question that already says the same
+    thing, so it costs a click without offering a decision."""
+    service = _clarifying_service({
+        "action": "clarify",
+        "clarification": "מה מעניין אותך?",
+        "options": [{"label": "בעלות", "answer": "מי הבעלים?"}],
+    })
+
+    result = service.follow_up(
+        {"id": "run-1", "question": "ספר לי עוד"},
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert result["options"] == []
+
+
+def test_an_option_without_an_answer_is_dropped_rather_than_sending_its_label():
+    """A label is a button caption. Sending it would put a fragment in the
+    composer where a question belongs."""
+    service = _clarifying_service({
+        "action": "clarify",
+        "clarification": "מה מעניין אותך?",
+        "options": [
+            {"label": "בעלות", "answer": "מי הבעלים?"},
+            {"label": "עסקאות", "answer": ""},
+            {"label": "שומה", "answer": "מה השומה?"},
+        ],
+    })
+
+    result = service.follow_up(
+        {"id": "run-1", "question": "ספר לי עוד"},
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert [option["label"] for option in result["options"]] == [
+        "בעלות", "שומה",
+    ]
+
+
+def test_a_clarification_without_options_still_names_what_is_available():
+    """Something to click beats a dead end, so the catalog names remain the
+    fallback when the router could not enumerate real answers."""
+    workflow = {
+        "workflow_key": "ownership", "name": "בעלות", "description": "בעלים",
+    }
+    service = _clarifying_service(
+        {"action": "clarify", "clarification": "מה מעניין אותך?"},
+        workflows=[workflow],
+    )
+
+    result = service.follow_up(
+        {"id": "run-1", "question": "ספר לי עוד"},
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert result["options"] == []
+    assert result["suggested_questions"] == ["בעלות"]
+
+
+def test_a_router_naming_an_unavailable_workflow_still_offers_the_real_ones():
+    """A rejected selection is a dead end unless the user is given somewhere
+    to go, and here the real alternatives are known exactly."""
+    workflows = [
+        {"workflow_key": "ownership", "name": "בעלות", "description": ""},
+        {"workflow_key": "deals", "name": "עסקאות", "description": ""},
+    ]
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            return {
+                "action": "workflow",
+                "workflow_key": "does-not-exist",
+                "tool_version_id": None,
+                "clarification": None,
+            }
+
+    class FakeRepository:
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+    service = SummaryService(FakeRepository(), None, FakeLlm(), None)
+
+    selected = service._select_detail("ספר לי עוד", workflows, [])
+
+    assert selected["action"] == "clarify"
+    assert [option["label"] for option in selected["options"]] == [
+        "בעלות", "עסקאות",
+    ]
+
+
+def test_the_model_being_unavailable_still_offers_the_catalog_to_choose_from():
+    """This is the no-model path, so the options are built in Python from the
+    catalog rather than asked for."""
+    workflows = [
+        {"workflow_key": "ownership", "name": "בעלות", "description": ""},
+        {"workflow_key": "deals", "name": "עסקאות", "description": ""},
+    ]
+
+    class FailingLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AgentError("model unavailable")
+
+    class FakeRepository:
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+    service = SummaryService(FakeRepository(), None, FailingLlm(), None)
+
+    selected = service._select_detail("ספר לי עוד", workflows, [])
+
+    assert selected["action"] == "clarify"
+    assert len(selected["options"]) == 2

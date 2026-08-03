@@ -746,6 +746,20 @@ first. Read it to understand what the question refers to. When the answer is
 already there, prefer `use_cached` over running the same workflow again, and
 do not ask in `clarify` for something the user has already told you.
 
+On `clarify`, ask ONE question the user can actually answer, and make it
+answerable in one click:
+
+- `clarification` — the question itself, in Hebrew. Ask about what the user
+  wants to know, never about which workflow or tool to run: they did not
+  write the catalog and cannot choose from it.
+- `recommendation` — what you would look at first, and why, in one sentence.
+- `options` — two to four real alternatives. `label` is a short button
+  caption; `answer` is the full question sent as the user's next message, so
+  write it as they would ask it. Put your recommendation first.
+
+Return `options` empty when the honest answers are not a short list. A user
+can always type their own question, so an invented menu is worse than none.
+
 Any `clarification` text you return is shown to the user and must be
 written in Hebrew.""",
     },
