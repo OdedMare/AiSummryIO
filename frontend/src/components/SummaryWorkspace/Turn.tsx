@@ -2,8 +2,10 @@ import { Dispatch, SetStateAction, useState } from "react";
 import { Database, ThumbsDown, ThumbsUp } from "lucide-react";
 import { api } from "@/services/api";
 import type { SummaryRun, SummarySection } from "@/types";
+import AgentStatus from "./AgentStatus";
 import EvidenceDrawer from "./EvidenceDrawer";
-import { RunHeader, RunProgress, SummaryContent } from "./RunContent";
+import NextQuestions from "./NextQuestions";
+import { RunHeader, SummaryContent } from "./RunContent";
 import SourceRow from "./SourceRow";
 
 /** Which turn has its evidence open, and filtered to which section. Held by
@@ -22,12 +24,16 @@ export interface EvidenceView {
  * run keeps its original header — it is the opening summary, not a reply.
  */
 export default function Turn({
-  run, view, setView, first,
+  run, view, setView, first, last, onAsk,
 }: {
   run: SummaryRun;
   view: EvidenceView | null;
   setView: Dispatch<SetStateAction<EvidenceView | null>>;
   first: boolean;
+  /** The newest turn, which is the only one still worth continuing from. */
+  last: boolean;
+  /** Asks a suggested question straight away, without the composer. */
+  onAsk: (question: string) => void;
 }) {
   const sections = run.result?.sections ?? run.progress.sections ?? [];
   const open = view?.runId === run.id;
@@ -47,12 +53,16 @@ export default function Turn({
     <article className="thread-turn">
       {run.question && <Question text={run.question} />}
       {first && <RunHeader run={run} />}
-      <RunProgress run={run} />
+      <AgentStatus run={run} />
       <SummaryContent run={run} />
       <SourceRow sections={sections} onSelect={selectSource}
         activeId={open ? source?.workflow_id ?? null : null} />
       {run.result && <TurnFooter run={run} evidenceOpen={open && !source}
         toggleAll={toggleAll} />}
+      {/* Offered only on the newest turn: chips under an older answer would
+          invite the user to reopen a question the thread has moved past. */}
+      {run.result && last &&
+        <NextQuestions result={run.result} onAsk={onAsk} />}
       <EvidenceDrawer runId={run.id} open={open}
         evidenceIds={source?.evidence_ids} title={source?.name} />
     </article>

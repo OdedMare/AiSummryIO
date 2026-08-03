@@ -23,41 +23,22 @@ export function EmptyWorkspace({ skills }: { skills: SummarySkill[] }) {
   );
 }
 
+/**
+ * The thread's title, on the opening turn only.
+ *
+ * The status pill and the "x of y processes" readout moved to `AgentStatus`,
+ * which says what the agent is doing in the user's terms. Keeping them here
+ * too would state the same thing twice, once conversationally and once as a
+ * job readout — and the job readout is the framing this is moving away from.
+ * A finished turn needs no status at all: the answer is the status.
+ */
 export function RunHeader({ run }: { run: SummaryRun }) {
-  const active = run.status === "queued" || run.status === "running";
   return (
     <header className="workspace-header">
-      <div><span className={`run-pill ${run.status}`}>
-        {active && <LoaderCircle className="spin" size={14} />}
-        {statusLabel(run.status)}
-      </span>
+      <div>
         <h1>{run.kind === "full" ? "הסיכום המלא" : "תשובת המשך"}</h1>
       </div>
-      {run.progress.total > 0 &&
-        <div className="progress-copy"><Clock3 size={16} />
-          {run.progress.completed} מתוך {run.progress.total} תהליכים
-        </div>}
     </header>
-  );
-}
-
-function statusLabel(status: SummaryRun["status"]) {
-  const labels = {
-    queued: "ממתין", running: "מעבד", completed: "הושלם",
-    partial: "הושלם חלקית", failed: "נכשל",
-  };
-  return labels[status];
-}
-
-export function RunProgress({ run }: { run: SummaryRun }) {
-  const active = run.status === "queued" || run.status === "running";
-  if (!active || !run.progress.total) return null;
-  const width = (run.progress.completed / run.progress.total) * 100;
-  return (
-    <div className="progress-track" role="progressbar" aria-valuemin={0}
-      aria-valuemax={run.progress.total} aria-valuenow={run.progress.completed}>
-      <span style={{ width: `${width}%` }} />
-    </div>
   );
 }
 

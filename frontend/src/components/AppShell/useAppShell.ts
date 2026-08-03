@@ -64,10 +64,23 @@ export function useAppShell() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    await send(message);
+  };
+
+  /**
+   * Send one question through the same path the composer uses.
+   *
+   * A suggested question and a clarification option are asked *for* the user,
+   * so they take this rather than filling the textarea and submitting — but
+   * they must still pass identifier detection, Skill commands, and the busy
+   * guard, which is why `submit` is a thin wrapper over it instead of the
+   * other way round.
+   */
+  const send = async (text: string) => {
     if (submitting || isActive(run)) return;
     setSubmitting(true); setError(""); setNotice("");
     try {
-      const parsed = parseCommands(message, skills);
+      const parsed = parseCommands(text, skills);
       const detected = detectIdentifier(rootId, parsed.text, conversation);
       if (detected) {
         setRootId(detected); setNotice(identifierNotice(detected));
@@ -89,12 +102,14 @@ export function useAppShell() {
     }
   };
 
+  const ask = (question: string) => { void send(question); };
+
   return {
     rootId, setRootId, message, setMessage, geoMode, setGeoMode,
     geometry, setGeometry, conversations, skills,
     conversation, run, runs, error, submitting, sidebarOpen, setSidebarOpen,
     settingsOpen, setSettingsOpen, studioOpen, setStudioOpen, dark, setDark,
-    notice, startNew, selectConversation, submit,
+    notice, startNew, selectConversation, submit, ask,
   };
 }
 

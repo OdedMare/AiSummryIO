@@ -14,11 +14,12 @@ import Turn, { EvidenceView } from "./Turn";
  * fallback while a brand-new conversation has yet to load its thread.
  */
 export default function SummaryWorkspace({
-  runs, run, skills,
+  runs, run, skills, onAsk,
 }: {
   runs: SummaryRun[];
   run: SummaryRun | null;
   skills: SummarySkill[];
+  onAsk: (question: string) => void;
 }) {
   const [view, setView] = useState<EvidenceView | null>(null);
   const thread = runs.length ? runs : run ? [run] : [];
@@ -28,7 +29,8 @@ export default function SummaryWorkspace({
     <main id="main-workspace" className="workspace thread" aria-live="polite">
       {thread.map((item, index) => (
         <Turn key={item.id} run={item} view={view} setView={setView}
-          first={index === 0} />
+          first={index === 0} last={index === thread.length - 1}
+          onAsk={onAsk} />
       ))}
       <div ref={anchor} aria-hidden="true" />
     </main>

@@ -32,6 +32,7 @@ export interface PlanChatState<TDraft> {
   pending: boolean;
   error: string;
   send: (text: string) => Promise<void>;
+  confirm: () => void;
   reset: () => void;
 }
 
@@ -46,6 +47,7 @@ export function usePlanChat<TDraft>(
   onTurn: (
     messages: PlanChatMessage[], draft: TDraft | null,
   ) => Promise<PlanTurn<TDraft>>,
+  onReady?: (draft: TDraft) => void,
 ): PlanChatState<TDraft> {
   const [messages, setMessages] = useState<PlanChatMessage[]>([]);
   const [draft, setDraft] = useState<TDraft | null>(null);
@@ -71,12 +73,25 @@ export function usePlanChat<TDraft>(
       setResolved(turn.resolved); setOpenPoints(turn.open_points);
       setAwaitingConfirmation(turn.awaiting_confirmation);
       setReady(turn.ready);
+      if (turn.ready) onReady?.(turn.draft);
     } catch (reason) {
       // The FDE's own message stays in the thread so it is not retyped.
       setError(reason instanceof Error ? reason.message : "השיחה נכשלה");
     } finally {
       setPending(false);
     }
+  };
+
+  // The confirm button is already the FDE's explicit approval. Sending that
+  // approval through the model for one more turn let either interview repeat
+  // `awaiting_confirmation` forever. Apply the normalized draft directly;
+  // it remains an unsaved form the FDE can review and edit.
+  const confirm = () => {
+    if (!draft || !awaitingConfirmation || pending) return;
+    setMessages([
+      ...messages, { role: "fde", text: "מאשר, הגענו להסכמה." },
+    ]);
+    setAwaitingConfirmation(false); setReady(true); onReady?.(draft);
   };
 
   const reset = () => {
@@ -87,7 +102,7 @@ export function usePlanChat<TDraft>(
 
   return {
     messages, draft, question, resolved, openPoints, awaitingConfirmation,
-    ready, pending, error, send, reset,
+    ready, pending, error, send, confirm, reset,
   };
 }
 
@@ -161,7 +176,7 @@ export function PlanChat<TDraft>({
         <QuestionCard question={chat.question} onAnswer={say} />}
 
       {chat.awaitingConfirmation && !chat.pending &&
-        <ConfirmCard onAnswer={say} />}
+        <ConfirmCard onConfirm={chat.confirm} onRevise={say} />}
 
       <InterviewProgress
         resolved={chat.resolved} openPoints={chat.openPoints} />
@@ -246,17 +261,22 @@ function QuestionCard({
 }
 
 /** The interview does not act before the FDE confirms the summary above. */
-function ConfirmCard({ onAnswer }: { onAnswer: (text: string) => void }) {
+function ConfirmCard({
+  onConfirm, onRevise,
+}: {
+  onConfirm: () => void;
+  onRevise: (text: string) => void;
+}) {
   return (
     <div className="plan-confirm" role="group" aria-label="אישור סיכום">
       <p>הסוכן סיים לשאול. מאשרים את הסיכום שלמעלה?</p>
       <div className="plan-confirm-actions">
         <button type="button" className="planner-button"
-          onClick={() => onAnswer("מאשר, הגענו להסכמה.")}>
+          onClick={onConfirm}>
           <CheckCircle2 size={16} aria-hidden="true" /> מאשר
         </button>
         <button type="button" className="secondary-button"
-          onClick={() => onAnswer("עוד לא — יש נקודה שצריך לחדד.")}>
+          onClick={() => onRevise("עוד לא — יש נקודה שצריך לחדד.")}>
           עוד לא
         </button>
       </div>

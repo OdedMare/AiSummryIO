@@ -108,13 +108,6 @@ export default function PackageCatalog({
   };
 
   const save = async (event: FormEvent) => {
-    // TEMP DIAGNOSTIC — remove once the drawer navigation bug is pinned.
-    console.warn("[diag] studio-form save fired", {
-      target: (event.target as HTMLElement)?.className,
-      inDrawer: !!(event.target as HTMLElement)?.closest?.(
-        ".agent-chat-drawer",
-      ),
-    });
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
     try {
       await api.createPackage(packagePayload(form));
@@ -257,13 +250,14 @@ function ToolPlanChat({
     (messages, draft) => api.planToolChat(
       messages, { ...connectionDraft(form), ...(draft ?? {}) }, inspection,
     ),
+    (readyDraft) => { onApply(readyDraft); setOpen(false); },
   );
   const draft = chat.draft;
   const filled = draft
     ? AUTHORED_LABELS.filter(([field]) => draft[field]).length : 0;
   return (
     <PlanChatDrawer open={open} busy={chat.pending}
-      onOpen={() => { console.warn("[diag] chat button clicked"); setOpen(true); }}
+      onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
       label="שאלו את הסוכן" disabled={!inspection}
       disabledHint="הריצו Fetch 1 ID כדי שהסוכן יראה את הנתונים האמיתיים">
@@ -286,10 +280,6 @@ function ToolPlanChat({
               <dd>{draft.agent_enabled ? "כן" : "ל-workflow בלבד"}</dd>
             </div>
           </dl>
-          {chat.ready && <button type="button" className="planner-button"
-            onClick={() => { onApply(draft); setOpen(false); }}>
-            <Beaker size={17} aria-hidden="true" /> טעינה לטופס לעריכה
-          </button>}
         </div>}
       </PlanChat>
     </PlanChatDrawer>
@@ -363,6 +353,11 @@ function FieldAgent({
       messages, { ...connectionDraft(form), ...(draft ?? {}) }, inspection,
       field,
     ),
+    (readyDraft) => {
+      const offered = readyDraft[field];
+      if (typeof offered === "string" && offered) onApply(field, offered);
+      setOpen(false);
+    },
   );
   const offered = chat.draft?.[field];
   const value = typeof offered === "string" ? offered : "";
@@ -381,10 +376,6 @@ function FieldAgent({
               || field === "agent_instructions" ? "rtl" : "ltr"}>
             {value}
           </p>
-          {chat.ready && <button type="button" className="planner-button"
-            onClick={() => { onApply(field, value); setOpen(false); }}>
-            <Beaker size={16} aria-hidden="true" /> טעינה לשדה
-          </button>}
         </div>}
       </PlanChat>
     </FieldAgentPopover>
@@ -809,4 +800,3 @@ function emptyJsonArray(value: string) {
     return false;
   }
 }
-

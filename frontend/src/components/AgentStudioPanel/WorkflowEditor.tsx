@@ -156,8 +156,16 @@ function useWorkflowEditor(
   };
   /** Load an agent proposal into the form as an editable draft, never saved. */
   const loadPlan = (plan: WorkflowPlan) => {
-    if (!plan.can_build) return;
-    setForm(planForm(plan)); setSteps(plan.steps.map((step) => ({ ...step })));
+    setForm((current) => ({
+      ...current,
+      name: plan.name || current.name,
+      description: plan.description || current.description,
+      role: plan.role || current.role,
+      system_prompt: plan.system_prompt || current.system_prompt,
+    }));
+    if (plan.can_build) {
+      setSteps(plan.steps.map((step) => ({ ...step })));
+    }
     setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
   };
 
@@ -312,6 +320,7 @@ function WorkflowPlanChat({ editor }: { editor: Editor }) {
   const [open, setOpen] = useState(false);
   const chat = usePlanChat<WorkflowPlan>(
     (messages, draft) => api.planWorkflowChat(messages, draft),
+    (readyPlan) => { editor.loadPlan(readyPlan); setOpen(false); },
   );
   const plan = chat.draft;
   return (
@@ -341,10 +350,6 @@ function WorkflowPlanChat({ editor }: { editor: Editor }) {
               </li>)}
             </ul>
           </section>}
-          {chat.ready && <button type="button" className="planner-button"
-            onClick={() => { editor.loadPlan(plan); setOpen(false); }}>
-            <Sparkles size={17} aria-hidden="true" /> טעינה לטופס לבדיקה
-          </button>}
         </div>}
       </PlanChat>
     </PlanChatDrawer>
@@ -411,6 +416,16 @@ function WorkflowFieldAgent({
   const label = WORKFLOW_FIELD_LABELS[field];
   const chat = usePlanChat<WorkflowPlan>(
     (messages, draft) => api.planWorkflowChat(messages, draft, field),
+    (readyPlan) => {
+      if (field === "steps") editor.loadPlanSteps(readyPlan);
+      else {
+        const offered = readyPlan[field];
+        if (typeof offered === "string" && offered) {
+          editor.update(field, offered);
+        }
+      }
+      setOpen(false);
+    },
   );
   const plan = chat.draft;
   // A step plan is only offerable once the shared validation gate accepted it;
@@ -450,16 +465,6 @@ function WorkflowFieldAgent({
             <p className="field-agent-proposal-label">ההצעה לשדה:</p>
             <p className="field-agent-proposal">{value}</p>
           </>}
-          {chat.ready && (offerSteps || !!value) &&
-            <button type="button" className="planner-button"
-              onClick={() => {
-                if (field === "steps") editor.loadPlanSteps(plan);
-                else editor.update(field, value);
-                setOpen(false);
-              }}>
-              <Sparkles size={16} aria-hidden="true" />
-              {field === "steps" ? " טעינת השלבים לקנבס" : " טעינה לשדה"}
-            </button>}
         </div>}
       </PlanChat>
     </FieldAgentPopover>
@@ -729,13 +734,6 @@ function workflowForm(item: WorkflowVersion) {
     system_prompt: item.system_prompt,
     output_schema: JSON.stringify(item.output_schema, null, 2),
     examples: JSON.stringify(item.examples, null, 2),
-  };
-}
-
-function planForm(plan: WorkflowPlan) {
-  return {
-    ...emptyWorkflow, name: plan.name, description: plan.description,
-    role: plan.role, system_prompt: plan.system_prompt,
   };
 }
 
