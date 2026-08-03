@@ -283,6 +283,24 @@ ROUTER_SCHEMA = {
 }
 
 
+REWRITE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        # The follow-up restated so it stands on its own, with pronouns and
+        # elisions resolved against the thread. The router and every summary
+        # prompt below it see one question and no history, so a question that
+        # only makes sense as a reply cannot be routed at all.
+        "question": {"type": "string"},
+        # Whether resolving the thread actually changed anything. A question
+        # already standalone is passed through, which is checkable rather
+        # than inferred from comparing two strings.
+        "changed": {"type": "boolean"},
+    },
+    "required": ["question", "changed"],
+    "additionalProperties": False,
+}
+
+
 def merge_output_schema(output_schema: Any) -> Dict[str, Any]:
     """Extend the section contract with the workflow's own fields.
 

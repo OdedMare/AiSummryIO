@@ -96,6 +96,19 @@ export default function WorkflowCanvas({
   const nodes = useMemo(
     () => mergeMeasurements(derived, measured), [derived, measured]);
 
+  // A node added after mount — a new step, or the whole graph re-created when
+  // it is re-parented into the fullscreen overlay — is not in `measured` yet,
+  // so React Flow has nothing to attach its measurement to and never reports
+  // one. Seeding the entry is what lets a step added later be measured at all.
+  useEffect(() => {
+    setMeasured((current) => {
+      const known = new Set(current.map((node) => node.id));
+      const added = derived.filter((node) => !known.has(node.id));
+      if (!added.length) return current;
+      return [...current, ...added];
+    });
+  }, [derived]);
+
   /**
    * Drag, measurement, selection, and removal of nodes.
    *

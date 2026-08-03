@@ -11,7 +11,7 @@ from app.dal.repository.base import new_id
 
 class ConversationRepository:
     def create_conversation(
-        self, session_id: str, root_id: str, boundaries=None
+        self, session_id: str, root_id: str, boundaries=None, title: str = ""
     ) -> dict:
         row_id = new_id()
         retention = self._store.get().conversation_retention_days
@@ -22,6 +22,7 @@ class ConversationRepository:
                 (
                     row_id, session_id, root_id,
                     Jsonb(boundaries) if boundaries else None, expires,
+                    conversation_title(title),
                 ),
             )
             connection.commit()
@@ -77,6 +78,48 @@ class ConversationRepository:
         """, (session_id,))
 
 
+_TITLE_LIMIT = 80
+
+
+def conversation_title(question: str) -> str:
+    """The opening question, collapsed and bounded, as a thread title.
+
+    Truncation is on a word boundary when one is close enough to the limit,
+    so a title breaks between words rather than mid-word.
+    """
+    text = " ".join((question or "").split())
+    if len(text) <= _TITLE_LIMIT:
+        return text
+    clipped = text[:_TITLE_LIMIT]
+    spaced = clipped.rsplit(" ", 1)[0]
+    return (spaced if len(spaced) > _TITLE_LIMIT // 2 else clipped) + "…"
+
+
+def _turn(row: dict) -> dict:
+    """One run projected as a question/answer pair.
+
+    The answer is the headline and summary only. The rest of `result` is
+    facts and sections already carried into routing as evidence, so
+    including it here would spend the context budget twice on the same data.
+    """
+    result = row.get("result") or {}
+    return {
+        "run_id": row["id"],
+        "question": row.get("question") or "",
+        "answer": _answer(result),
+        "status": row["status"],
+        "created_at": row["created_at"],
+    }
+
+
+def _answer(result: dict) -> str:
+    headline = (result.get("headline") or "").strip()
+    summary = (result.get("summary") or "").strip()
+    if headline and summary and not summary.startswith(headline):
+        return headline + "\n" + summary
+    return summary or headline
+
+
 def _conversation_filter(conversation_id: str, session_id):
     if session_id:
         return "id=%s AND session_id=%s", (conversation_id, session_id)
@@ -85,6 +128,6 @@ def _conversation_filter(conversation_id: str, session_id):
 
 _INSERT_CONVERSATION = """
     INSERT INTO conversations
-        (id, session_id, root_id, boundaries, expires_at)
-    VALUES (%s,%s,%s,%s,%s)
+        (id, session_id, root_id, boundaries, expires_at, title)
+    VALUES (%s,%s,%s,%s,%s,%s)
 """

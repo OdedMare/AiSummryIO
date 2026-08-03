@@ -100,6 +100,12 @@ ALTER TABLE conversations
 -- is optional. Existing rows already hold a value and are unaffected.
 ALTER TABLE conversations ALTER COLUMN root_id DROP NOT NULL;
 
+-- What the user asked, so history reads as a thread of questions rather than
+-- a list of raw identifiers. Empty on existing rows, which the UI falls back
+-- to rendering as it did before.
+ALTER TABLE conversations
+    ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS summary_runs (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,

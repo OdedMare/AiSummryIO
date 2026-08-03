@@ -45,6 +45,50 @@ class PackageRepository:
             connection.commit()
         return self.get_package(row_id)
 
+    def delete_package(self, version_id: str) -> dict:
+        """Remove a tool and every version of it.
+
+        Deleting one version would leave the catalog showing an older one and
+        read as a failed delete, since the list is `DISTINCT ON (package_key)`.
+        The whole key goes, which is also what makes the version counter
+        restart cleanly if the FDE recreates the tool.
+
+        `workflow_steps.package_version_id` has no `ON DELETE` clause, so a
+        tool still wired into a workflow would otherwise fail as a raw
+        constraint violation — a 500 with a psycopg message. It is named here
+        instead, with the workflows that block it.
+        """
+        # `_one` raises NotFoundError (404) when the id is unknown.
+        package = self._one(
+            "SELECT package_key, name FROM summary_packages WHERE id=%s",
+            (version_id,),
+        )
+        used_by = self._workflows_using(package["package_key"])
+        if used_by:
+            raise ValueError(
+                "אי אפשר למחוק טול שנמצא בשימוש בתהליכים: %s. "
+                "יש למחוק או לערוך אותם קודם." % "; ".join(used_by)
+            )
+        with connect(self._store) as connection:
+            connection.execute(
+                "DELETE FROM summary_packages WHERE package_key=%s",
+                (package["package_key"],),
+            )
+            connection.commit()
+        return {"deleted": package["package_key"], "name": package["name"]}
+
+    def _workflows_using(self, package_key: str) -> List[str]:
+        """Names of workflows whose steps point at any version of this tool."""
+        rows = self._all("""
+            SELECT DISTINCT w.name, w.version
+            FROM workflow_steps AS s
+            JOIN summary_packages AS p ON p.id = s.package_version_id
+            JOIN summary_workflows AS w ON w.id = s.workflow_id
+            WHERE p.package_key = %s
+            ORDER BY w.name
+        """, (package_key,))
+        return ["%s (v%s)" % (row["name"], row["version"]) for row in rows]
+
 
 def _package_values(row_id, package_key, version, data):
     return (
