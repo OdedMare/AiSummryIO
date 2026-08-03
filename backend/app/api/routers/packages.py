@@ -25,6 +25,10 @@ def build(context) -> APIRouter:
         root_id = data.pop("root_id")
         return context.service.inspect_tool(data, root_id)
 
+    @router.delete("/{version_id}")
+    def delete_package(version_id: str):
+        return context.repository.delete_package(version_id)
+
     @router.post("/plan-chat")
     def plan_tool_chat(payload: ToolPlanChatCreate):
         return context.service.plan_tool_chat(

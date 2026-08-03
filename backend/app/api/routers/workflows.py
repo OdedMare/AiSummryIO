@@ -30,6 +30,10 @@ def build(context) -> APIRouter:
     def publish_workflow(workflow_id: str):
         return context.repository.publish_workflow(workflow_id)
 
+    @router.delete("/{workflow_id}")
+    def delete_workflow(workflow_id: str):
+        return context.repository.delete_workflow(workflow_id)
+
     @router.post("/{workflow_id}/dry-run")
     def dry_run(workflow_id: str, payload: DryRunCreate):
         return context.service.dry_run(workflow_id, payload.root_id)

@@ -54,6 +54,31 @@ class WorkflowRepository:
             connection.commit()
         return self.get_workflow(version_id)
 
+    def delete_workflow(self, version_id: str) -> dict:
+        """Remove a workflow and every version of it.
+
+        The whole key goes, for the same reason as a tool: `list_workflows` is
+        `DISTINCT ON (workflow_key)`, so dropping one version would surface an
+        older one and read as a delete that did not happen.
+
+        `workflow_steps` cascades from `summary_workflows`, so the steps go
+        with it. Evidence rows reference `workflow_id` without a foreign key
+        and are deliberately left alone — they are the audit trail of runs that
+        really happened, and a past summary stays traceable after the workflow
+        that produced it is retired.
+        """
+        workflow = self._one(
+            "SELECT workflow_key, name FROM summary_workflows WHERE id=%s",
+            (version_id,),
+        )
+        with connect(self._store) as connection:
+            connection.execute(
+                "DELETE FROM summary_workflows WHERE workflow_key=%s",
+                (workflow["workflow_key"],),
+            )
+            connection.commit()
+        return {"deleted": workflow["workflow_key"], "name": workflow["name"]}
+
     def published_workflows(self, roles: List[str]) -> List[dict]:
         rows = self._all("""
             SELECT * FROM summary_workflows

@@ -4,24 +4,34 @@ import json
 from typing import List
 
 from app.common.errors import AgentError
+from app.bl.workflow_engine_pkg import history
 from app.bl.workflow_engine_pkg.schemas import ROUTER_SCHEMA
 
 
 def follow_up(service, run, conversation, progress) -> dict:
+    """Answer a follow-up in the context of the thread it belongs to.
+
+    The question is resolved against prior turns before anything selects on
+    it, so routing, execution, and synthesis all see a question that names
+    its own subject. `run["question"]` keeps the user's original wording;
+    only what the model reads downstream is the resolved form.
+    """
     prior, workflows, tools = _available(service, conversation)
     skills = _skills(service, run)
+    turns = history.recent_turns(service, conversation)
+    question = history.standalone_question(service, run["question"], turns)
     selected = service._select_detail(
-        run["question"], workflows, prior, tools=tools
+        question, workflows, prior, tools=tools, turns=turns
     )
     if selected.get("clarification"):
         return _clarification_result(selected, workflows, tools)
     chosen = _chosen_workflows(service, selected, workflows, tools)
     if chosen:
         return service._execute(
-            run, conversation["root_id"], run["question"], chosen, progress,
+            run, conversation["root_id"], question, chosen, progress,
             skills, conversation.get("boundaries"),
         )
-    return service._synthesize_cached(run["question"], prior, skills)
+    return service._synthesize_cached(question, prior, skills)
 
 
 def _available(service, conversation):
@@ -61,11 +71,13 @@ def _chosen_workflows(service, selected, workflows, tools) -> List[dict]:
     return [service._tool_workflow(tool)] if tool else chosen
 
 
-def select_detail(service, question, workflows, evidence, tools=None) -> dict:
+def select_detail(
+    service, question, workflows, evidence, tools=None, turns=None
+) -> dict:
     tools = tools or []
     if not workflows and not tools:
         return _no_options(evidence)
-    payload = _router_payload(question, workflows, tools, evidence)
+    payload = _router_payload(question, workflows, tools, evidence, turns)
     prompt = service._repository.published_content(
         "tool-aware-router",
         "בחר ראיות קיימות, workflow, טול עצמאי או clarification.",
