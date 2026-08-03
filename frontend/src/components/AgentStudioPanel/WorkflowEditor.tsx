@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import {
   CheckCircle2, ChevronDown, Play, Plus, Save, Send, Sparkles,
-  Trash2, Workflow,
+  Trash2, Wand2, Workflow,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
@@ -68,6 +68,21 @@ function useWorkflowEditor(
       current.filter((_, position) => position !== index),
       current[index]?.key ?? "",
     ));
+
+  /**
+   * Delete by key, for the canvas — where a node is identified by its key
+   * rather than by its position in the array.
+   *
+   * Routed through the same `releaseDependents` as the step card's delete
+   * button, so a step feeding another cannot be removed without returning
+   * its dependents to the main identifier.
+   */
+  const removeStepByKey = (key: string) => {
+    setSteps((current) => current.some((step) => step.key === key)
+      ? releaseDependents(current.filter((step) => step.key !== key), key)
+      : current);
+    setSelectedKey((selected) => (selected === key ? "" : selected));
+  };
 
   /**
    * Point one step at a new source; the canvas draws this as an edge.
@@ -136,13 +151,53 @@ function useWorkflowEditor(
     setSelectedKey("");
     setMessage("שלבי הסוכן נטענו לקנבס. יש לבדוק את החיבורים לפני השמירה.");
   };
+  /**
+   * A complete one-step workflow wrapping a single tool.
+   *
+   * The common case is not a pipeline at all: an FDE wants to expose one
+   * FLAPI package as a route and see its rows. Building that by hand meant
+   * naming the workflow, adding a step, picking the tool, and copying its
+   * output contract into `output_schema` by hand. Everything here is already
+   * known from the package itself.
+   *
+   * The step reads `workflow.id` — the only source a first step can have —
+   * so the result is immediately valid and, being a single level, runs as
+   * one call.
+   */
+  const createFromTool = (item: PackageVersion) => {
+    setForm({
+      ...emptyWorkflow,
+      name: item.name,
+      description: item.description,
+      role: "detail",
+      // The section contract is shared and added by the backend; a workflow's
+      // own schema only extends it. Publishing the tool's output as `fields`
+      // is what surfaces the package's JSON on the section it produces.
+      output_schema: JSON.stringify(toolOutputSchema(item), null, 2),
+      examples: "[]",
+    });
+    const step: WorkflowStep = {
+      key: "step1", name: item.name, package_version_id: item.id,
+      depends_on: [], input_source: "workflow.id", input_field: "",
+      summary_prompt: "",
+    };
+    setSteps([step]);
+    setSelectedKey(step.key);
+    setDryResult("");
+    setError("");
+    setMessage(
+      `נוצרה טיוטת תהליך עם הטול „${item.name}” וחוזה הפלט שלו. ` +
+      "בדקו ושמרו.",
+    );
+  };
+
   const reset = () => { setForm(emptyWorkflow); setSteps([]); };
 
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
     libraryError, selectedKey, setSelectedKey, update, edit, addStep,
-    updateStep, removeStep, connectStep, disconnectStep, save, publish,
-    dryRun, loadPlan, loadPlanSteps, reset,
+    updateStep, removeStep, removeStepByKey, connectStep, disconnectStep,
+    save, publish, dryRun, loadPlan, loadPlanSteps, createFromTool, reset,
   };
 }
 
@@ -382,6 +437,54 @@ function WorkflowFieldAgent({
   );
 }
 
+/**
+ * Build a whole workflow from one tool, in a single choice.
+ *
+ * Wrapping one package as a route is the most common thing an FDE does, and
+ * it required four separate acts before: name the workflow, add a step, pick
+ * the tool, then copy the tool's output contract into `output_schema` by
+ * hand. All of it is derivable from the package.
+ *
+ * Replacing existing work is confirmed first — this overwrites the form, not
+ * just the steps.
+ */
+function SingleToolWorkflow({
+  packages, editor,
+}: {
+  packages: PackageVersion[];
+  editor: Editor;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!packages.length) return null;
+  const choose = (item: PackageVersion) => {
+    setOpen(false);
+    const occupied = editor.steps.length || editor.form.name.trim();
+    if (occupied && !window.confirm(
+      `להחליף את הטיוטה הנוכחית בתהליך חד-שלבי עם „${item.name}”?`
+    )) return;
+    editor.createFromTool(item);
+  };
+  return (
+    <div className="single-tool-workflow">
+      <button type="button" className="secondary-button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}>
+        <Wand2 size={16} /> תהליך מטול יחיד
+      </button>
+      {open && <ul className="single-tool-menu" role="menu"
+        aria-label="בחירת טול לתהליך חד-שלבי">
+        {packages.map((item) =>
+          <li key={item.id}>
+            <button type="button" role="menuitem" onClick={() => choose(item)}>
+              <strong>{item.name}</strong>
+              <small dir="ltr">{item.package_id} · v{item.version}</small>
+            </button>
+          </li>)}
+      </ul>}
+    </div>
+  );
+}
+
 function StepEditor({
   packages, editor,
 }: {
@@ -393,16 +496,20 @@ function StepEditor({
       <header><div><h4>שלבי התהליך
         <WorkflowFieldAgent field="steps" editor={editor} /></h4>
         <p>גררו חיבור בין שלבים בקנבס, או ערכו כל שלב בטופס שמתחתיו.</p>
-      </div><button type="button" className="secondary-button"
-        onClick={editor.addStep} disabled={!packages.length}>
-        <Plus size={16} /> הוספת שלב
-      </button></header>
+      </div><div className="step-editor-actions">
+        <SingleToolWorkflow packages={packages} editor={editor} />
+        <button type="button" className="secondary-button"
+          onClick={editor.addStep} disabled={!packages.length}>
+          <Plus size={16} /> הוספת שלב
+        </button>
+      </div></header>
       {!!editor.steps.length && <WorkflowCanvas
         steps={editor.steps} packages={packages}
         selectedKey={editor.selectedKey}
         onSelectStep={editor.setSelectedKey}
         onConnectStep={editor.connectStep}
-        onDisconnectStep={editor.disconnectStep} />}
+        onDisconnectStep={editor.disconnectStep}
+        onRemoveStep={editor.removeStepByKey} />}
       {editor.steps.map((step, index) =>
         <StepCard key={`${step.key}-${index}`} step={step} index={index}
           packages={packages} editor={editor} />)}
@@ -601,6 +708,59 @@ function planForm(plan: WorkflowPlan) {
     ...emptyWorkflow, name: plan.name, description: plan.description,
     role: plan.role, system_prompt: plan.system_prompt,
   };
+}
+
+/**
+ * A workflow `output_schema` that re-exposes one tool's own output contract.
+ *
+ * A workflow's schema **extends** the shared section contract, and the extra
+ * properties come back under `section.fields` (`_merge_output_schema` on the
+ * backend). So wrapping the package's rows under a `rows` array is what makes
+ * the tool's JSON reachable on the section rather than only in raw evidence.
+ *
+ * The properties are taken from the package's declared schema when it has
+ * one, and inferred from an example row otherwise — mirroring how the canvas
+ * derives a tool's output fields.
+ */
+function toolOutputSchema(item: PackageVersion): Record<string, unknown> {
+  const declared = item.output_schema as {
+    properties?: Record<string, unknown>;
+  } | null;
+  const properties = declared?.properties
+    && typeof declared.properties === "object"
+    ? declared.properties
+    : inferredProperties(item.example_output ?? []);
+  return {
+    type: "object",
+    properties: {
+      rows: {
+        type: "array",
+        description: `שורות הפלט של ${item.name}`,
+        items: Object.keys(properties).length
+          ? { type: "object", properties }
+          : { type: "object" },
+      },
+    },
+  };
+}
+
+/** Property types guessed from the first example row, when no schema exists. */
+function inferredProperties(
+  examples: Array<Record<string, unknown>>,
+): Record<string, unknown> {
+  const row = examples.find(
+    (candidate) => candidate && typeof candidate === "object");
+  if (!row) return {};
+  return Object.fromEntries(Object.entries(row).map(
+    ([name, value]) => [name, { type: jsonType(value) }]));
+}
+
+function jsonType(value: unknown): string {
+  if (typeof value === "number") return "number";
+  if (typeof value === "boolean") return "boolean";
+  if (Array.isArray(value)) return "array";
+  if (value && typeof value === "object") return "object";
+  return "string";
 }
 
 function workflowPayload(form: typeof emptyWorkflow, steps: WorkflowStep[]) {

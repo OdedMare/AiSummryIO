@@ -383,8 +383,18 @@ class _WorkflowPlanner(_Planner):
         )
         return self._focused(payload, focus_field)
 
-    def _result(self, answer: dict, _draft) -> dict:
-        plan = validated_plan(as_dict(answer.get("draft")), self._tools)
+    # What a turn may carry forward from the last one. `steps` is the reason
+    # this exists: the plan is rebuilt from scratch every turn, so a model that
+    # answers the confirmation turn without re-emitting the route would drop
+    # the wiring precisely when `ready` turns true — leaving the FDE agreeing
+    # to a plan the form then refuses to load.
+    _CARRIED_FIELDS = (
+        "name", "description", "role", "system_prompt", "steps",
+    )
+
+    def _result(self, answer: dict, draft) -> dict:
+        merged = self._merged_draft(answer.get("draft"), draft)
+        plan = validated_plan(merged, self._tools)
         common = self._common(answer)
         return dict(
             common,
@@ -393,6 +403,23 @@ class _WorkflowPlanner(_Planner):
             ready=is_ready(answer, common) and plan["can_build"],
             draft=plan,
         )
+
+    @classmethod
+    def _merged_draft(cls, draft, previous) -> dict:
+        """This turn over the last, so nothing agreed is silently dropped.
+
+        The tool planner merges for the same reason; the workflow planner has
+        to be more careful about *what* it carries. `missing_tools` is
+        deliberately not carried: it is this turn's verdict on this turn's
+        plan, and a stale entry would keep reporting a gap the FDE has since
+        filled. `validated_plan` re-derives it either way.
+        """
+        draft, previous = as_dict(draft), as_dict(previous)
+        merged = dict(draft)
+        for field in cls._CARRIED_FIELDS:
+            if not draft.get(field) and previous.get(field):
+                merged[field] = previous[field]
+        return merged
 
 
 def is_ready(answer: dict, common: dict) -> bool:

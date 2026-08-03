@@ -11,18 +11,17 @@
  * be saved.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactFlow, {
   Background, Controls, Handle, MarkerType, MiniMap, Position,
-  applyNodeChanges,
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
   type NodeProps, type XYPosition,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import {
-  AlertTriangle, GitCommitHorizontal, Map as MapIcon, Maximize2, Minimize2,
-  Package, Rows3, Tag,
+  AlertTriangle, GitCommitHorizontal, LayoutGrid, Map as MapIcon, Maximize2,
+  Minimize2, Package, Rows3, Tag,
 } from "lucide-react";
 import type { PackageVersion, WorkflowStep } from "@/types";
 
@@ -37,6 +36,7 @@ const SOURCE_NODES = [
 
 export default function WorkflowCanvas({
   steps, packages, onConnectStep, onDisconnectStep, onSelectStep, selectedKey,
+  onRemoveStep,
 }: {
   steps: WorkflowStep[];
   packages: PackageVersion[];
@@ -46,11 +46,63 @@ export default function WorkflowCanvas({
   onDisconnectStep: (targetKey: string) => void;
   onSelectStep: (key: string) => void;
   selectedKey: string;
+  onRemoveStep: (key: string) => void;
 }) {
+  /**
+   * Where the FDE has dragged each node.
+   *
+   * Node positions are otherwise derived from `stepLevels` on every render,
+   * so a dragged node snapped straight back the moment any step state
+   * changed. An entry here overrides the computed layout for that node and
+   * nothing else: a node never moved keeps following the automatic layout,
+   * so newly added steps still place themselves.
+   */
+  const [moved, setMoved] = useState<Record<string, XYPosition>>({});
+
+  // A deleted key keeps its entry until something else prunes it, so the
+  // lookup is filtered to live nodes here rather than in an effect: were a
+  // key reused by a later step, it would otherwise inherit the old node's
+  // position. Filtering at read time also avoids a second render pass.
+  const live = useMemo(() => {
+    const keys = new Set<string>([
+      ...steps.map((step) => step.key), ROOT_SOURCE, AREA_SOURCE,
+    ]);
+    return Object.fromEntries(Object.entries(moved)
+      .filter(([key]) => keys.has(key)));
+  }, [moved, steps]);
+
   const nodes = useMemo(
-    () => canvasNodes(steps, packages, selectedKey), [steps, packages, selectedKey]);
+    () => canvasNodes(steps, packages, selectedKey, live),
+    [steps, packages, selectedKey, live]);
   const edges = useMemo(
     () => canvasEdges(steps, packages), [steps, packages]);
+
+  /**
+   * Drag, selection, and removal of nodes.
+   *
+   * `deleteKeyCode` was already set, but React Flow only *reports* a deletion
+   * — with no `onNodesChange` the change was dropped and the key did
+   * nothing. Removing a step here is what makes Delete work, and it routes
+   * through the editor's own `removeStep` so dependents are released exactly
+   * as they are when the step card's delete button is used.
+   */
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    const positions: Record<string, XYPosition> = {};
+    changes.forEach((change) => {
+      if (change.type === "position" && change.position) {
+        positions[change.id] = change.position;
+      }
+      if (change.type === "remove" && !isSourceNode(change.id)) {
+        onRemoveStep(change.id);
+      }
+    });
+    if (Object.keys(positions).length) {
+      setMoved((current) => ({ ...current, ...positions }));
+    }
+  }, [onRemoveStep]);
+
+  const resetLayout = useCallback(() => setMoved({}), []);
+  const hasMoved = Object.keys(live).length > 0;
 
   // A step carries exactly one `input_source`, so a new connection replaces
   // whatever fed that node rather than adding a second incoming edge. The
@@ -111,6 +163,7 @@ export default function WorkflowCanvas({
       onEdgeUpdate={onEdgeUpdate}
       edgeUpdaterRadius={14}
       onEdgesChange={onEdgesChange}
+      onNodesChange={onNodesChange}
       onNodeClick={(_, node) => {
         if (!isSourceNode(node.id)) onSelectStep(node.id);
       }}
@@ -146,20 +199,30 @@ export default function WorkflowCanvas({
       <ExecutionMode steps={steps} />
       <div className="workflow-canvas-surface" aria-label="עריכת חיבורי התהליך">
         {graph}
-        <button type="button" className="canvas-expand"
-          onClick={() => setExpanded((current) => !current)}
-          aria-expanded={expanded}
-          aria-label={expanded ? "יציאה ממסך מלא" : "עריכה במסך מלא"}
-          title={expanded ? "יציאה ממסך מלא (Esc)" : "עריכה במסך מלא"}>
-          {expanded
-            ? <Minimize2 size={16} aria-hidden="true" />
-            : <Maximize2 size={16} aria-hidden="true" />}
-        </button>
+        <div className="canvas-tools">
+          {/* Only offered once something has actually been moved, so the
+              automatic layout stays the silent default. */}
+          {hasMoved && <button type="button" className="canvas-expand"
+            onClick={resetLayout} title="סידור אוטומטי מחדש"
+            aria-label="סידור אוטומטי מחדש">
+            <LayoutGrid size={16} aria-hidden="true" />
+          </button>}
+          <button type="button" className="canvas-expand"
+            onClick={() => setExpanded((current) => !current)}
+            aria-expanded={expanded}
+            aria-label={expanded ? "יציאה ממסך מלא" : "עריכה במסך מלא"}
+            title={expanded ? "יציאה ממסך מלא (Esc)" : "עריכה במסך מלא"}>
+            {expanded
+              ? <Minimize2 size={16} aria-hidden="true" />
+              : <Maximize2 size={16} aria-hidden="true" />}
+          </button>
+        </div>
       </div>
       <p className="canvas-hint">
         גררו משדה פלט אל שלב אחר כדי להזרים אליו את השדה הזה — החיבור קובע
         גם את שדה המזהה. אפשר לגרור קצה של חיבור קיים אל שדה אחר כדי להזיז
-        אותו, ומחיקת חיבור מחזירה את השלב למזהה הראשי.
+        אותו, ומחיקת חיבור מחזירה את השלב למזהה הראשי. גררו שלב כדי למקם
+        אותו בחופשיות, ומקש Delete מוחק את השלב שנבחר.
         {expanded && " גרירה על הרקע מזיזה את התצוגה, וגלגלת מקרבת ומרחיקה."}
       </p>
     </div>
@@ -396,14 +459,18 @@ const NODE_TYPES = { sourceNode: SourceNode, stepNode: StepNode };
 
 function canvasNodes(
   steps: WorkflowStep[], packages: PackageVersion[], selectedKey: string,
+  moved: Record<string, XYPosition> = {},
 ): Node[] {
   const levels = stepLevels(steps);
   const sources: Node[] = SOURCE_NODES.map((item, index) => ({
     id: item.id,
     type: "sourceNode",
-    position: { x: 0, y: index * 96 },
+    position: moved[item.id] ?? { x: 0, y: index * 96 },
     data: item,
     draggable: true,
+    // The workflow-level inputs are fixtures of every graph, not steps, so
+    // Delete must not remove them.
+    deletable: false,
   }));
   const stepNodes: Node[] = [];
   levels.forEach((level, column) => {
@@ -418,9 +485,12 @@ function canvasNodes(
         type: "stepNode",
         // RTL reads right-to-left, but React Flow's x axis does not flip, so
         // the layout runs left-to-right and the handles are mirrored instead.
-        position: { x: 290 * (column + 1), y: offset },
+        // A dragged node keeps where the FDE put it; the rest stay on the
+        // computed grid.
+        position: moved[step.key] ?? { x: 290 * (column + 1), y: offset },
         data,
         draggable: true,
+        deletable: true,
       });
       offset += nodeHeight(data) + 26;
     });
