@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactFlow, {
   Background, Controls, Handle, MarkerType, MiniMap, Position,
-  applyNodeChanges,
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
   type NodeProps, type XYPosition,
 } from "reactflow";
@@ -92,22 +91,18 @@ export default function WorkflowCanvas({
    * Layout still comes from `derived`: the measurement is merged onto it, so
    * a step renamed or rewired below still updates the node it belongs to.
    */
-  const [measured, setMeasured] = useState<Node[]>(derived);
+  /**
+   * Measurements only, keyed by node id.
+   *
+   * Storing sizes rather than whole nodes is what keeps this independent of
+   * `derived`: a node added later needs no seeding entry, because
+   * `mergeMeasurements` simply finds nothing for it and passes it through
+   * until React Flow reports its first `dimensions` change. Holding nodes
+   * here instead would mean reconciling two node lists on every step edit.
+   */
+  const [sizes, setSizes] = useState<Record<string, NodeSize>>({});
   const nodes = useMemo(
-    () => mergeMeasurements(derived, measured), [derived, measured]);
-
-  // A node added after mount — a new step, or the whole graph re-created when
-  // it is re-parented into the fullscreen overlay — is not in `measured` yet,
-  // so React Flow has nothing to attach its measurement to and never reports
-  // one. Seeding the entry is what lets a step added later be measured at all.
-  useEffect(() => {
-    setMeasured((current) => {
-      const known = new Set(current.map((node) => node.id));
-      const added = derived.filter((node) => !known.has(node.id));
-      if (!added.length) return current;
-      return [...current, ...added];
-    });
-  }, [derived]);
+    () => mergeMeasurements(derived, sizes), [derived, sizes]);
 
   /**
    * Drag, measurement, selection, and removal of nodes.
@@ -118,17 +113,20 @@ export default function WorkflowCanvas({
    * through the editor's own `removeStep` so dependents are released exactly
    * as they are when the step card's delete button is used.
    *
-   * Every other change is applied through `applyNodeChanges` rather than
-   * cherry-picked, which is what keeps `dimensions` — the one this handler
-   * used to discard — from being lost again.
+   * `dimensions` is the change this handler used to discard, and recording it
+   * is the whole fix — without it no node is ever measured.
    */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const positions: Record<string, XYPosition> = {};
+    const measured: Record<string, NodeSize> = {};
     changes.forEach((change) => {
-      // `add`/`reset` carry `item` instead of `id`, so the guarded types are
-      // narrowed before either field is read.
+      // `add`/`reset` carry `item` instead of `id`, so each type is narrowed
+      // before either field is read.
       if (change.type === "position" && change.position) {
         positions[change.id] = change.position;
+      }
+      if (change.type === "dimensions" && change.dimensions) {
+        measured[change.id] = change.dimensions;
       }
       if (change.type === "remove" && !isSourceNode(change.id)) {
         onRemoveStep(change.id);
@@ -137,7 +135,9 @@ export default function WorkflowCanvas({
     if (Object.keys(positions).length) {
       setMoved((current) => ({ ...current, ...positions }));
     }
-    setMeasured((current) => applyNodeChanges(changes, current));
+    if (Object.keys(measured).length) {
+      setSizes((current) => ({ ...current, ...measured }));
+    }
   }, [onRemoveStep]);
 
   const resetLayout = useCallback(() => setMoved({}), []);
@@ -496,30 +496,24 @@ type StepNodeData = {
 
 const NODE_TYPES = { sourceNode: SourceNode, stepNode: StepNode };
 
+/** The size React Flow measured for one node. */
+type NodeSize = { width: number; height: number };
+
 /**
- * `derived` nodes carrying the size React Flow measured for them.
+ * `derived` nodes carrying the size React Flow measured for each.
  *
  * The step array stays the source of truth for which nodes exist, their data,
- * and their computed position — a node dropped from `derived` disappears here
- * too, so a deleted step cannot linger with a stale measurement. Only the
- * fields React Flow owns are carried over, and a node it has not measured yet
- * simply passes through until the first `dimensions` change arrives.
+ * and their computed position; only the measurement comes from elsewhere. A
+ * node with no recorded size passes through untouched, so a step added after
+ * mount renders normally and picks up its size on the next `dimensions`
+ * change. Sizes for deleted steps are simply never looked up.
  */
-function mergeMeasurements(derived: Node[], measured: Node[]): Node[] {
-  if (!measured.length) return derived;
-  const sizes = new Map(measured.map((node) => [node.id, node]));
+function mergeMeasurements(
+  derived: Node[], sizes: Record<string, NodeSize>,
+): Node[] {
   return derived.map((node) => {
-    const previous = sizes.get(node.id);
-    if (previous?.width == null || previous?.height == null) return node;
-    return {
-      ...node,
-      width: previous.width,
-      height: previous.height,
-      // Set alongside width/height by React Flow's own measurement, and read
-      // by the same viewport test, so it travels with them rather than being
-      // recomputed from a stale layout.
-      positionAbsolute: previous.positionAbsolute,
-    };
+    const size = sizes[node.id];
+    return size ? { ...node, ...size } : node;
   });
 }
 
