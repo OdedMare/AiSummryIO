@@ -249,7 +249,7 @@ function WorkflowLibrary({
       {editor.libraryError &&
         <p className="form-error" role="alert">{editor.libraryError}</p>}
       <label className="dry-run-field"><span>מזהה לבדיקה חיה</span>
-        <input dir="ltr" value={editor.dryRunId}
+        <input dir="ltr" value={editor.dryRunId} placeholder="001234567"
           onChange={(e) => editor.setDryRunId(e.target.value)} />
       </label>
     </section>
@@ -363,7 +363,7 @@ function WorkflowFields({ editor }: { editor: Editor }) {
       <div className="form-grid two">
         <label><span>שם התהליך *
           <WorkflowFieldAgent field="name" editor={editor} /></span>
-          <input value={form.name}
+          <input value={form.name} placeholder="לדוגמה: תמונת מצב פיננסית"
             onChange={(e) => update("name", e.target.value)} /></label>
         <label><span>תפקיד
           <WorkflowFieldAgent field="role" editor={editor} /></span>
@@ -377,6 +377,7 @@ function WorkflowFields({ editor }: { editor: Editor }) {
       <label><span>מתי להשתמש בתהליך
         <WorkflowFieldAgent field="description" editor={editor} /></span>
         <textarea value={form.description}
+          placeholder="לדוגמה: כשצריך לסכם את המצב הפיננסי של המזהה"
           onChange={(e) => update("description", e.target.value)} rows={2} />
       </label>
     </>
@@ -568,9 +569,11 @@ function StepCard({
       <span className="step-number">{index + 1}</span>
       <div className="form-grid two">
         <label><span>מפתח שלב</span><input dir="ltr" value={step.key}
+          placeholder="financial-overview"
           onChange={(e) => editor.updateStep(index, { key: e.target.value })} />
         </label>
         <label><span>שם ברור ל-FDE</span><input value={step.name}
+          placeholder="לדוגמה: שליפת נתונים פיננסיים"
           onChange={(e) => editor.updateStep(index, { name: e.target.value })} />
         </label>
         <label><span>טול</span><select value={step.package_version_id}
@@ -629,7 +632,7 @@ function InputFieldPicker({
   if (!fields.length) {
     return (
       <label>{label}
-        <input dir="ltr" value={step.input_field}
+        <input dir="ltr" value={step.input_field} placeholder="company_id"
           onChange={(event) => set(event.target.value)} />
         <small className="field-hint">
           לטול המקור אין עדיין חוזה פלט או דוגמאות, לכן שם השדה מוקלד ידנית.
@@ -697,16 +700,19 @@ function AdvancedWorkflowFields({ editor }: { editor: Editor }) {
         <small>איך לקרוא את מה שחזר — נקרא על ידי המודל שמנסח את הסעיף</small>
         <WorkflowFieldAgent field="system_prompt" editor={editor} /></span>
         <textarea value={editor.form.system_prompt}
+          placeholder="לדוגמה: סכמו את הממצאים, הדגישו חריגות וציינו פערי מידע"
           onChange={(e) => editor.update("system_prompt", e.target.value)}
           rows={5} />
       </label>
       <label><span>חוזה פלט (JSON Schema)</span>
         <textarea dir="ltr" value={editor.form.output_schema}
+          placeholder={'{\n  "type": "object",\n  "properties": {}\n}'}
           onChange={(e) => editor.update("output_schema", e.target.value)}
           rows={5} />
       </label>
       <label><span>דוגמאות משולבות ובדיקות (JSON)</span>
         <textarea dir="ltr" value={editor.form.examples}
+          placeholder={'[\n  { "id": "001234567", "expected": "סיכום קצר" }\n]'}
           onChange={(e) => editor.update("examples", e.target.value)} rows={6} />
       </label>
     </details>
