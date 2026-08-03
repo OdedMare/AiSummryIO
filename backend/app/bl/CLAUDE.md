@@ -44,6 +44,33 @@ a model, or a flunks wheel.
 `_select_detail` cannot confidently pick a workflow. It suggests the available
 workflow and tool names rather than guessing.
 
+### Conversation memory (`workflow_engine_pkg/history.py`)
+
+Routing and synthesis each receive one question and no thread, which is right
+for an opening request and wrong for every follow-up: "ולמה?" names its
+subject only by reference to the previous turn.
+
+`recent_turns` reads the last `TURN_LIMIT` (4) finished turns through
+`Repository.conversation_history`, clipping each answer to 600 characters —
+prior answers are context for resolving a reference, not the payload the
+router selects on. `standalone_question` then restates the follow-up against
+them under `REWRITE_SCHEMA`, using the FDE-owned `question-rewriter` prompt.
+
+Two rules hold this together:
+
+- **The rewrite is internal.** `run["question"]` keeps the user's wording, and
+  that is what is persisted and rendered. Only what the model reads downstream
+  is the resolved form — the user is never shown a paraphrase of themselves.
+- **Every failure path returns the original question.** No history, a blank
+  rewrite, `changed=false`, or an `AgentError` all fall back to the text as
+  typed. A rewrite is an optimization for routing, so it can never leave the
+  caller worse off than not having run at all. The first follow-up in a thread
+  skips the call entirely, since there is nothing to resolve against.
+
+`recent_turns` reaches the repository through `getattr`, so a fake or older
+repository without `conversation_history` degrades to no history rather than
+crashing a follow-up.
+
 ### The execution path
 
 `_execute` → `_execute_workflow` (per workflow, in a thread pool bounded by

@@ -1,81 +1,54 @@
 "use client";
 
-import { Dispatch, SetStateAction, useState } from "react";
-import { Database, ThumbsDown, ThumbsUp } from "lucide-react";
-import { api } from "@/services/api";
-import type { SummaryRun, SummarySection, SummarySkill } from "@/types";
-import EvidenceDrawer from "./EvidenceDrawer";
-import {
-  EmptyWorkspace, RunHeader, RunProgress, SummaryContent,
-} from "./RunContent";
-import SourceRow from "./SourceRow";
+import { useEffect, useRef, useState } from "react";
+import type { SummaryRun, SummarySkill } from "@/types";
+import { EmptyWorkspace } from "./RunContent";
+import Turn, { EvidenceView } from "./Turn";
 
+/**
+ * The conversation as a transcript: every question with the answer it got.
+ *
+ * Rendering only the latest run made a follow-up look like a replacement for
+ * the summary before it, which is exactly what a thread is not. `runs` is the
+ * whole conversation; `run` is only the turn still being polled, and is the
+ * fallback while a brand-new conversation has yet to load its thread.
+ */
 export default function SummaryWorkspace({
-  run, skills,
+  runs, run, skills,
 }: {
+  runs: SummaryRun[];
   run: SummaryRun | null;
   skills: SummarySkill[];
 }) {
-  const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [source, setSource] = useState<SummarySection | null>(null);
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
-  if (!run) return <EmptyWorkspace skills={skills} />;
-  const sections = run.result?.sections ?? run.progress.sections ?? [];
-  /* A chip toggles its own evidence; picking another swaps the filter without
-     closing the drawer. "הצגת ראיות" clears the filter back to the whole run. */
-  const selectSource = (section: SummarySection) => {
-    const same = source?.workflow_id === section.workflow_id;
-    setSource(same && evidenceOpen ? null : section);
-    setEvidenceOpen(!(same && evidenceOpen));
-  };
-  const toggleAll = () => {
-    setSource(null);
-    setEvidenceOpen((value) => !(value && !source));
-  };
+  const [view, setView] = useState<EvidenceView | null>(null);
+  const thread = runs.length ? runs : run ? [run] : [];
+  const anchor = useAutoScroll(thread);
+  if (!thread.length) return <EmptyWorkspace skills={skills} />;
   return (
-    <main id="main-workspace" className="workspace" aria-live="polite">
-      <RunHeader run={run} />
-      <RunProgress run={run} />
-      <SummaryContent run={run} />
-      <SourceRow sections={sections} onSelect={selectSource}
-        activeId={evidenceOpen ? source?.workflow_id ?? null : null} />
-      {run.result && <ResultFooter run={run}
-        evidenceOpen={evidenceOpen && !source} toggleAll={toggleAll}
-        feedback={feedback} setFeedback={setFeedback} />}
-      <EvidenceDrawer runId={run.id} open={evidenceOpen}
-        evidenceIds={source?.evidence_ids} title={source?.name} />
+    <main id="main-workspace" className="workspace thread" aria-live="polite">
+      {thread.map((item, index) => (
+        <Turn key={item.id} run={item} view={view} setView={setView}
+          first={index === 0} />
+      ))}
+      <div ref={anchor} aria-hidden="true" />
     </main>
   );
 }
 
-function ResultFooter({
-  run, evidenceOpen, toggleAll, feedback, setFeedback,
-}: {
-  run: SummaryRun;
-  evidenceOpen: boolean;
-  toggleAll: () => void;
-  feedback: "up" | "down" | null;
-  setFeedback: Dispatch<SetStateAction<"up" | "down" | null>>;
-}) {
-  const sendFeedback = (value: "up" | "down", rating: 1 | -1) => {
-    setFeedback(value); void api.feedback(run.id, rating);
-  };
-  return (
-    <footer className="result-footer">
-      <button type="button" className="secondary-button" onClick={toggleAll}>
-        <Database size={17} />
-        {evidenceOpen ? "הסתרת ראיות" : "הצגת ראיות"}
-      </button>
-      <div className="feedback-actions" aria-label="משוב על הסיכום">
-        <button type="button" className={feedback === "up" ? "active" : ""}
-          onClick={() => sendFeedback("up", 1)} aria-label="הסיכום עזר לי">
-          <ThumbsUp size={17} />
-        </button>
-        <button type="button" className={feedback === "down" ? "active" : ""}
-          onClick={() => sendFeedback("down", -1)} aria-label="הסיכום דורש שיפור">
-          <ThumbsDown size={17} />
-        </button>
-      </div>
-    </footer>
-  );
+/**
+ * Keeps the newest turn in view as it arrives.
+ *
+ * Scrolling on every poll would fight a user reading an earlier answer, so
+ * this reacts to the turn count and the latest turn's status only — progress
+ * ticks within one turn do not move the page.
+ */
+function useAutoScroll(thread: SummaryRun[]) {
+  const anchor = useRef<HTMLDivElement>(null);
+  const status = thread.at(-1)?.status;
+  const count = thread.length;
+  useEffect(() => {
+    if (!count) return;
+    anchor.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [count, status]);
+  return anchor;
 }

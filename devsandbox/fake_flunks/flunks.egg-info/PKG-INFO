@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: flunks
+Version: 0.0.0+mock
+Summary: LOCAL MOCK of the internal FLAPI client. Never publish.
+Requires-Python: >=3.8
+Requires-Dist: pandas

@@ -1059,6 +1059,42 @@ button:disabled {
   margin-top: 16px;
 }
 
+/* Every turn of the conversation, oldest first. */
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A turn is separated by a rule rather than a card, so the transcript stays
+   one column of prose instead of a stack of panels — the same reason the
+   answer itself is not a card per workflow. */
+.thread-turn + .thread-turn {
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border);
+}
+
+/* The user's own words, set apart from the answer so a reader scanning the
+   thread can find the questions without reading every answer. */
+.thread-question {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 18px;
+}
+
+.thread-question p {
+  max-width: 52ch;
+  margin: 0;
+  padding: 11px 15px;
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-line;
+  background: var(--surface-3);
+  border-radius: 14px;
+  border-start-end-radius: 4px;
+}
+
 .feedback-actions {
   display: flex;
   gap: 7px;

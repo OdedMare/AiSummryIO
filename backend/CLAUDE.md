@@ -13,6 +13,8 @@ The backend turns one opaque string identifier into a traceable Hebrew
 summary. An initial request runs all published `baseline`/`both` workflows.
 Follow-ups reuse conversation evidence and run one relevant
 `detail`/`both` workflow or one FDE-approved standalone tool when needed.
+A follow-up is resolved against the conversation's prior turns first, so a
+question that names its subject only by reference can still be routed.
 
 ## Runtime and commands
 
@@ -57,6 +59,10 @@ uvicorn app.main:app --reload
   stays in the `agent_content` table** — Skills, the `workflow-planner` prompt,
   and a workflow's `system_prompt` are edited live in Agent Studio and must not
   move into files. See [app/bl/prompts/README.md](app/bl/prompts/README.md).
+- `bl/workflow_engine_pkg/history.py` — conversation memory: the thread's
+  recent turns, and the follow-up restated to stand alone before routing.
+  The user's original wording is what is stored and shown; the rewrite is
+  internal, and every failure path falls back to the question as typed.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
   have priority.
 - `api/` — Pydantic HTTP contracts and signed authentication.
@@ -100,6 +106,12 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - `focus_field` scopes an interview to one form field, and each planner writes
   back only the field it names. Applying a whole draft from a single-field
   conversation would overwrite text the FDE edited by hand elsewhere.
+- A follow-up's rewrite never replaces what the user typed. `run["question"]`
+  and every rendering of it stay the original wording; only what the model
+  reads downstream is resolved. A failed, empty, or declined rewrite routes
+  the original question rather than failing the run.
+- Conversation history is derived from `summary_runs`, never stored in a
+  second table, and only finished runs become turns.
 - Never log API keys, tokens, raw package bodies, or full user IDs.
 - There is no authentication: FDE routes are open and the service must be
   deployed on a trusted network only. Anonymous conversation sessions still

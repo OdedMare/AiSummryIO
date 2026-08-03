@@ -13,12 +13,25 @@ modules. It opens a connection per operation through
 | `packages.py` | Versioned FLAPI package catalog |
 | `workflows.py` | Workflows, steps, publishing |
 | `content.py` | Versioned Skills and prompts |
-| `conversations.py` | Conversations and retention |
+| `conversations.py` | Conversations, retention, and thread history |
 | `runs.py` | Runs, progress, and evidence |
 | `feedback.py` | Feedback and review queue |
 | `validation.py` | Pure workflow-step validation |
 | `schema.py` | DDL used at startup |
 | `seed_content.py` | Built-in Skills and prompts |
+
+## Conversation history
+
+`conversation_history` projects `summary_runs` into question/answer turns.
+**There is no messages table, deliberately.** A run already holds the user's
+`question` and the assistant's `result`, so a second table would be a parallel
+source of truth that drifts whenever a run fails, retries, or is recovered by
+`queued_runs()` at startup.
+
+Only `completed`/`partial` runs are returned: a queued or failed run has no
+answer, and offering it as context would invite the model to treat a question
+that was never answered as if it had been. The newest turns are selected and
+then reversed, so a long thread keeps its most recent context.
 
 ## Rules
 

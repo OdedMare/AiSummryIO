@@ -1,8 +1,8 @@
 import type {
-  AgentContent, Conversation, Evidence, PackageInspection, PackageVersion,
-  PlanChatMessage, SkillPreviewResult, SummaryRun, SummarySkill,
-  ToolPlanChatTurn, ToolPlanDraft, WorkflowPlan, WorkflowPlanChatTurn,
-  WorkflowVersion,
+  AgentContent, Conversation, ConversationTurn, Evidence, PackageInspection,
+  PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
+  SummarySkill, ToolPlanChatTurn, ToolPlanDraft, WorkflowPlan,
+  WorkflowPlanChatTurn, WorkflowVersion,
 } from "@/types";
 import type { GeoJSONMultiPolygon } from "@/types/geo";
 
@@ -96,6 +96,11 @@ export const api = {
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
+  // The thread as question/answer turns, without the runs' evidence and
+  // sections. `conversation` already carries the full runs the transcript
+  // renders, so this is for a caller that wants the text alone.
+  messages: (id: string) =>
+    request<ConversationTurn[]>(`/api/conversations/${id}/messages`),
   // Either rootId or boundaries must be present; the backend rejects a
   // request carrying neither.
   start: (

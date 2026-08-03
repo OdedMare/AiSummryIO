@@ -1,6 +1,6 @@
 # Tests (`tests/`)
 
-One file, `test_core.py` (929 lines), covering the rules that are expensive to
+One file, `test_core.py`, covering the rules that are expensive to
 get wrong. Run from `backend/`:
 
 ```bash
@@ -17,6 +17,7 @@ python -m pytest -q
 | Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed |
 | Workflow validation | No forward step references; `depends_on` must be declared |
 | Conversational planning | Draft carries forward between turns; sample data stays bounded and drops internals; a chat draft still passes the shared validation gate |
+| Conversation memory | An opening follow-up pays for no rewrite; a reference is resolved against the thread; the user's wording is what is persisted; every rewrite failure routes the original question; the router sees the thread only when there is one |
 | Identifier mapping | Fan-out over list values plus deduplication |
 | Settings | URL/schema normalization, JDBC translation, secret masking |
 | Auth | scrypt hashing and verification |
@@ -54,8 +55,8 @@ with a `.run()` method returning a DataFrame.
   Rewording a user-facing error is a behavior change and will fail here.
 - Timing tests assert generous bounds (the timeout test allows 10s for a 1s
   timeout over two attempts) so they stay stable on a loaded machine.
-- Fakes are defined inline in the test that needs them; there is no
-  `conftest.py`.
+- Fakes are defined inline in the test that needs them. `conftest.py` holds
+  only the `flunks` stubbing, which must run before collection.
 
 ## Python version
 

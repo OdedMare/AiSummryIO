@@ -45,6 +45,22 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - All icon buttons have an accessible name and at least a 44px target.
 - Status changes use text/icons, not color alone; errors use `role="alert"`.
 - Evidence is progressive disclosure: summary first, raw records on demand.
+- **The workspace is a transcript, not a single answer.** `SummaryWorkspace`
+  renders every run in the conversation through `Turn`; `runs` is the thread
+  and `run` is only the turn still being polled. Showing just the latest run
+  made a follow-up read as a replacement for the summary before it. Each turn
+  renders the user's question above its answer — a transcript of answers alone
+  forces the reader to remember what was asked — and turns are separated by a
+  rule rather than a card, for the same reason the answer itself is not a card
+  per workflow. Only the first turn keeps its `RunHeader`.
+- Evidence is one drawer for the whole thread (`EvidenceView`, held by the
+  workspace and keyed by run id), so opening a turn's sources closes another's
+  instead of leaving drawers stacked down the page. Feedback stays per turn.
+- The thread auto-scrolls on the turn count and the last turn's status only.
+  Scrolling on every 1.5s poll would fight a user reading an earlier answer.
+- Conversation history is titled by the opening question; the raw identifier
+  is secondary. Conversations created before titles fall back to the
+  identifier.
 - **The summary is one continuous answer, not a card per workflow.** `.answer-body`
   merges every section into flowing prose (headline, summary, findings, risks,
   gaps) at a capped measure, and `SourceRow` below it is where the section model

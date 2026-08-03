@@ -21,6 +21,9 @@ export function useAppShell() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [skills, setSkills] = useState<SummarySkill[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
+  /* The whole thread, oldest first. `run` is the turn still being polled, so
+     the transcript and the poll loop do not fight over one piece of state. */
+  const [runs, setRuns] = useState<SummaryRun[]>([]);
   const [run, setRun] = useState<SummaryRun | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -36,11 +39,11 @@ export function useAppShell() {
 
   useInitialData(loadHistory, setDark, setSkills);
   useTheme(dark);
-  useRunPolling(run, setRun, setError, loadHistory);
+  useRunPolling(run, setRun, setRuns, setError, loadHistory);
 
   const startNew = () => {
-    setConversation(null); setRun(null); setRootId(""); setMessage("");
-    setError(""); setNotice("");
+    setConversation(null); setRun(null); setRuns([]); setRootId("");
+    setMessage(""); setError(""); setNotice("");
     setGeoMode("none"); setGeometry(null); setSidebarOpen(false);
   };
 
@@ -49,7 +52,10 @@ export function useAppShell() {
     try {
       const selected = await api.conversation(id);
       setConversation(selected); setRootId(selected.root_id);
-      setRun(selected.runs?.at(-1) ?? null);
+      const thread = selected.runs ?? [];
+      setRuns(thread);
+      // Only the last turn can still be running, so it is the one polled.
+      setRun(thread.at(-1) ?? null);
       setSidebarOpen(false);
     } catch (reason) {
       setError(errorMessage(reason, "לא ניתן לטעון שיחה"));
@@ -71,7 +77,10 @@ export function useAppShell() {
       const next = await submitRequest(
         conversation, rootId, parsed.text, parsed.keys, geometry
       );
-      setConversation(next.conversation); setRun(next.run);
+      setConversation(next.conversation);
+      setRun(next.run);
+      // A new conversation starts the thread; a follow-up extends it.
+      setRuns((thread) => conversation ? [...thread, next.run] : [next.run]);
       setMessage(""); loadHistory();
     } catch (reason) {
       setError(errorMessage(reason, "הפעולה נכשלה"));
@@ -83,7 +92,7 @@ export function useAppShell() {
   return {
     rootId, setRootId, message, setMessage, geoMode, setGeoMode,
     geometry, setGeometry, conversations, skills,
-    conversation, run, error, submitting, sidebarOpen, setSidebarOpen,
+    conversation, run, runs, error, submitting, sidebarOpen, setSidebarOpen,
     settingsOpen, setSettingsOpen, studioOpen, setStudioOpen, dark, setDark,
     notice, startNew, selectConversation, submit,
   };
@@ -117,6 +126,7 @@ function useTheme(dark: boolean) {
 function useRunPolling(
   run: SummaryRun | null,
   setRun: Setter<SummaryRun | null>,
+  setRuns: Setter<SummaryRun[]>,
   setError: Setter<string>,
   loadHistory: () => void,
 ) {
@@ -142,6 +152,11 @@ function useRunPolling(
           );
         }
         setRun(next);
+        // Keyed by id rather than by position: the thread is what the
+        // transcript renders, so a progress tick has to reach it too.
+        setRuns((thread) => thread.map(
+          (item) => item.id === next.id ? next : item,
+        ));
         if (!isActive(next)) {
           console.debug(
             `[poll] run ${next.id} finished as ${next.status} ` +
@@ -155,7 +170,7 @@ function useRunPolling(
       });
     }, 1500);
     return () => window.clearInterval(timer);
-  }, [run, setRun, setError, loadHistory]);
+  }, [run, setRun, setRuns, setError, loadHistory]);
 }
 
 function detectIdentifier(

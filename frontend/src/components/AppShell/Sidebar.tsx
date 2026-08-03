@@ -42,8 +42,18 @@ function HistoryList({ app }: { app: AppShellController }) {
           className={app.conversation?.id === item.id ? "active" : ""}
           onClick={() => void app.selectConversation(item.id)}>
           <Bot size={16} />
-          <span><strong dir="ltr">{item.root_id}</strong>
-            <small>{new Date(item.updated_at).toLocaleDateString("he-IL")}</small>
+          {/* The question is what distinguishes one thread from another; a
+              list of bare identifiers cannot be scanned. Older conversations
+              have no title, so the identifier still leads for them. */}
+          <span>
+            {item.title
+              ? <strong>{item.title}</strong>
+              : <strong dir="ltr">{item.root_id}</strong>}
+            <small>
+              {item.title && item.root_id &&
+                <span dir="ltr">{item.root_id} · </span>}
+              {new Date(item.updated_at).toLocaleDateString("he-IL")}
+            </small>
           </span>
         </button>
       ))}

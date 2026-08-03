@@ -78,10 +78,21 @@ export interface SkillPreviewResult {
 export interface Conversation {
   id: string;
   root_id: string;
+  /** The opening question. Empty on conversations created before titles. */
+  title?: string;
   created_at: string;
   updated_at: string;
   last_status?: RunStatus;
   runs?: SummaryRun[];
+}
+
+/** One finished turn of a conversation, projected from its run. */
+export interface ConversationTurn {
+  run_id: string;
+  question: string;
+  answer: string;
+  status: RunStatus;
+  created_at: string;
 }
 
 export interface PackageVersion {
