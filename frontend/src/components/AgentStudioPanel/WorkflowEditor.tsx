@@ -251,6 +251,9 @@ function WorkflowLibrary({
       <label className="dry-run-field"><span>מזהה לבדיקה חיה</span>
         <input dir="ltr" value={editor.dryRunId} placeholder="001234567"
           onChange={(e) => editor.setDryRunId(e.target.value)} />
+        <small className="field-hint">
+          המזהה יישלח לטולים בתהליך לצורך בדיקה בלבד.
+        </small>
       </label>
     </section>
   );
@@ -364,7 +367,11 @@ function WorkflowFields({ editor }: { editor: Editor }) {
         <label><span>שם התהליך *
           <WorkflowFieldAgent field="name" editor={editor} /></span>
           <input value={form.name} placeholder="לדוגמה: תמונת מצב פיננסית"
-            onChange={(e) => update("name", e.target.value)} /></label>
+            onChange={(e) => update("name", e.target.value)} />
+          <small className="field-hint">
+            שם קצר וברור שיופיע ברשימת התהליכים ובתוצאות.
+          </small>
+        </label>
         <label><span>תפקיד
           <WorkflowFieldAgent field="role" editor={editor} /></span>
           <select value={form.role}
@@ -372,13 +379,20 @@ function WorkflowFields({ editor }: { editor: Editor }) {
             <option value="baseline">בסיס — תמיד בריצה הראשונה</option>
             <option value="detail">פירוט — לשאלות המשך</option>
             <option value="both">שניהם</option>
-          </select></label>
+          </select>
+          <small className="field-hint">
+            קובע אם התהליך ירוץ בסיכום הראשוני, בשאלות המשך או בשניהם.
+          </small>
+        </label>
       </div>
       <label><span>מתי להשתמש בתהליך
         <WorkflowFieldAgent field="description" editor={editor} /></span>
         <textarea value={form.description}
           placeholder="לדוגמה: כשצריך לסכם את המצב הפיננסי של המזהה"
           onChange={(e) => update("description", e.target.value)} rows={2} />
+        <small className="field-hint">
+          מסביר לסוכן מתי לבחור בתהליך הזה.
+        </small>
       </label>
     </>
   );
@@ -571,10 +585,16 @@ function StepCard({
         <label><span>מפתח שלב</span><input dir="ltr" value={step.key}
           placeholder="financial-overview"
           onChange={(e) => editor.updateStep(index, { key: e.target.value })} />
+          <small className="field-hint">
+            מזהה טכני ייחודי לחיבורים; אותיות, מספרים, מקף או קו תחתון.
+          </small>
         </label>
         <label><span>שם ברור ל-FDE</span><input value={step.name}
           placeholder="לדוגמה: שליפת נתונים פיננסיים"
           onChange={(e) => editor.updateStep(index, { name: e.target.value })} />
+          <small className="field-hint">
+            שם אנושי שמתאר מה השלב מבצע או מחזיר.
+          </small>
         </label>
         <label><span>טול</span><select value={step.package_version_id}
           onChange={(e) => editor.updateStep(
@@ -585,7 +605,11 @@ function StepCard({
             <option key={item.id} value={item.id}>
               {item.name} · v{item.version}
             </option>)}
-        </select></label>
+        </select>
+          <small className="field-hint">
+            חבילת ה-FLAPI שתורץ בשלב הזה.
+          </small>
+        </label>
         <label><span>מקור המזהה</span><select value={step.input_source}
           onChange={(e) => editor.updateStep(
             index, { input_source: e.target.value }
@@ -596,7 +620,11 @@ function StepCard({
             <option key={prior.key} value={`steps.${prior.key}`}>
               פלט: {prior.name}
             </option>)}
-        </select></label>
+        </select>
+          <small className="field-hint">
+            הערך שיועבר כקלט: המזהה הראשי, אזור או פלט של שלב קודם.
+          </small>
+        </label>
         {mappedStep(step) && <InputFieldPicker step={step} index={index}
           packages={packages} editor={editor} />}
       </div>
@@ -653,9 +681,11 @@ function InputFieldPicker({
         {!known &&
           <option value={step.input_field}>{step.input_field} (לא בקטלוג)</option>}
       </select>
-      {!known && <small className="field-hint">
-        השדה אינו מופיע בפלט של טול המקור. יש לוודא שהוא עדיין קיים.
-      </small>}
+      <small className="field-hint">
+        {known
+          ? "השדה מפלט השלב הקודם שיועבר כמזהה לשלב הזה."
+          : "השדה אינו מופיע בפלט של טול המקור. יש לוודא שהוא עדיין קיים."}
+      </small>
     </label>
   );
 }
@@ -697,23 +727,31 @@ function AdvancedWorkflowFields({ editor }: { editor: Editor }) {
     <details className="advanced-block">
       <summary><Sparkles size={16} /> הנחיה, חוזה פלט ודוגמאות</summary>
       <label><span>הנחיית סיכום לתהליך
-        <small>איך לקרוא את מה שחזר — נקרא על ידי המודל שמנסח את הסעיף</small>
         <WorkflowFieldAgent field="system_prompt" editor={editor} /></span>
         <textarea value={editor.form.system_prompt}
           placeholder="לדוגמה: סכמו את הממצאים, הדגישו חריגות וציינו פערי מידע"
           onChange={(e) => editor.update("system_prompt", e.target.value)}
           rows={5} />
+        <small className="field-hint">
+          מסביר למודל איך לקרוא את הפלט ולנסח ממנו את סעיף הסיכום.
+        </small>
       </label>
       <label><span>חוזה פלט (JSON Schema)</span>
         <textarea dir="ltr" value={editor.form.output_schema}
           placeholder={'{\n  "type": "object",\n  "properties": {}\n}'}
           onChange={(e) => editor.update("output_schema", e.target.value)}
           rows={5} />
+        <small className="field-hint">
+          מגדיר אילו שדות נוספים יוחזרו מעבר לחוזה הסיכום המשותף.
+        </small>
       </label>
       <label><span>דוגמאות משולבות ובדיקות (JSON)</span>
         <textarea dir="ltr" value={editor.form.examples}
           placeholder={'[\n  { "id": "001234567", "expected": "סיכום קצר" }\n]'}
           onChange={(e) => editor.update("examples", e.target.value)} rows={6} />
+        <small className="field-hint">
+          דוגמאות JSON שמשמשות לבדיקה ולאימות לפני פרסום.
+        </small>
       </label>
     </details>
   );
