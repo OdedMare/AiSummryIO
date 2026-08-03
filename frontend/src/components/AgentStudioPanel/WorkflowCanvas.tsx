@@ -483,6 +483,33 @@ type StepNodeData = {
 
 const NODE_TYPES = { sourceNode: SourceNode, stepNode: StepNode };
 
+/**
+ * `derived` nodes carrying the size React Flow measured for them.
+ *
+ * The step array stays the source of truth for which nodes exist, their data,
+ * and their computed position — a node dropped from `derived` disappears here
+ * too, so a deleted step cannot linger with a stale measurement. Only the
+ * fields React Flow owns are carried over, and a node it has not measured yet
+ * simply passes through until the first `dimensions` change arrives.
+ */
+function mergeMeasurements(derived: Node[], measured: Node[]): Node[] {
+  if (!measured.length) return derived;
+  const sizes = new Map(measured.map((node) => [node.id, node]));
+  return derived.map((node) => {
+    const previous = sizes.get(node.id);
+    if (previous?.width == null || previous?.height == null) return node;
+    return {
+      ...node,
+      width: previous.width,
+      height: previous.height,
+      // Set alongside width/height by React Flow's own measurement, and read
+      // by the same viewport test, so it travels with them rather than being
+      // recomputed from a stale layout.
+      positionAbsolute: previous.positionAbsolute,
+    };
+  });
+}
+
 function canvasNodes(
   steps: WorkflowStep[], packages: PackageVersion[], selectedKey: string,
   moved: Record<string, XYPosition> = {},

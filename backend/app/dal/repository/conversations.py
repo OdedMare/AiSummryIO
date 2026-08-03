@@ -40,6 +40,30 @@ class ConversationRepository:
         """, (conversation_id,))
         return row
 
+    def conversation_history(
+        self, conversation_id: str, limit: int = 8
+    ) -> List[dict]:
+        """The conversation's finished turns, oldest first.
+
+        Derived from `summary_runs` rather than stored separately: a run
+        already holds the user's `question` and the assistant's `result`, so
+        a parallel messages table would be a second source of truth that
+        drifts whenever a run fails, retries, or is recovered at startup.
+
+        Only finished runs are returned — a queued or failed run has no
+        answer, and offering it as conversational context would invite the
+        model to treat a question that was never answered as if it had been.
+        The newest `limit` turns are selected, then reversed, so a long thread
+        keeps its most recent context rather than its oldest.
+        """
+        rows = self._all("""
+            SELECT id, question, result, status, created_at
+            FROM summary_runs
+            WHERE conversation_id=%s AND status IN ('completed','partial')
+            ORDER BY created_at DESC LIMIT %s
+        """, (conversation_id, max(1, limit)))
+        return [_turn(row) for row in reversed(rows)]
+
     def list_conversations(self, session_id: str) -> List[dict]:
         return self._all("""
             SELECT c.*, (
