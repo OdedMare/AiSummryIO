@@ -1554,6 +1554,76 @@ def test_workflow_chat_rejects_a_step_reading_an_undeclared_dependency():
     assert result["draft"]["can_build"] is False
 
 
+def test_a_confirmed_workflow_keeps_the_route_the_model_stopped_repeating():
+    """The plan is rebuilt from the model's answer every turn, so a
+    confirmation turn that replies without re-emitting the steps must not drop
+    the route. That turn is exactly when `ready` becomes true, and an empty
+    `steps` there leaves `can_build` false — the FDE agrees to a plan and the
+    canvas then refuses to load it."""
+    agreed = [{
+        "key": "ownership", "name": "בעלות",
+        "package_version_id": "pkg-real", "depends_on": [],
+        "input_source": "workflow.id", "input_field": "",
+        "summary_prompt": "",
+    }]
+    service, _llm = _chat_service(
+        _workflow_answer(
+            ready=True,
+            reply="מאשר, זה המסלול.",
+            draft={
+                "name": "", "description": "", "role": "detail",
+                "rationale": "", "system_prompt": "",
+                "steps": [], "missing_tools": [],
+            },
+        ),
+        tools=[{
+            "id": "pkg-real", "name": "בעלות", "input_mode": "single",
+            "input_cube_parameter": "id", "output_schema": {},
+        }],
+    )
+    result = service.plan_workflow_chat(
+        [{"role": "fde", "text": "מאשר"}],
+        {"name": "תמונת בעלות", "role": "baseline", "steps": agreed},
+    )
+
+    assert result["draft"]["steps"] == agreed
+    assert result["draft"]["can_build"] is True
+    assert result["draft"]["name"] == "תמונת בעלות"
+    assert result["ready"] is True
+
+
+def test_a_workflow_turn_that_revises_the_route_replaces_it():
+    """Carrying the last turn forward must not freeze it: a turn that does
+    send steps is the FDE and agent changing their minds, and it wins."""
+    revised = [{
+        "key": "permits", "name": "היתרים",
+        "package_version_id": "pkg-real", "depends_on": [],
+        "input_source": "workflow.id", "input_field": "",
+        "summary_prompt": "",
+    }]
+    service, _llm = _chat_service(
+        _workflow_answer(draft={
+            "name": "", "description": "", "role": "detail", "rationale": "",
+            "system_prompt": "", "steps": revised, "missing_tools": [],
+        }),
+        tools=[{
+            "id": "pkg-real", "name": "בעלות", "input_mode": "single",
+            "input_cube_parameter": "id", "output_schema": {},
+        }],
+    )
+    result = service.plan_workflow_chat(
+        [{"role": "fde", "text": "תחליף להיתרים"}],
+        {"steps": [{
+            "key": "ownership", "name": "בעלות",
+            "package_version_id": "pkg-real", "depends_on": [],
+            "input_source": "workflow.id", "input_field": "",
+            "summary_prompt": "",
+        }]},
+    )
+
+    assert result["draft"]["steps"] == revised
+
+
 def test_the_interview_shows_the_output_fields_it_can_ask_about():
     """The wiring question names real fields, so the catalog must carry the
     fields of every tool the agent may propose."""
