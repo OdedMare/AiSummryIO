@@ -1,6 +1,4 @@
-import {
-  AlertTriangle, Clock3, LoaderCircle, Sparkles,
-} from "lucide-react";
+import { AlertTriangle, Sparkles } from "lucide-react";
 import BrandMark from "@/components/AppShell/BrandMark";
 import type { SummaryRun, SummarySection, SummarySkill } from "@/types";
 import { SkillHint, SkillResults } from "./Skills";
@@ -56,7 +54,7 @@ export function SummaryContent({ run }: { run: SummaryRun }) {
         {result?.headline && <p className="answer-headline">{result.headline}</p>}
         {synthesized
           ? <p>{result?.summary}</p>
-          : <PendingAnswer run={run} sections={sections} />}
+          : <PendingAnswer sections={sections} />}
         {result?.coverage && <p className="answer-coverage">{result.coverage}</p>}
         <AnswerList items={result?.key_findings ?? []} />
         <AnswerList title="סיכונים" tone="risk" items={result?.risks ?? []} />
@@ -71,26 +69,18 @@ export function SummaryContent({ run }: { run: SummaryRun }) {
 
 /** Before synthesis finishes, `result` is null while sections stream in. Their
     summaries are the answer so far, so the prose assembles as they land rather
-    than staying blank and popping in whole. */
-function PendingAnswer(
-  { run, sections }: { run: SummaryRun; sections: SummarySection[] },
-) {
-  const active = run.status === "queued" || run.status === "running";
+    than staying blank and popping in whole.
+
+    The "still working" spinners that used to sit here now live in
+    `AgentStatus`, which names each source as it arrives. Repeating them would
+    put two live indicators on one turn saying the same thing. */
+function PendingAnswer({ sections }: { sections: SummarySection[] }) {
   const arrived = sections.filter((section) => section.summary);
-  if (!arrived.length) {
-    return active
-      ? <p className="answer-pending"><LoaderCircle className="spin" size={15} />
-        אוסף מידע מהמקורות…
-      </p>
-      : null;
-  }
+  if (!arrived.length) return null;
   return (
     <>
       {arrived.map((section) =>
         <p key={section.workflow_id}>{section.summary}</p>)}
-      {active && <p className="answer-pending">
-        <LoaderCircle className="spin" size={15} /> ממשיך לאסוף…
-      </p>}
     </>
   );
 }
