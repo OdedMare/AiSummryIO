@@ -58,6 +58,21 @@ ID/evidence, and reuse the conversation's stored boundaries.
   instead of leaving drawers stacked down the page. Feedback stays per turn.
 - The thread auto-scrolls on the turn count and the last turn's status only.
   Scrolling on every 1.5s poll would fight a user reading an earlier answer.
+- **Progress reads as the agent talking, not as a job queue.** `AgentStatus`
+  replaces the status pill, the percentage bar, and the "x מתוך y תהליכים"
+  readout: it says what the agent is doing and names each source as it lands.
+  `RunHeader` is now the thread title alone and `PendingAnswer` no longer
+  carries its own spinner — two live indicators on one turn said the same
+  thing twice. A finished turn shows no status: the answer is the status.
+  "ממתין בתור" is deliberately not surfaced; the user asked a question and is
+  owed an answer about it, not about our scheduler.
+- **`suggested_questions` renders as clickable chips** (`NextQuestions`) under
+  the newest turn only — chips under an older answer invite reopening a
+  question the thread has moved past. Clicking asks immediately through
+  `app.ask`, which shares `send` with the composer's `submit` so a suggested
+  question still passes identifier detection, `/skill` parsing, and the busy
+  guard. These offer the user their next question; they never ask the user
+  anything, and the composer stays the way to ask something else.
 - Conversation history is titled by the opening question; the raw identifier
   is secondary. Conversations created before titles fall back to the
   identifier.
@@ -78,6 +93,13 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - Before synthesis finishes `result` is null while sections stream in, so
   `PendingAnswer` renders the arrived section summaries as paragraphs. The answer
   assembles as sources land instead of staying blank and popping in whole.
+- **The main chat never asks the user a question back.** A clarifying run
+  still carries `recommendation` and `options` from the router, and the UI
+  deliberately does not render them: the agent offers the user their next
+  question, it does not interrogate them. That is the one place the main chat
+  parts company with the FDE interview in `AgentStudioPanel/PlanChat.tsx`,
+  where questioning the FDE is the point. A clarification renders as an
+  ordinary answer whose `suggested_questions` become the chips.
 - FDE language is concrete: “טול”, “חבילת FLAPI”, “קלט”, “פלט”, “שלב”,
   “טיוטה”, “פורסם”.
 - AI workflow proposals are labeled as suggestions and loaded only as drafts

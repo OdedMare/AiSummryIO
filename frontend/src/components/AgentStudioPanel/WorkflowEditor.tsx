@@ -172,9 +172,9 @@ function useWorkflowEditor(
   /**
    * The steps alone, from an interview opened on the route itself.
    *
-   * `loadPlan` replaces the whole form because it follows a conversation about
-   * the whole workflow. Here the FDE asked only what the route should do, so
-   * the name and description they already wrote stay as they are.
+   * `loadPlan` may update every agent-authored workflow field because it
+   * follows a conversation about the whole workflow. Here the FDE asked only
+   * what the route should do, so every other field stays as it is.
    */
   const loadPlanSteps = (plan: WorkflowPlan) => {
     if (!plan.can_build) return;
