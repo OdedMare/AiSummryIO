@@ -25,9 +25,11 @@ from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
 from app.dal.repository import Repository
+from app.dal.repository.conversations import conversation_title
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
+from app.bl.workflow_engine_pkg import history
 from app.bl.workflow_engine_pkg.execution import chunk_facts
 from app.api.models import (
     ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
@@ -1843,3 +1845,263 @@ def test_a_section_falling_back_is_marked_degraded_rather_than_looking_thin():
 
     assert section["degraded"] is True
     assert section["warnings"]
+
+
+def _history_service(llm, turns, **repository_extras):
+    """A service whose repository returns `turns` as conversation history."""
+    class FakeRepository:
+        @staticmethod
+        def conversation_history(_conversation_id, _limit):
+            return turns
+
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+        @staticmethod
+        def published_workflows(_roles):
+            return repository_extras.get("workflows", [])
+
+        @staticmethod
+        def agent_tools():
+            return repository_extras.get("tools", [])
+
+        @staticmethod
+        def run_evidence(_run_id):
+            return []
+
+    return SummaryService(FakeRepository(), None, llm, None)
+
+
+def test_an_opening_follow_up_is_routed_without_paying_for_a_rewrite():
+    """With no prior turn there is nothing to resolve against, so spending an
+    LLM call on every first follow-up would be pure cost."""
+    class NeverCalledLlm:
+        calls = 0
+
+        def complete_json(self, _system, _user, _schema):
+            self.calls += 1
+            raise AssertionError("no rewrite should be attempted")
+
+    llm = NeverCalledLlm()
+
+    question = history.standalone_question(
+        _history_service(llm, []), "מה מצב הנכס?", []
+    )
+
+    assert question == "מה מצב הנכס?"
+    assert llm.calls == 0
+
+
+def test_a_follow_up_is_restated_so_the_router_can_act_on_it():
+    """"ולמה?" names its subject only by reference to the previous turn; a
+    router given the raw text has nothing to select on."""
+    turns = [{"question": "מה מצב הנכס?", "answer": "הנכס אינו פעיל."}]
+
+    class RewritingLlm:
+        received = None
+
+        def complete_json(self, _system, user, _schema):
+            self.received = json.loads(user)
+            return {"question": "למה הנכס אינו פעיל?", "changed": True}
+
+    llm = RewritingLlm()
+
+    question = history.standalone_question(
+        _history_service(llm, turns), "ולמה?", turns
+    )
+
+    assert question == "למה הנכס אינו פעיל?"
+    assert llm.received["history"] == turns
+
+
+def test_a_question_already_standing_alone_is_left_exactly_as_written():
+    """`changed=false` is the model declining to rewrite. Honoring it keeps
+    the user's own wording instead of a paraphrase of it."""
+    turns = [{"question": "מה מצב הנכס?", "answer": "הנכס אינו פעיל."}]
+
+    class DecliningLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            return {"question": "משהו אחר לגמרי", "changed": False}
+
+    question = history.standalone_question(
+        _history_service(DecliningLlm(), turns), "מי הבעלים של 001?", turns
+    )
+
+    assert question == "מי הבעלים של 001?"
+
+
+def test_a_failed_rewrite_routes_the_original_question_instead_of_failing():
+    """The rewrite is an optimization for routing. A model that errors must
+    leave the caller where it would have been without it, never worse."""
+    turns = [{"question": "מה מצב הנכס?", "answer": "הנכס אינו פעיל."}]
+
+    class FailingLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AgentError("model unavailable")
+
+    question = history.standalone_question(
+        _history_service(FailingLlm(), turns), "ולמה?", turns
+    )
+
+    assert question == "ולמה?"
+
+
+def test_an_empty_rewrite_is_rejected_rather_than_routed_on():
+    """A blank result means the model dropped the question rather than
+    restating it, and routing on nothing is worse than routing on the text."""
+    turns = [{"question": "מה מצב הנכס?", "answer": "הנכס אינו פעיל."}]
+
+    class EmptyLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            return {"question": "  ", "changed": True}
+
+    question = history.standalone_question(
+        _history_service(EmptyLlm(), turns), "ולמה?", turns
+    )
+
+    assert question == "ולמה?"
+
+
+def test_the_router_is_shown_the_thread_so_it_can_resolve_a_reference():
+    """Without history the router cannot tell a new request from a question
+    about something it has already answered."""
+    turns = [{"question": "מה מצב הנכס?", "answer": "הנכס אינו פעיל."}]
+
+    class FakeLlm:
+        received = None
+
+        def complete_json(self, _system, user, _schema):
+            self.received = json.loads(user)
+            return {
+                "action": "use_cached",
+                "workflow_key": None,
+                "tool_version_id": None,
+                "clarification": None,
+            }
+
+    llm = FakeLlm()
+    service = _history_service(llm, turns)
+
+    service._select_detail(
+        "למה הנכס אינו פעיל?",
+        [{"workflow_key": "status", "name": "מצב", "description": "מצב הנכס"}],
+        [{"step_key": "baseline", "records": [{"state": "לא פעיל"}]}],
+        turns=turns,
+    )
+
+    assert llm.received["history"] == turns
+
+
+def test_an_opening_request_sends_the_router_payload_it_always_did():
+    """`history` is added only when there is a thread, so a first request is
+    not changed by a feature that has nothing to contribute to it."""
+    class FakeLlm:
+        received = None
+
+        def complete_json(self, _system, user, _schema):
+            self.received = json.loads(user)
+            return {
+                "action": "use_cached",
+                "workflow_key": None,
+                "tool_version_id": None,
+                "clarification": None,
+            }
+
+    llm = FakeLlm()
+    service = _history_service(llm, [])
+
+    service._select_detail(
+        "מה מצב הנכס?",
+        [{"workflow_key": "status", "name": "מצב", "description": "מצב הנכס"}],
+        [{"step_key": "baseline", "records": [{"state": "לא פעיל"}]}],
+    )
+
+    assert "history" not in llm.received
+
+
+def test_a_follow_up_run_keeps_the_users_wording_while_routing_on_the_rewrite():
+    """What is persisted and shown must stay what the user typed; the
+    rewrite is an internal routing aid, not a correction of the user."""
+    turns = [{"question": "מה מצב הנכס?", "answer": "הנכס אינו פעיל."}]
+    workflow = {
+        "workflow_key": "status", "name": "מצב", "description": "מצב הנכס",
+    }
+
+    class RewritingLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            return {"question": "למה הנכס אינו פעיל?", "changed": True}
+
+    service = _history_service(
+        RewritingLlm(), turns, workflows=[workflow]
+    )
+    service._select_detail = lambda *_args, **_kwargs: {
+        "action": "workflow", "workflow_key": "status",
+    }
+    captured = {}
+
+    def execute(
+        _run, _root_id, question, _workflows, _progress, _skills=None,
+        _boundaries=None,
+    ):
+        captured["question"] = question
+        return {"summary": "ok"}
+
+    service._execute = execute
+    run = {"id": "run-9", "question": "ולמה?"}
+
+    service.follow_up(
+        run, {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert captured["question"] == "למה הנכס אינו פעיל?"
+    assert run["question"] == "ולמה?"
+
+
+def test_a_repository_without_history_still_answers_follow_ups():
+    """`conversation_history` is newer than the callers of `follow_up`; a
+    fake or older repository lacking it must degrade, not crash."""
+    class OlderRepository:
+        @staticmethod
+        def published_workflows(_roles):
+            return []
+
+        @staticmethod
+        def agent_tools():
+            return []
+
+    turns = history.recent_turns(
+        SummaryService(OlderRepository(), None, None, None),
+        {"id": "conv-1"},
+    )
+
+    assert turns == []
+
+
+def test_a_long_answer_is_clipped_before_it_crowds_out_the_evidence():
+    """Prior answers are context for resolving a reference, not the payload
+    the router selects on."""
+    turns = history.recent_turns(
+        _history_service(None, [
+            {"question": "מה?", "answer": "א" * 5000},
+        ]),
+        {"id": "conv-1"},
+    )
+
+    assert len(turns[0]["answer"]) < 5000
+    assert turns[0]["answer"].endswith("…")
+
+
+def test_a_thread_title_breaks_between_words_rather_than_mid_word():
+    """The title is shown in the history sidebar, where a word cut in half
+    reads as corruption rather than as truncation."""
+    title = conversation_title("מה " + "בעלות " * 40)
+
+    assert len(title) <= 81
+    assert title.endswith("…")
+    assert "  " not in title

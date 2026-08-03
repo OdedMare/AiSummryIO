@@ -154,6 +154,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  // Deletes every version of the tool, so the catalog row disappears rather
+  // than falling back to an older version.
+  deletePackage: (id: string) =>
+    request<{ deleted: string; name: string }>(`/api/packages/${id}`, {
+      method: "DELETE",
+    }),
   planToolChat: (
     messages: PlanChatMessage[], draft: Partial<ToolPlanDraft>,
     inspection: PackageInspection | null, focusField = "",
@@ -182,6 +188,12 @@ export const api = {
     }),
   publishWorkflow: (id: string) =>
     request<WorkflowVersion>(`/api/workflows/${id}/publish`, { method: "POST" }),
+  // As with a tool, every version of the workflow goes; evidence from past
+  // runs is kept so an existing summary stays traceable.
+  deleteWorkflow: (id: string) =>
+    request<{ deleted: string; name: string }>(`/api/workflows/${id}`, {
+      method: "DELETE",
+    }),
   dryRun: (id: string, rootId: string) =>
     request<Record<string, unknown>>(`/api/workflows/${id}/dry-run`, {
       method: "POST",

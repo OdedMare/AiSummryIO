@@ -2041,17 +2041,46 @@ select:focus {
   box-shadow: var(--shadow-soft);
 }
 
+/* The card holds the edit button and the delete button side by side; the
+   grid that used to be on the card itself now belongs to the edit button,
+   which is what still spans the row. */
 .catalog-card {
+  display: flex;
+  align-items: stretch;
+}
+
+.catalog-card-main {
   display: grid;
+  flex: 1;
   grid-template-columns: 34px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 9px;
+  min-width: 0;
   min-height: 62px;
   padding: 9px 10px;
   text-align: right;
 }
 
-.catalog-card > span:nth-child(2),
+.catalog-card-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 44px minimum touch target, per the icon-button rule. */
+  min-width: 44px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  border-inline-start: 1px solid var(--border);
+  border-radius: 0 14px 14px 0;
+}
+
+.catalog-card-delete:hover,
+.workflow-card-actions .danger-action:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.catalog-card-main > span:nth-child(2),
 .workflow-card-main > span:nth-child(2),
 .content-card button > span:nth-child(2) {
   display: flex;
@@ -2059,7 +2088,7 @@ select:focus {
   flex-direction: column;
 }
 
-.catalog-card small,
+.catalog-card-main small,
 .workflow-card small,
 .content-card small {
   margin-top: 3px;

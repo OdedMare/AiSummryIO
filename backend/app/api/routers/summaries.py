@@ -35,6 +35,7 @@ def build(context) -> APIRouter:
         conversation = context.repository.create_conversation(
             session_id, payload.root_id,
             payload.boundaries.model_dump() if payload.boundaries else None,
+            payload.question,
         )
         run = context.repository.create_run(
             conversation["id"], payload.question, "full", payload.skill_keys

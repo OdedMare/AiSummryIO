@@ -140,10 +140,10 @@ class SummaryService:
 
     def _select_detail(
         self, question: str, workflows: List[dict], evidence: List[dict],
-        tools=None,
+        tools=None, turns=None,
     ) -> dict:
         return routing.select_detail(
-            self, question, workflows, evidence, tools
+            self, question, workflows, evidence, tools, turns
         )
 
     @staticmethod

@@ -741,8 +741,37 @@ Prefer `workflow` when several steps are required, and `tool` when a single
 lookup suffices. Use only the keys and identifiers supplied; never invent
 one.
 
+`history`, when present, holds earlier turns of this conversation, oldest
+first. Read it to understand what the question refers to. When the answer is
+already there, prefer `use_cached` over running the same workflow again, and
+do not ask in `clarify` for something the user has already told you.
+
 Any `clarification` text you return is shown to the user and must be
 written in Hebrew.""",
+    },
+    {
+        "content_key": "question-rewriter",
+        "kind": "prompt",
+        "name": "ניסוח מחדש של שאלת המשך",
+        "description": "הופך שאלת המשך לשאלה שעומדת בפני עצמה לצורך ניתוב.",
+        "content": """Restate the follow-up question so it stands on its own.
+
+`history` holds earlier turns of this conversation, oldest first. Resolve
+pronouns and elisions against it, so the question names its own subject
+without the thread. Return the result in `question`.
+
+Rules:
+
+- Preserve the user's intent and scope. Narrow nothing and add nothing.
+- Never answer the question, and never state facts as if they were part
+  of it.
+- Never invent an identifier, a date, or a name that does not appear in the
+  history or in the question itself.
+- Keep the user's language — a Hebrew question stays Hebrew.
+- If the question already stands on its own, return it unchanged with
+  `changed` set to false.
+
+Set `changed` to true only when the wording actually differs.""",
     },
     {
         "content_key": "workflow-planner",

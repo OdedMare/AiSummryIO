@@ -122,6 +122,29 @@ function useWorkflowEditor(
       setLibraryError(errorMessage(reason, "הפרסום נכשל"));
     }
   };
+  /**
+   * Delete a workflow and every version of it.
+   *
+   * Confirmed first because it is not recoverable from the UI: versions are
+   * append-only, so there is no "restore" to undo it with. If the deleted
+   * workflow was the one open in the form, the form is reset too — it would
+   * otherwise keep editing a `workflow_key` that no longer exists and save a
+   * surprising new v1.
+   */
+  const remove = async (item: WorkflowVersion) => {
+    const confirmed = window.confirm(
+      `למחוק את התהליך „${item.name}” על כל הגרסאות שלו? הפעולה אינה הפיכה.`,
+    );
+    if (!confirmed) return;
+    setLibraryError("");
+    try {
+      await api.deleteWorkflow(item.id);
+      if (form.workflow_key === item.workflow_key) reset();
+      await onRefresh();
+    } catch (reason) {
+      setLibraryError(errorMessage(reason, "המחיקה נכשלה"));
+    }
+  };
   const dryRun = async (id: string) => {
     if (!dryRunId.trim()) return setLibraryError("יש להזין מזהה בדיקה");
     setDryResult("מריץ חבילות…"); setLibraryError("");
@@ -197,7 +220,8 @@ function useWorkflowEditor(
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
     libraryError, selectedKey, setSelectedKey, update, edit, addStep,
     updateStep, removeStep, removeStepByKey, connectStep, disconnectStep,
-    save, publish, dryRun, loadPlan, loadPlanSteps, createFromTool, reset,
+    save, publish, remove, dryRun, loadPlan, loadPlanSteps, createFromTool,
+    reset,
   };
 }
 
@@ -242,6 +266,11 @@ function WorkflowCard({ item, editor }: { item: WorkflowVersion; editor: Editor 
           </button>}
         <button type="button" onClick={() => void editor.dryRun(item.id)}>
           <Play size={15} /> בדיקה חיה
+        </button>
+        <button type="button" className="danger-action"
+          onClick={() => void editor.remove(item)}
+          aria-label={`מחיקת התהליך ${item.name}`}>
+          <Trash2 size={15} aria-hidden="true" /> מחיקה
         </button>
       </div>
     </article>

@@ -5,7 +5,7 @@ import {
 } from "react";
 import {
   ArrowLeft, Beaker, CheckCircle2, Eye, EyeOff, GripVertical, LoaderCircle,
-  PackagePlus, Save, Wrench,
+  PackagePlus, Save, Trash2, Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
@@ -127,6 +127,34 @@ export default function PackageCatalog({
     }
   };
 
+  /**
+   * Delete a tool and every version of it.
+   *
+   * Confirmed first, because versions are append-only and the UI offers no
+   * way back. The backend refuses a tool still wired into a workflow and
+   * names those workflows, so that reason is surfaced as-is rather than
+   * replaced with a generic failure — it tells the FDE exactly what to fix.
+   */
+  const remove = async (item: PackageVersion) => {
+    const confirmed = window.confirm(
+      `למחוק את הטול „${item.name}” על כל הגרסאות שלו? הפעולה אינה הפיכה.`,
+    );
+    if (!confirmed) return;
+    setError(""); setMessage("");
+    try {
+      await api.deletePackage(item.id);
+      // The form would otherwise keep editing a package_key that no longer
+      // exists and silently save it back as a new v1.
+      if (form.package_key === item.package_key) {
+        setForm(emptyPackage); setInspection(null);
+      }
+      setMessage(`הטול „${item.name}” נמחק.`);
+      await onRefresh();
+    } catch (reason) {
+      setError(errorMessage(reason, "המחיקה נכשלה"));
+    }
+  };
+
   const inspect = async () => {
     if (!inspectId.trim()) return setError("יש להזין מזהה בדיקה בטוח");
     setInspecting(true); setError(""); setMessage("");
@@ -163,7 +191,7 @@ export default function PackageCatalog({
 
   return (
     <div className="studio-split">
-      <PackageList items={items} onEdit={edit} />
+      <PackageList items={items} onEdit={edit} onRemove={remove} />
       <form className="studio-form" onSubmit={save}>
         <FormHeader form={form} editing={!!form.package_key}
           inspection={inspection} onApply={applyDraft} />
@@ -364,24 +392,34 @@ function FieldAgent({
 }
 
 function PackageList({
-  items, onEdit,
+  items, onEdit, onRemove,
 }: {
   items: PackageVersion[];
   onEdit: (item: PackageVersion) => void;
+  onRemove: (item: PackageVersion) => void;
 }) {
   return (
     <section className="studio-list">
       <header><h3>מקורות מידע</h3><span>{items.length} מקורות</span></header>
       {items.map((item) => (
-        <button type="button" className="catalog-card" key={item.id}
-          onClick={() => onEdit(item)}>
-          <span className="catalog-icon"><Wrench size={18} /></span>
-          <span><strong>{item.name}</strong><small>
-            <bdi dir="ltr">{item.package_id} · v{item.version}</bdi>{" · "}
-            {item.agent_enabled ? "זמין לסוכן" : "ל-workflow בלבד"}
-          </small></span>
-          <ArrowLeft size={16} />
-        </button>
+        // The row was a single <button>; a delete action cannot be nested
+        // inside one, so the card is now a wrapper holding two controls.
+        <article className="catalog-card" key={item.id}>
+          <button type="button" className="catalog-card-main"
+            onClick={() => onEdit(item)}>
+            <span className="catalog-icon"><Wrench size={18} /></span>
+            <span><strong>{item.name}</strong><small>
+              <bdi dir="ltr">{item.package_id} · v{item.version}</bdi>{" · "}
+              {item.agent_enabled ? "זמין לסוכן" : "ל-workflow בלבד"}
+            </small></span>
+            <ArrowLeft size={16} />
+          </button>
+          <button type="button" className="catalog-card-delete"
+            onClick={() => onRemove(item)}
+            aria-label={`מחיקת הטול ${item.name}`} title="מחיקת הטול">
+            <Trash2 size={15} aria-hidden="true" />
+          </button>
+        </article>
       ))}
       {!items.length &&
         <p className="panel-empty">הוסיפו את מקור המידע הראשון.</p>}

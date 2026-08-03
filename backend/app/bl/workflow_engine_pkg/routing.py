@@ -97,13 +97,22 @@ def _no_options(evidence) -> dict:
     return _clarify("אין עדיין תהליך מפורסם שיכול לענות על השאלה.")
 
 
-def _router_payload(question, workflows, tools, evidence) -> dict:
-    return {
+def _router_payload(question, workflows, tools, evidence, turns=None) -> dict:
+    """What the router selects on.
+
+    `history` is what separates "run this workflow again" from "the user is
+    asking about something already answered". Omitted entirely when empty so
+    an opening request sends the payload it always did.
+    """
+    payload = {
         "question": question,
         "available_workflows": [_workflow_option(item) for item in workflows],
         "available_tools": [_tool_option(item) for item in tools],
         "existing_evidence": _evidence_summary(evidence),
     }
+    if turns:
+        payload["history"] = turns
+    return payload
 
 
 def _workflow_option(item: dict) -> dict:
