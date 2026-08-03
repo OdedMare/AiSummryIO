@@ -28,7 +28,6 @@ export interface PlanChatState<TDraft> {
   resolved: string[];
   openPoints: string[];
   awaitingConfirmation: boolean;
-  ready: boolean;
   pending: boolean;
   error: string;
   send: (text: string) => Promise<void>;
@@ -55,7 +54,6 @@ export function usePlanChat<TDraft>(
   const [resolved, setResolved] = useState<string[]>([]);
   const [openPoints, setOpenPoints] = useState<string[]>([]);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
-  const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,7 +70,6 @@ export function usePlanChat<TDraft>(
       setDraft(turn.draft); setQuestion(turn.question);
       setResolved(turn.resolved); setOpenPoints(turn.open_points);
       setAwaitingConfirmation(turn.awaiting_confirmation);
-      setReady(turn.ready);
       if (turn.ready) onReady?.(turn.draft);
     } catch (reason) {
       // The FDE's own message stays in the thread so it is not retyped.
@@ -91,18 +88,18 @@ export function usePlanChat<TDraft>(
     setMessages([
       ...messages, { role: "fde", text: "מאשר, הגענו להסכמה." },
     ]);
-    setAwaitingConfirmation(false); setReady(true); onReady?.(draft);
+    setAwaitingConfirmation(false); onReady?.(draft);
   };
 
   const reset = () => {
     setMessages([]); setDraft(null); setQuestion(null); setResolved([]);
-    setOpenPoints([]); setAwaitingConfirmation(false); setReady(false);
+    setOpenPoints([]); setAwaitingConfirmation(false);
     setError("");
   };
 
   return {
     messages, draft, question, resolved, openPoints, awaitingConfirmation,
-    ready, pending, error, send, confirm, reset,
+    pending, error, send, confirm, reset,
   };
 }
 

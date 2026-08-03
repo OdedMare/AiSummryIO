@@ -1059,6 +1059,111 @@ button:disabled {
   margin-top: 16px;
 }
 
+/* The agent working, as a message rather than a job readout. */
+.agent-status {
+  margin-bottom: 20px;
+}
+
+.agent-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.agent-status-sources {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-status-sources li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.agent-status-sources li.pending {
+  opacity: 0.75;
+}
+
+.agent-status-dot {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  color: var(--success);
+  background: var(--success-soft);
+  border-radius: 999px;
+}
+
+.agent-status-dot.partial,
+.agent-status-dot.failed {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.agent-status-warn {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Questions the agent can answer, offered so the thread can continue without
+   composing one. Never a prompt to the user — the composer stays the way to
+   ask something else. */
+.next-questions {
+  margin-top: 20px;
+}
+
+.next-questions h2 {
+  margin: 0 0 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.next-questions ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.next-question {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 13px;
+  color: var(--text);
+  text-align: start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.next-question:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+.next-question svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
 /* Every turn of the conversation, oldest first. */
 .thread {
   display: flex;
