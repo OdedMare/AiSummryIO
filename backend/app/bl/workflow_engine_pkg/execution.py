@@ -1,12 +1,16 @@
 """Workflow and package execution."""
 
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Dict, List
 
 from app.common.geometry import multipolygon_to_wkt
+from app.common.logging_setup import trace
 from app.dal.repository.validation import step_levels
+
+_log = trace("execution")
 
 
 def geo_capable(workflow: dict) -> bool:
@@ -54,11 +58,20 @@ def _execute_all(
     total = len(workflows)
     progress_callback(0, total, [])
     workers = min(service._store.get().max_parallel_workflows, total)
+    _log.info(
+        "executing %d workflow(s) on %d worker(s): %s", total, workers,
+        ", ".join(item["workflow_key"] for item in workflows),
+    )
+    started = time.time()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = _workflow_futures(
             pool, service, run, root_id, workflows, boundaries
         )
-        return _collect_sections(futures, total, progress_callback)
+        sections = _collect_sections(futures, total, progress_callback)
+    _log.info(
+        "all %d workflow(s) finished in %.2fs", total, time.time() - started,
+    )
+    return sections
 
 
 def _workflow_futures(
@@ -85,8 +98,18 @@ def _collect_sections(futures, total: int, progress_callback) -> List[dict]:
 
 def _future_section(future, workflow: dict) -> dict:
     try:
-        return future.result()
+        section = future.result()
+        _log.info(
+            "workflow OK  %s status=%s facts=%d warnings=%d",
+            workflow["workflow_key"], section.get("status"),
+            len(section.get("facts", [])), len(section.get("warnings", [])),
+        )
+        return section
     except Exception as exc:
+        _log.exception(
+            "workflow FAILED %s %s: %s",
+            workflow["workflow_key"], type(exc).__name__, exc,
+        )
         return _failed_section(workflow, exc)
 
 
@@ -132,7 +155,20 @@ def _run_steps(service, run, workflow, context, save_evidence):
     ``context["steps"]`` without any further coordination.
     """
     warnings, evidence_ids = [], []
-    for level in step_levels(workflow["steps"]):
+    levels = step_levels(workflow["steps"])
+    _log.info(
+        "workflow %s: %d step(s) in %d level(s) -> %s",
+        workflow["workflow_key"], len(workflow["steps"]), len(levels),
+        " then ".join(
+            "[" + ", ".join(step["key"] for step in level) + "]"
+            for level in levels
+        ),
+    )
+    for index, level in enumerate(levels):
+        _log.info(
+            "workflow %s: level %d/%d starting (%d step(s) concurrently)",
+            workflow["workflow_key"], index + 1, len(levels), len(level),
+        )
         _run_level(
             service, run, workflow, context, save_evidence, level,
             warnings, evidence_ids,
@@ -176,16 +212,46 @@ def _level_outcomes(service, context, level) -> Dict[str, tuple]:
 def _step_outcome(service, step, context) -> tuple:
     """Run one step, keeping its warnings local so threads never share a list."""
     warnings = []
+    key = step["key"]
+    started = time.time()
+    _log.info(
+        "step START %s (package_version=%s source=%s field=%s)",
+        key, step["package_version_id"], step.get("input_source"),
+        step.get("input_field") or "-",
+    )
     package = service._repository.get_package(step["package_version_id"])
     fields = _summary_fields(package)
     try:
-        records = service._run_package(
-            package, service._identifiers(step, context)
+        resolved = service._identifiers(step, context)
+        _log.info(
+            "step %s resolved %d identifier(s) for package %s",
+            key, len(resolved), package.get("package_key"),
+        )
+        _log.debug("step %s identifiers=%s", key, _preview(resolved))
+        records = service._run_package(package, resolved)
+        _log.info(
+            "step OK    %s rows=%d in %.2fs",
+            key, len(records), time.time() - started,
         )
     except Exception as exc:
+        # A step failure is a warning, not an abort — but it must be visible,
+        # or a section quietly returns empty with the cause only in the UI.
+        _log.warning(
+            "step FAIL  %s after %.2fs %s: %s",
+            key, time.time() - started, type(exc).__name__, exc,
+        )
+        _log.debug("step %s traceback", key, exc_info=True)
         warnings.append("%s: %s" % (step["name"], exc))
         records = []
     return records, warnings, fields
+
+
+def _preview(values: List[str], limit: int = 5) -> str:
+    """A bounded sample of identifiers — never the whole list, which can be
+    thousands of rows fanned out from a previous step."""
+    shown = [str(value)[:60] for value in values[:limit]]
+    extra = len(values) - len(shown)
+    return ", ".join(shown) + (" (+%d more)" % extra if extra > 0 else "")
 
 
 def _summary_fields(package):

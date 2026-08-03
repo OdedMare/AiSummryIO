@@ -122,11 +122,37 @@ function useRunPolling(
 ) {
   useEffect(() => {
     if (!run || !isActive(run)) return;
+    const startedAt = Date.now();
+    console.debug(`[poll] watching run ${run.id} (status=${run.status})`);
     const timer = window.setInterval(() => {
       api.run(run.id).then((next) => {
+        const age = (Date.now() - startedAt) / 1000;
+        const done = next.progress?.completed ?? 0;
+        const total = next.progress?.total ?? 0;
+        // The whole symptom of a stuck run is that this line repeats with
+        // the same numbers, so age and progress are printed every tick.
+        console.debug(
+          `[poll] run ${next.id} status=${next.status} ` +
+          `progress=${done}/${total} age=${age.toFixed(0)}s`,
+        );
+        if (isActive(next) && age > 180) {
+          console.warn(
+            `[poll] run ${next.id} has been ${next.status} for ${age.toFixed(0)}s ` +
+            "with no completion — check the backend console for a FLAPI timeout.",
+          );
+        }
         setRun(next);
-        if (!isActive(next)) loadHistory();
-      }).catch((reason) => setError(reason.message));
+        if (!isActive(next)) {
+          console.debug(
+            `[poll] run ${next.id} finished as ${next.status} ` +
+            `after ${age.toFixed(1)}s`,
+          );
+          loadHistory();
+        }
+      }).catch((reason) => {
+        console.error(`[poll] run ${run.id} poll failed`, reason);
+        setError(reason.message);
+      });
     }, 1500);
     return () => window.clearInterval(timer);
   }, [run, setRun, setError, loadHistory]);

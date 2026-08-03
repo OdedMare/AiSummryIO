@@ -6,6 +6,7 @@ to/from flunks models lives in `mapper`.
 """
 
 import logging
+import time
 from typing import Any, Dict, List
 
 from flunks import FlunksRunner
@@ -30,26 +31,63 @@ class FlapiProvider:
     def run(self, package: dict, identifiers: List[str]) -> List[dict]:
         """Return the package's rows, retrying once before giving up."""
         last_attempt = _ATTEMPTS - 1
+        self._logger.info(
+            "FLAPI run package=%s id_count=%d mode=%s timeout=%ss",
+            package.get("package_key"), len(identifiers),
+            package.get("input_mode"),
+            resolve_timeout(package, self._store.get()),
+        )
         for attempt in range(_ATTEMPTS):
             try:
-                return self._attempt(package, identifiers)
+                return self._attempt(package, identifiers, attempt)
             except Exception as exc:
+                self._logger.warning(
+                    "FLAPI attempt %d/%d failed package=%s %s: %s",
+                    attempt + 1, _ATTEMPTS, package.get("package_key"),
+                    type(exc).__name__, exc,
+                )
                 if attempt == last_attempt:
                     raise self._failure(package, exc) from exc
         raise AssertionError("unreachable: the last attempt returns or raises")
 
-    def _attempt(self, package: dict, identifiers: List[str]) -> List[dict]:
-        """One full run: configure, execute under a timeout, normalize."""
+    def _attempt(
+        self, package: dict, identifiers: List[str], attempt: int = 0
+    ) -> List[dict]:
+        """One full run: configure, execute under a timeout, normalize.
+
+        Each stage is announced before it starts. The whole point is that a
+        hang leaves a START line with no matching OK line, which names the
+        stage that never returned instead of leaving a silent gap.
+        """
+        key = package["package_key"]
+        self._logger.debug(
+            "FLAPI [%s] attempt=%d building package config", key, attempt + 1,
+        )
         config = self._mapper.package_config(package, identifiers)
         timeout = resolve_timeout(package, self._store.get())
-        result = run_bounded(
-            self._runner(config), timeout, package["package_key"]
+
+        self._logger.debug("FLAPI [%s] constructing runner", key)
+        runner = self._runner(config)
+
+        self._logger.info(
+            "FLAPI [%s] calling flunks .run() (timeout=%ss) — no cancellation, "
+            "a hang past this point leaks its worker thread", key, timeout,
         )
+        started = time.time()
+        result = run_bounded(runner, timeout, key)
+        self._logger.info(
+            "FLAPI [%s] flunks returned in %.2fs", key, time.time() - started,
+        )
+
         records = self._tag_query(self._mapper.normalize(result), package)
         self._logger.info(
-            "FLAPI package OK package=%s rows=%d",
-            package["package_key"], len(records),
+            "FLAPI package OK package=%s rows=%d elapsed=%.2fs",
+            key, len(records), time.time() - started,
         )
+        if records:
+            self._logger.debug(
+                "FLAPI [%s] first row keys=%s", key, sorted(records[0].keys()),
+            )
         return records
 
     @staticmethod

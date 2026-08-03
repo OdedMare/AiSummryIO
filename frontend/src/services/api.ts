@@ -6,23 +6,64 @@ import type {
 } from "@/types";
 import type { GeoJSONMultiPolygon } from "@/types/geo";
 
+/**
+ * Every backend call is traced to the browser console.
+ *
+ * Failures are logged with the request body that caused them, because the
+ * Hebrew message the UI shows is deliberately short and a 4xx/5xx is only
+ * diagnosable next to what was actually sent.
+ */
 export async function request<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-    credentials: "same-origin",
-  });
+  const method = options?.method ?? "GET";
+  const started = performance.now();
+  const label = `${method} ${path}`;
+  // The 1.5s run poll would drown the console, so it is logged only when it
+  // fails or turns slow.
+  const quiet = /^\/api\/runs\//.test(path);
+  if (!quiet) console.debug(`[api] → ${label}`, requestBody(options));
+
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      credentials: "same-origin",
+    });
+  } catch (reason) {
+    // A network-level failure never reaches the code below, so it would
+    // otherwise surface as a bare "Failed to fetch" with no route attached.
+    console.error(`[api] ✗ ${label} network error`, reason);
+    throw reason;
+  }
+
+  const elapsed = performance.now() - started;
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    console.error(
+      `[api] ✗ ${label} → ${response.status} (${elapsed.toFixed(0)}ms)`,
+      { status: response.status, body: data, sent: requestBody(options) },
+    );
     throw new Error(errorDetail(data, response.status));
   }
+  if (!quiet || elapsed > 3000) {
+    console.debug(
+      `[api] ✓ ${label} → ${response.status} (${elapsed.toFixed(0)}ms)`, data,
+    );
+  }
   return data as T;
+}
+
+/** The parsed request body, for logging only; never throws on bad JSON. */
+function requestBody(options?: RequestInit): unknown {
+  if (typeof options?.body !== "string") return undefined;
+  try {
+    return JSON.parse(options.body);
+  } catch {
+    return options.body;
+  }
 }
 
 // A rejected body can still arrive as FastAPI's list of error objects, which
