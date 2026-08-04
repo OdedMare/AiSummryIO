@@ -137,10 +137,10 @@ class FlapiProvider:
         cube = package_config.main_input_cube
         values = list(getattr(cube, "values", []) or [])
         logging.getLogger(__name__).warning(
-            "[diag] FLAPI outbound username=%s token=%s package_id=%r "
+            "[diag] FLAPI outbound username=%r token=%s package_id=%r "
             "package_name=%r cube_name=%r cube_parameter=%r "
             "output_cube=%r values=%s",
-            _fingerprint(getattr(flapi_config, "username", "")),
+            getattr(flapi_config, "username", ""),
             _fingerprint(getattr(flapi_config, "token", "")),
             package_config.package_id, package_config.package_name,
             cube.cube_name, cube.cube_parameter,

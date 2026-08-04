@@ -176,11 +176,10 @@ def test_flapi_outbound_diagnostic_is_comparable_without_leaking_secrets(
 
     assert runner.flapi_config.username == "diagnostic-user"
     assert runner.flapi_config.token == "top-secret-token"
-    assert "username=str:length=15:sha256=c85b7af5b173" in caplog.text
+    assert "username='diagnostic-user'" in caplog.text
     assert "token=str:length=16:sha256=baed6367ed9d" in caplog.text
     assert "values=['str:length=3:sha256=7a3e6b16cb75']" in caplog.text
     assert "package_id='PKG-007'" in caplog.text
-    assert "diagnostic-user" not in caplog.text
     assert "top-secret-token" not in caplog.text
 
 
