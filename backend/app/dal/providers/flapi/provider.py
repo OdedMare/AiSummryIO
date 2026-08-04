@@ -145,7 +145,7 @@ class FlapiProvider:
             package_config.package_id, package_config.package_name,
             cube.cube_name, cube.cube_parameter,
             package_config.output_cube.cube_name,
-            [_fingerprint(value) for value in values],
+            values,
         )
         return FlunksRunner(
             flapi_config=flapi_config,

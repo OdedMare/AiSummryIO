@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
 
-    flapi_username: Optional[str] = None
+    flapi_username: Optional[str] = "665avivs"
     flapi_token: str = ""
     flapi_verify_tls: bool = True
 
