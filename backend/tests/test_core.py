@@ -1,7 +1,7 @@
 import json
 import sys
 import time
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -24,6 +24,8 @@ from app.dal.providers.flapi.provider import FlapiProvider
 from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
+from app.dal.llm.completion_retry import create_with_retry
+from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.repository import Repository
 from app.dal.repository.conversations import conversation_title
 from app.dal.repository.validation import step_levels
@@ -405,6 +407,75 @@ def test_package_timeout_falls_back_to_the_global_setting(monkeypatch):
     assert resolve_timeout({"timeout_seconds": 7}, settings) == 7
     assert resolve_timeout({"timeout_seconds": None}, settings) == 45
     assert resolve_timeout({}, settings) == 45
+
+
+def test_an_expired_model_deadline_makes_no_api_request():
+    class Completion:
+        @staticmethod
+        def create(**_kwargs):
+            raise AssertionError("an expired call must stop before the SDK")
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=Completion())
+    )
+
+    with pytest.raises(TimeoutError, match="למודל"):
+        create_with_retry(
+            client, "model", {}, deadline=time.monotonic() - 1
+        )
+
+
+def test_one_timeout_covers_the_whole_logical_model_call(monkeypatch):
+    class Values:
+        openai_api_key = "key"
+        llm_base_url = None
+        llm_model = "model"
+        llm_diet_mode = False
+        llm_timeout_seconds = 7
+
+    class Store:
+        @staticmethod
+        def get():
+            return Values()
+
+    deadlines = []
+    replies = iter(("not json", '{"ok": true}'))
+
+    def complete(_client, _model, _kwargs, deadline=None):
+        deadlines.append(deadline)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content=next(replies))
+            )],
+            usage=None,
+        )
+
+    client = OpenAIJsonClient(Store())
+    monkeypatch.setattr(client, "_client_for", lambda *_args: object())
+    monkeypatch.setattr("app.dal.llm.openai_client.create_with_retry", complete)
+    started = time.monotonic()
+
+    assert client.complete_json("system", "user") == {"ok": True}
+    assert len(deadlines) == 2
+    assert deadlines[0] == deadlines[1]
+    assert started + 6 < deadlines[0] <= started + 8
+
+
+def test_the_app_owns_retries_instead_of_stacking_the_sdk_defaults(
+    monkeypatch
+):
+    captured = {}
+    sdk_client = object()
+
+    def build_client(**kwargs):
+        captured.update(kwargs)
+        return sdk_client
+
+    monkeypatch.setattr("app.dal.llm.openai_client.OpenAI", build_client)
+    client = OpenAIJsonClient(object())
+
+    assert client._client_for("key", None) is sdk_client
+    assert captured["max_retries"] == 0
 
 
 def test_verify_tls_reaches_flapi_config_only_when_the_field_exists():

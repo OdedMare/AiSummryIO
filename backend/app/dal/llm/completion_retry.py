@@ -15,10 +15,12 @@ def create_with_retry(client, model: str, kwargs: dict, deadline=None):
     last_error = None
     for attempt in range(_ATTEMPTS):
         timeout = _remaining(deadline)
+        call = dict(kwargs)
+        if timeout is not None:
+            call["timeout"] = timeout
         try:
             return client.chat.completions.create(
-                model=model, temperature=_TEMPERATURE, timeout=timeout,
-                **kwargs
+                model=model, temperature=_TEMPERATURE, **call
             )
         except _ERRORS as exc:
             last_error = exc
