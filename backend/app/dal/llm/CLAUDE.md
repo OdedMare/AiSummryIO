@@ -46,11 +46,6 @@ JSON, the bad reply and a correction instruction are appended to the messages
 and the whole ladder runs once more. Two failures raise
 `AgentError("המודל החזיר JSON לא תקין פעמיים: ...")`.
 
-The whole logical call shares the `llm_timeout_seconds` wall-time budget,
-including every ladder rung and retry. The SDK's automatic retries are off;
-`completion_retry.py` owns the single visible retry so attempts do not
-multiply underneath the application.
-
 `llm_diet_mode` caps completions at `_DIET_MAX_COMPLETION_TOKENS = 1200` and
 is on by default.
 
