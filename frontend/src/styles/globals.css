@@ -3006,6 +3006,30 @@ select:focus {
   padding: 9px 11px;
 }
 
+.canvas-node-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  padding: 3px 11px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+
+.canvas-node-input span {
+  color: var(--text-muted);
+}
+
+.canvas-node-input b {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .canvas-node strong {
   display: block;
   color: var(--text);

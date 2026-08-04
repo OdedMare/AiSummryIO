@@ -328,6 +328,8 @@ def identifiers(step: dict, context: dict) -> List[str]:
         return _root_identifiers(context)
     if source == "workflow.boundaries":
         return _boundary_identifiers(context)
+    if source == "workflow.value":
+        return [str(step["input_value"])]
     return _step_identifiers(step, context, source)
 
 

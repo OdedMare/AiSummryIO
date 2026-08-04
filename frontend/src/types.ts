@@ -145,6 +145,7 @@ export interface WorkflowStep {
   depends_on: string[];
   input_source: string;
   input_field: string;
+  input_value: string;
   summary_prompt: string;
 }
 

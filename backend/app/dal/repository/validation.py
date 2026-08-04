@@ -55,10 +55,14 @@ def _validate_step(step: dict, seen: set) -> None:
             "שלב תלוי בשלב מאוחר או לא קיים: " + ", ".join(missing)
         )
     source = step.get("input_source", "workflow.id")
-    # Both workflow-level sources are complete inputs on their own: the root
-    # identifier and the area drawn on the map. Only a steps.<key> source
-    # needs its reference checked.
+    # Workflow-level sources are complete inputs on their own. A saved value
+    # additionally needs the value itself; only a steps.<key> source needs its
+    # reference checked.
     if source in ("workflow.id", "workflow.boundaries"):
+        return
+    if source == "workflow.value":
+        if not str(step.get("input_value", "")).strip():
+            raise ValueError("נדרש ערך קלט שמור")
         return
     _validate_source(step, source, seen)
 

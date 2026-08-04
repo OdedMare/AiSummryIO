@@ -124,10 +124,16 @@ ID/evidence, and reuse the conversation's stored boundaries.
   reads are marked. An edge's endpoint can be dragged to another field or
   step to move it (`onEdgeUpdate`), which is why edges anchor to the field's
   handle rather than the node.
+- The target handle sits on a labeled input row showing the selected tool's
+  real `input_cube_parameter`, so an edge visibly connects output to input
+  rather than disappearing into a generic card edge.
 - A step holds one `input_source`, so a new edge replaces the old one.
   Deleting an edge — or deleting the step feeding it — returns the target to
   `workflow.id` **and clears `input_field`**, or the step keeps a mapping
   nothing points at. Cycles are refused at drag time rather than at publish.
+- `workflow.value` is a literal input stored in the target step's
+  `input_value`. It has its own canvas source node and a visibly labeled value
+  field in the step card; an empty saved value is invalid.
 - Steps are sorted by dependency level in `workflowPayload`, because the
   backend resolves `steps.<key>` only against steps earlier in the array
   while the canvas lets an FDE wire a node backwards.
@@ -138,7 +144,8 @@ ID/evidence, and reuse the conversation's stored boundaries.
   mode flag to set: connecting steps is the only control. `ExecutionMode`
   reads the graph and names what will run, and `stepLevels` must keep
   matching the backend's `step_levels` or the banner misreports it.
-- Edges from `workflow.id` / `workflow.boundaries` carry `is-implicit` and
+- Edges from `workflow.id` / `workflow.boundaries` / `workflow.value` carry
+  `is-implicit` and
   are drawn faint and dashed. They are every unconnected step's default
   rather than a mapping the FDE drew, and at full strength a parallel bundle
   reads as a fan-out chain.

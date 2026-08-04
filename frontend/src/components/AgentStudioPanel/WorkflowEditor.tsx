@@ -210,7 +210,7 @@ function useWorkflowEditor(
     const step: WorkflowStep = {
       key: "step1", name: item.name, package_version_id: item.id,
       depends_on: [], input_source: "workflow.id", input_field: "",
-      summary_prompt: "",
+      input_value: "", summary_prompt: "",
     };
     setSteps([step]);
     setSelectedKey(step.key);
@@ -610,21 +610,33 @@ function StepCard({
             חבילת FLAPI שתורץ בשלב הזה.
           </small>
         </label>
-        <label><span>מקור המזהה</span><select value={step.input_source}
+        <label><span>מקור הקלט</span><select value={step.input_source}
           onChange={(e) => editor.updateStep(
             index, { input_source: e.target.value }
           )}>
           <option value="workflow.id">המזהה הראשי</option>
           <option value="workflow.boundaries">האזור מהמפה (MULTIPOLYGON)</option>
+          <option value="workflow.value">ערך קבוע שנשמר בתהליך</option>
           {editor.steps.slice(0, index).map((prior) =>
             <option key={prior.key} value={`steps.${prior.key}`}>
               פלט: {prior.name}
             </option>)}
         </select>
           <small className="field-hint">
-            הערך שיועבר כקלט: המזהה הראשי, אזור או פלט של שלב קודם.
+            הערך שיועבר לטול: מזהה, אזור, ערך שמור או פלט של שלב קודם.
           </small>
         </label>
+        {step.input_source === "workflow.value" &&
+          <label><span>ערך הקלט השמור *</span>
+            <input dir="ltr" value={step.input_value ?? ""} required
+              placeholder="001234567"
+              onChange={(event) => editor.updateStep(
+                index, { input_value: event.target.value }
+              )} />
+            <small className="field-hint">
+              הערך המדויק שיישלח לטול בכל ריצה ויישמר עם גרסת התהליך.
+            </small>
+          </label>}
         {mappedStep(step) && <InputFieldPicker step={step} index={index}
           packages={packages} editor={editor} />}
       </div>
@@ -869,7 +881,7 @@ function newStep(steps: WorkflowStep[], packages: PackageVersion[]) {
     key: `step-${index}`, name: `שלב ${index}`,
     package_version_id: packages[0]?.id ?? "", depends_on: [],
     input_source: "workflow.id",
-    input_field: "", summary_prompt: "",
+    input_field: "", input_value: "", summary_prompt: "",
   };
 }
 
@@ -877,6 +889,8 @@ function patchedStep(step: WorkflowStep, patch: Partial<WorkflowStep>) {
   const next = { ...step, ...patch };
   next.depends_on = next.input_source.startsWith("steps.")
     ? [next.input_source.split(".")[1]] : [];
+  if (!next.input_source.startsWith("steps.")) next.input_field = "";
+  if (next.input_source !== "workflow.value") next.input_value = "";
   return next;
 }
 

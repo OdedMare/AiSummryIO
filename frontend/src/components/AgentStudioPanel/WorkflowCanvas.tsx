@@ -25,13 +25,15 @@ import {
 } from "lucide-react";
 import type { PackageVersion, WorkflowStep } from "@/types";
 
-/** The two workflow-level inputs, drawn as fixed source nodes. */
+/** The workflow-level inputs, drawn as fixed source nodes. */
 const ROOT_SOURCE = "workflow.id";
 const AREA_SOURCE = "workflow.boundaries";
+const VALUE_SOURCE = "workflow.value";
 
 const SOURCE_NODES = [
   { id: ROOT_SOURCE, label: "המזהה הראשי", hint: "מחרוזת מזהה" },
   { id: AREA_SOURCE, label: "האזור מהמפה", hint: "MULTIPOLYGON" },
+  { id: VALUE_SOURCE, label: "ערך קבוע", hint: "נשמר עם השלב" },
 ];
 
 export default function WorkflowCanvas({
@@ -66,6 +68,7 @@ export default function WorkflowCanvas({
   const live = useMemo(() => {
     const keys = new Set<string>([
       ...steps.map((step) => step.key), ROOT_SOURCE, AREA_SOURCE,
+      VALUE_SOURCE,
     ]);
     return Object.fromEntries(Object.entries(moved)
       .filter(([key]) => keys.has(key)));
@@ -419,7 +422,6 @@ function StepNode({ data }: NodeProps<StepNodeData>) {
   return (
     <div className={`canvas-node canvas-node-step${
       data.selected ? " is-selected" : ""}${data.incomplete ? " is-incomplete" : ""}`}>
-      <Handle type="target" position={Position.Right} />
       <header className="canvas-node-head">
         <span className="canvas-node-icon">
           <Package size={15} aria-hidden="true" />
@@ -429,6 +431,12 @@ function StepNode({ data }: NodeProps<StepNodeData>) {
           <small dir="ltr">{data.packageName}</small>
         </div>
       </header>
+      <div className="canvas-node-input">
+        <span>קלט</span>
+        <b dir="ltr">{data.inputName}</b>
+        <Handle type="target" position={Position.Right}
+          title={`חיבור לקלט ${data.inputName}`} />
+      </div>
       {data.incompleteReason && <p className="canvas-node-warning">
         <AlertTriangle size={12} aria-hidden="true" />
         {data.incompleteReason}
@@ -483,6 +491,7 @@ type OutputField = { name: string; type: string; consumed: boolean };
 type StepNodeData = {
   name: string;
   packageName: string;
+  inputName: string;
   packageChosen: boolean;
   outputFields: OutputField[];
   selected: boolean;
@@ -558,7 +567,7 @@ function canvasNodes(
 function nodeHeight(data: StepNodeData): number {
   const rows = data.outputFields.length;
   const body = rows ? rows * 19 + 8 : 26;
-  return 52 + body + (data.incompleteReason ? 22 : 0);
+  return 78 + body + (data.incompleteReason ? 22 : 0);
 }
 
 function stepNodeData(
@@ -577,6 +586,7 @@ function stepNodeData(
   return {
     name: step.name || step.key,
     packageName: item ? `${item.name} · v${item.version}` : "לא נבחר טול",
+    inputName: item?.input_cube_parameter || "input",
     packageChosen: Boolean(item),
     outputFields: fields,
     selected: step.key === selectedKey,
@@ -588,6 +598,9 @@ function stepNodeData(
 /** Why this step cannot be published yet, or "" when it is complete. */
 function incompleteReason(step: WorkflowStep): string {
   if (!step.package_version_id) return "לא נבחר טול";
+  if (step.input_source === VALUE_SOURCE && !step.input_value?.trim()) {
+    return "לא הוזן ערך קלט שמור";
+  }
   if (mappedStep(step) && !step.input_field.trim()) return "לא נבחר שדה מזהה";
   return "";
 }
@@ -697,9 +710,10 @@ function targetOfEdge(id: string) {
  * The output field a drag started from.
  *
  * The workflow-level sources and a package with no contract carry no field:
- * `workflow.id` and `workflow.boundaries` are complete inputs on their own,
- * and `_validate_source` only demands an `input_field` for a `steps.<key>`
- * source, which the step form is then left to fill in.
+ * Workflow-level sources are complete inputs on their own; `workflow.value`
+ * keeps its literal on the target step. `_validate_source` only demands an
+ * `input_field` for a `steps.<key>` source, which the step form is then left
+ * to fill in.
  */
 function connectedField(handle: string | null | undefined): string {
   if (!handle || handle === ANY_FIELD_HANDLE) return "";
@@ -712,7 +726,8 @@ function sourceExpression(nodeId: string) {
 }
 
 function isSourceNode(nodeId: string) {
-  return nodeId === ROOT_SOURCE || nodeId === AREA_SOURCE;
+  return nodeId === ROOT_SOURCE || nodeId === AREA_SOURCE ||
+    nodeId === VALUE_SOURCE;
 }
 
 /**
@@ -782,5 +797,5 @@ export function orderedSteps(steps: WorkflowStep[]): WorkflowStep[] {
 
 export function mappedStep(step: WorkflowStep) {
   return step.input_source !== ROOT_SOURCE &&
-    step.input_source !== AREA_SOURCE;
+    step.input_source !== AREA_SOURCE && step.input_source !== VALUE_SOURCE;
 }

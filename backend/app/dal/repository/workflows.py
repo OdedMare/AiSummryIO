@@ -97,7 +97,7 @@ class WorkflowRepository:
             SELECT
                 id, workflow_id, position, step_key AS key, name,
                 package_version_id, depends_on, input_source, input_field,
-                summary_prompt
+                input_value, summary_prompt
             FROM workflow_steps
             WHERE workflow_id=%s ORDER BY position
         """, (workflow_id,))
@@ -157,7 +157,8 @@ def _step_values(workflow_id, position, step):
         new_id(), workflow_id, position, step["key"], step["name"],
         step["package_version_id"], Jsonb(step.get("depends_on", [])),
         step.get("input_source", "workflow.id"),
-        step.get("input_field", ""), step.get("summary_prompt", ""),
+        step.get("input_field", ""), step.get("input_value", ""),
+        step.get("summary_prompt", ""),
     )
 
 
@@ -171,8 +172,8 @@ _INSERT_WORKFLOW = """
 _INSERT_STEP = """
     INSERT INTO workflow_steps (
         id, workflow_id, position, step_key, name, package_version_id,
-        depends_on, input_source, input_field, summary_prompt
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        depends_on, input_source, input_field, input_value, summary_prompt
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
 _ARCHIVE_WORKFLOW = """

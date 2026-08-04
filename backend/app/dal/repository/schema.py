@@ -62,9 +62,13 @@ CREATE TABLE IF NOT EXISTS workflow_steps (
     depends_on JSONB NOT NULL DEFAULT '[]',
     input_source TEXT NOT NULL DEFAULT 'workflow.id',
     input_field TEXT NOT NULL DEFAULT '',
+    input_value TEXT NOT NULL DEFAULT '',
     summary_prompt TEXT NOT NULL DEFAULT '',
     UNIQUE(workflow_id, step_key)
 );
+
+ALTER TABLE workflow_steps
+    ADD COLUMN IF NOT EXISTS input_value TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS agent_content (
     id TEXT PRIMARY KEY,

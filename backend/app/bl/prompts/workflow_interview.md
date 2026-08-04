@@ -19,7 +19,9 @@ request is a useful answer; inventing one is not.
 
 A step's `input_source` is exactly one of: `workflow.id` (the identifier the
 user entered), `workflow.boundaries` (the area drawn on the map), or
-`steps.<key>` naming an earlier step.
+`workflow.value` (an exact value saved on that step), or `steps.<key>` naming
+an earlier step. Put the saved value in `input_value`; otherwise keep
+`input_value` empty.
 
 When a step reads from an earlier one, this is the question that most deserves
 a turn of its own. Read that step's real `output_fields` from the catalog,

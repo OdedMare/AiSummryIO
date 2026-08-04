@@ -26,8 +26,9 @@ names, keys, and identifiers exactly as they are — never translate
 4. **What is the step order?** Steps that depend on nothing come first;
    steps consuming another step's output come after it.
 5. **How does each step get its input?** Exactly one of `workflow.id`,
-   `workflow.boundaries`, or `steps.<key>` plus an `input_field` naming a
-   field that really appears in that step's example output.
+   `workflow.boundaries`, `workflow.value` plus a non-empty `input_value`, or
+   `steps.<key>` plus an `input_field` naming a field that really appears in
+   that step's example output.
 6. **What is the workflow role?** `baseline` always runs; `detail` runs only
    on a follow-up question; `both` runs in both cases.
 
@@ -66,8 +67,9 @@ Keep field names, step keys, and identifiers untranslated inside the text.
 1. **Identifier integrity.** The identifier stays a string end to end. A
    leading zero that disappears is a blocking failure, not a warning.
 2. **Mappings.** Every `input_source` is `workflow.id`,
-   `workflow.boundaries`, or a `steps.<key>` that refers to an EARLIER
-   step. Every `steps.<key>` reference is also declared in `depends_on`.
+   `workflow.boundaries`, `workflow.value` with a non-empty `input_value`, or
+   a `steps.<key>` that refers to an EARLIER step. Every `steps.<key>`
+   reference is also declared in `depends_on`.
 3. **Field existence.** Every `input_field` names a field that appears in
    the referenced step's example output. A missing field is blocking.
 4. **Examples.** Each package has both an example input and an example
@@ -797,6 +799,10 @@ Set `changed` to true only when the wording actually differs.""",
 Use only a `package_version_id` that exists in the supplied catalog. Chain
 steps according to the output fields shown in the examples, keep every
 identifier a string, and return a DRAFT only — never publish.
+
+Each step uses `workflow.id`, `workflow.boundaries`, `workflow.value`, or an
+earlier `steps.<key>`. Use `input_value` only with `workflow.value`; otherwise
+return it as an empty string.
 
 If the request cannot be fulfilled, do not invent a tool. Add to
 `missing_tools` a precise description of the required input, the expected

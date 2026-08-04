@@ -202,6 +202,21 @@ def test_workflow_identifier_mapping_supports_fanout_and_deduplication():
     assert SummaryService._identifiers(step, context) == ["001", "A-7"]
 
 
+def test_a_saved_input_value_is_valid_and_reaches_the_package_unchanged():
+    step = {
+        "key": "fixed-input", "input_source": "workflow.value",
+        "input_value": "00123-A", "depends_on": [],
+    }
+
+    Repository._validate_steps([step])
+    assert SummaryService._identifiers(step, {
+        "workflow": {"id": "ignored"}, "steps": {},
+    }) == ["00123-A"]
+
+    with pytest.raises(ValueError, match="ערך קלט"):
+        Repository._validate_steps([dict(step, input_value="")])
+
+
 def test_map_boundaries_reach_the_package_as_multipolygon_wkt():
     """The drawn area travels to flunks as one opaque WKT string."""
     step = {"input_source": "workflow.boundaries"}

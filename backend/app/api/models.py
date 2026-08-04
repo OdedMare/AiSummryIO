@@ -43,6 +43,7 @@ class WorkflowStep(BaseModel):
     depends_on: List[str] = Field(default_factory=list)
     input_source: str = "workflow.id"
     input_field: str = ""
+    input_value: str = ""
     summary_prompt: str = ""
 
     @field_validator("key")

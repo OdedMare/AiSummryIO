@@ -90,13 +90,15 @@ returns `status: "partial"` and keeps every section that did succeed.
 
 ### `_identifiers` — the input contract
 
-A step's `input_source` is one of exactly three shapes:
+A step's `input_source` is one of exactly four shapes:
 
 - `workflow.id` — the conversation's root identifier, as a string.
 - `workflow.boundaries` — the area drawn on the map, serialized by
   `common/geometry.py` to an OGC `MULTIPOLYGON` WKT string. **Raises a clear
   Hebrew error when no area was drawn.** To FLAPI this is just another opaque
   string.
+- `workflow.value` — one exact string stored in the step's `input_value` and
+  reused on every run.
 - `steps.<key>` — an earlier step's output, read through `input_field`. Values
   that are lists fan out; `None` is skipped; the result is deduplicated while
   preserving order (`dict.fromkeys`).

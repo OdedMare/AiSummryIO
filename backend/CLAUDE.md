@@ -78,8 +78,9 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   SQL, or mappings.
 - Workflow planning creates a draft from catalog tool-version IDs or describes
   a missing tool contract; it never publishes automatically.
-- A workflow input may reference `workflow.id`, `workflow.boundaries`, or an
-  earlier step output. `workflow.boundaries` is the area drawn on the map,
+- A workflow input may reference `workflow.id`, `workflow.boundaries`, a saved
+  `workflow.value`, or an earlier step output. `workflow.boundaries` is the
+  area drawn on the map,
   serialized by `common/geometry.py` to an OGC `MULTIPOLYGON` WKT string and
   passed into `PackageInputCube.values` like any other opaque identifier. A
   step that requests it fails clearly when no area was drawn.
