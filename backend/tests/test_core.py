@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 import time
 from types import ModuleType, SimpleNamespace
@@ -153,6 +154,34 @@ def test_flapi_provider_retries_once_and_adds_query_provenance(monkeypatch):
 
     assert attempts == [1, 2]
     assert records == [{"name": "בית", "_package_query": "home-summary"}]
+
+
+def test_flapi_outbound_diagnostic_is_comparable_without_leaking_secrets(
+    caplog
+):
+    class Settings:
+        flapi_username = "diagnostic-user"
+        flapi_token = "top-secret-token"
+        flapi_verify_tls = True
+
+    package_config = FlunksMapper().package_config({
+        "package_id": "PKG-007",
+        "input_cube_name": "root",
+        "input_cube_parameter": "identifier",
+        "output_cube_name": "facts",
+    }, ["001"])
+
+    with caplog.at_level(logging.WARNING):
+        runner = FlapiProvider._flunks_runner(Settings(), package_config)
+
+    assert runner.flapi_config.username == "diagnostic-user"
+    assert runner.flapi_config.token == "top-secret-token"
+    assert "username=str:length=15:sha256=c85b7af5b173" in caplog.text
+    assert "token=str:length=16:sha256=baed6367ed9d" in caplog.text
+    assert "values=['str:length=3:sha256=7a3e6b16cb75']" in caplog.text
+    assert "package_id='PKG-007'" in caplog.text
+    assert "diagnostic-user" not in caplog.text
+    assert "top-secret-token" not in caplog.text
 
 
 def test_workflow_identifier_mapping_supports_fanout_and_deduplication():

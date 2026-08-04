@@ -1,6 +1,5 @@
 """Translate summary package definitions to/from flunks models."""
 
-import logging
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -8,8 +7,6 @@ from flunks.config import FlunksPackageConfig
 from flunks.flow_models import PackageInputCube, PackageOutputCube
 
 from app.common.errors import ProviderError
-
-_logger = logging.getLogger(__name__)
 
 
 class FlunksMapper:
@@ -21,16 +18,6 @@ class FlunksMapper:
             cube_name=package["input_cube_name"],
             cube_parameter=package["input_cube_parameter"],
             values=values,
-        )
-        # TEMP DIAGNOSTIC — remove once the FLAPI 500 is pinned. Logs exactly
-        # what is sent, to compare against the same package run from FLAPI's
-        # own UI. Values are the FDE's own test identifiers, not user data.
-        _logger.warning(
-            "[diag] package_id=%r package_name=%r cube_name=%r "
-            "cube_parameter=%r output_cube=%r values=%r",
-            str(package["package_id"]), "",
-            package["input_cube_name"], package["input_cube_parameter"],
-            package["output_cube_name"], values,
         )
         return FlunksPackageConfig(
             package_id=str(package["package_id"]),
@@ -89,4 +76,3 @@ class FlunksMapper:
         if hasattr(value, "item"):
             return value.item()
         return value
-

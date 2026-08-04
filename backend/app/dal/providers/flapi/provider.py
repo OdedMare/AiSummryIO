@@ -5,6 +5,7 @@ policy and credential shaping live in `runner_config`, and translation
 to/from flunks models lives in `mapper`.
 """
 
+import hashlib
 import logging
 import time
 from typing import Any, Dict, List
@@ -78,6 +79,14 @@ class FlapiProvider:
         self._logger.info(
             "FLAPI [%s] flunks returned in %.2fs", key, time.time() - started,
         )
+        self._logger.warning(
+            "[diag] FLAPI inbound package=%s result_type=%s shape=%r "
+            "columns=%r success_chunks=%r failed_chunks=%r",
+            key, type(result).__name__, getattr(result, "shape", None),
+            [str(column) for column in getattr(result, "columns", [])],
+            getattr(runner, "success_chunks", None),
+            getattr(runner, "failed_chunks", None),
+        )
 
         records = self._tag_query(self._mapper.normalize(result), package)
         self._logger.info(
@@ -124,8 +133,31 @@ class FlapiProvider:
 
     @staticmethod
     def _flunks_runner(settings, package_config):
+        flapi_config = build_flapi_config(FlapiConfig, settings)
+        cube = package_config.main_input_cube
+        values = list(getattr(cube, "values", []) or [])
+        logging.getLogger(__name__).warning(
+            "[diag] FLAPI outbound username=%s token=%s package_id=%r "
+            "package_name=%r cube_name=%r cube_parameter=%r "
+            "output_cube=%r values=%s",
+            _fingerprint(getattr(flapi_config, "username", "")),
+            _fingerprint(getattr(flapi_config, "token", "")),
+            package_config.package_id, package_config.package_name,
+            cube.cube_name, cube.cube_parameter,
+            package_config.output_cube.cube_name,
+            [_fingerprint(value) for value in values],
+        )
         return FlunksRunner(
-            flapi_config=build_flapi_config(FlapiConfig, settings),
+            flapi_config=flapi_config,
             package_config=package_config,
             flunks_config=FlunksConfig(),
         )
+
+
+def _fingerprint(value: Any) -> str:
+    """Comparable diagnostic value that never writes the value itself."""
+    text = str(value or "")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    return "%s:length=%d:sha256=%s" % (
+        type(value).__name__, len(text), digest,
+    )
