@@ -315,6 +315,13 @@ export interface Evidence {
   id: string;
   workflow_id: string;
   step_key: string;
-  records: Array<Record<string, unknown>>;
+  row_count: number;
   created_at: string;
+}
+
+export interface EvidencePage extends Evidence {
+  records: Array<Record<string, unknown>>;
+  offset: number;
+  limit: number;
+  has_more: boolean;
 }

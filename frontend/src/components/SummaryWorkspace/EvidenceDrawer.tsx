@@ -1,9 +1,11 @@
 "use client";
 
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import {
+  Dispatch, SetStateAction, SyntheticEvent, useEffect, useState,
+} from "react";
 import { Database, LoaderCircle } from "lucide-react";
 import { api } from "@/services/api";
-import type { Evidence } from "@/types";
+import type { Evidence, EvidencePage } from "@/types";
 
 type LoadedEvidence = { runId: string; items: Evidence[]; error: string };
 
@@ -31,7 +33,7 @@ export default function EvidenceDrawer({
   return (
     <div className="evidence-panel">
       {title && <h3 className="evidence-title">{title}</h3>}
-      <EvidenceList items={items} />
+      <EvidenceList runId={runId} items={items} />
     </div>
   );
 }
@@ -53,18 +55,54 @@ function useEvidence(
   }, [open, runId, setLoaded]);
 }
 
-function EvidenceList({ items }: { items: Evidence[] }) {
+function EvidenceList({ runId, items }: { runId: string; items: Evidence[] }) {
   return (
     <div className="evidence-list">
-      {items.map((item) => (
-        <details key={item.id}>
-          <summary><Database size={16} aria-hidden="true" />
-            {item.step_key} · {item.records.length} רשומות
-          </summary>
-          <pre dir="ltr">{JSON.stringify(item.records, null, 2)}</pre>
-        </details>
-      ))}
+      {items.map((item) =>
+        <EvidenceItem key={item.id} runId={runId} item={item} />)}
       {!items.length && <p>לא נשמרו ראיות לריצה זו.</p>}
     </div>
+  );
+}
+
+function EvidenceItem({ runId, item }: { runId: string; item: Evidence }) {
+  const [page, setPage] = useState<EvidencePage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async (offset: number) => {
+    if (loading) return;
+    setLoading(true); setError("");
+    try {
+      const next = await api.evidencePage(runId, item.id, offset);
+      setPage((current) => !current || offset === 0
+        ? next
+        : { ...next, records: [...current.records, ...next.records] });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "טעינת הראיות נכשלה");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const open = (event: SyntheticEvent<HTMLDetailsElement>) => {
+    if (event.currentTarget.open && !page) void load(0);
+  };
+
+  return (
+    <details onToggle={open}>
+      <summary><Database size={16} aria-hidden="true" />
+        {item.step_key} · {item.row_count} רשומות
+      </summary>
+      {error && <p role="alert">{error}</p>}
+      {page && <pre dir="ltr">{JSON.stringify(page.records, null, 2)}</pre>}
+      {loading && <p className="loading-line">
+        <LoaderCircle size={16} /> טוען ראיות…
+      </p>}
+      {page?.has_more && !loading &&
+        <button type="button" onClick={() => void load(page.records.length)}>
+          טעינת 100 רשומות נוספות
+        </button>}
+    </details>
   );
 }

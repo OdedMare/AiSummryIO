@@ -1,7 +1,7 @@
 """OpenAI-compatible JSON-mode LLM client.
 
-Model, API key, and base URL come from the runtime settings store on EVERY
-call, so changes saved in the UI settings panel apply immediately. Works
+Model, API key, base URL, and timeout come from the runtime settings store on
+EVERY call, so changes saved in the UI settings panel apply immediately. Works
 against OpenAI itself and OpenAI-compatible servers (Ollama, vLLM, Groq...)
 — the main model is Gemma 4 31B served through Ollama.
 
@@ -12,6 +12,8 @@ Robustness policy, matching LocatoAI:
   reject a system role (some Gemma deployments)
 - strips markdown fences from the reply
 - retries once with the parse error appended before giving up
+- bounds each HTTP completion by `llm_timeout_seconds`, so a hung local
+  server cannot hold a job worker for the SDK's 600-second default
 """
 
 import json
@@ -49,7 +51,10 @@ class OpenAIJsonClient:
         settings = self._store.get()
         if not settings.openai_api_key and not settings.llm_base_url:
             raise AgentError("לא הוגדר מפתח API או שרת תואם OpenAI")
-        client = self._client_for(settings.openai_api_key, settings.llm_base_url)
+        client = self._client_for(
+            settings.openai_api_key, settings.llm_base_url,
+            settings.llm_timeout_seconds,
+        )
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -97,16 +102,23 @@ class OpenAIJsonClient:
         except Exception as exc:
             raise AgentError("לא ניתן לטעון מודלים: " + str(exc))
 
-    def _client_for(self, api_key, base_url):
+    def _client_for(self, api_key, base_url, timeout):
         """Reuse one OpenAI client (and its underlying httpx connection pool)
         across calls — a fresh client per call paid a TCP/TLS handshake on
         every one of a workflow's LLM round-trips. Re-keyed automatically when
-        settings change mid-session, since the store is read per call."""
-        cache_key = (api_key, base_url)
+        settings change mid-session, since the store is read per call.
+
+        `timeout` is part of the cache key, not just a constructor argument:
+        without it a client built before the setting changed would keep
+        serving every later call, and the saved value would appear to do
+        nothing. It bounds ONE HTTP completion — the ladder and the parse
+        retry each get their own budget on top."""
+        cache_key = (api_key, base_url, timeout)
         if self._cached_client is None or self._cached_key != cache_key:
             self._cached_client = OpenAI(
                 api_key=api_key or _LOCAL_SERVER_KEY_PLACEHOLDER,
                 base_url=base_url or None,
+                timeout=timeout,
             )
             self._cached_key = cache_key
         return self._cached_client

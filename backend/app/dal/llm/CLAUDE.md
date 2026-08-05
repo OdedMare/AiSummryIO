@@ -51,10 +51,19 @@ is on by default.
 
 ## Connection reuse
 
-`_client_for(api_key, base_url)` caches one `OpenAI` client keyed by
-`(api_key, base_url)`. A fresh client per call paid a TCP/TLS handshake on
+`_client_for(api_key, base_url, timeout)` caches one `OpenAI` client keyed by
+all three. A fresh client per call paid a TCP/TLS handshake on
 every LLM round-trip of a workflow. The cache re-keys automatically when
 settings change mid-session, because the store is still read per call.
+
+`timeout` comes from `llm_timeout_seconds` and is **part of the key**, not
+just a constructor argument: a client built before the setting changed would
+otherwise keep serving every later call, making the saved value look inert.
+
+It bounds **one HTTP completion**, not the whole logical call — the ladder
+below and `_MAX_JSON_ATTEMPTS` above each get their own budget. The point is
+to stop a hung local model server from holding a job worker for the SDK's
+600-second default.
 
 ## Local-server accommodations
 

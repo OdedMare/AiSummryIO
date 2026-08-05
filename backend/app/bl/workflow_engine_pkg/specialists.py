@@ -64,7 +64,7 @@ def _orchestrate(
     max_rounds = max(0, min(5, settings.agent_max_rounds))
     leader_prompt = _prompt(service, "leader-orchestrator", _LEADER_FALLBACK)
     worker_prompt = _prompt(service, "workflow-worker", _WORKER_FALLBACK)
-    prior_sections, prior_evidence = _prior_context(
+    prior_sections, prior_sources = _prior_context(
         service, conversation, run["id"]
     )
     assignments = _delegations(
@@ -83,12 +83,11 @@ def _orchestrate(
         service, run, conversation, progress, states, workflows,
         max_rounds,
     )
-    current_evidence = _run_evidence(service, run["id"])
-    evidence = prior_evidence + _tag_evidence(current_evidence, sections)
     _attach_sections(states, sections)
 
     rounds_used = 0
     leader_missing = []
+    evidence = None
     for round_number in range(1, max_rounds + 1):
         decision = _review(
             service, question, states, leader_prompt, limit
@@ -97,6 +96,10 @@ def _orchestrate(
         questions = decision.get("questions", [])
         if decision.get("done") or not questions:
             break
+        if evidence is None:
+            evidence = _evidence_context(
+                service, prior_sources, run["id"], sections
+            )
         _answer_questions(
             service, states, questions, evidence, worker_prompt,
             round_number, limit,
@@ -518,8 +521,7 @@ def _evidence_policy(service, workflow_id, step_key, cache):
 
 
 def _prior_context(service, conversation, current_run_id):
-    sections, evidence = [], []
-    reader = getattr(service._repository, "run_evidence", None)
+    sections, sources = [], []
     for run in conversation.get("runs", []):
         if run.get("id") == current_run_id:
             continue
@@ -527,9 +529,19 @@ def _prior_context(service, conversation, current_run_id):
             continue
         run_sections = (run.get("result") or {}).get("sections", [])
         sections.extend(run_sections)
-        if reader:
-            evidence.extend(_tag_evidence(reader(run["id"]), run_sections))
-    return sections, evidence
+        sources.append((run["id"], run_sections))
+    return sections, sources
+
+
+def _evidence_context(service, prior_sources, current_run_id, sections):
+    """Load raw evidence only if a review actually asks for deeper analysis."""
+    evidence = []
+    for run_id, run_sections in prior_sources:
+        evidence.extend(_tag_evidence(_run_evidence(service, run_id), run_sections))
+    evidence.extend(_tag_evidence(
+        _run_evidence(service, current_run_id), sections
+    ))
+    return evidence
 
 
 def _run_evidence(service, run_id) -> List[dict]:

@@ -46,7 +46,12 @@ class Settings(BaseSettings):
     """Use compact prompts, schema samples, and bounded completion output."""
 
     llm_timeout_seconds: int = 120
-    """Maximum wall time for one logical model call, including retries."""
+    """Maximum wall time for ONE HTTP completion to the model.
+
+    Not a budget for the whole logical call: the degradation ladder and the
+    parse retry above it each get their own, so a pathological call can take
+    a multiple of this. It exists to stop a hung model server from holding a
+    worker for the SDK's 600-second default."""
 
     llm_base_url: Optional[str] = "http://localhost:11434/v1"
     """OpenAI-compatible endpoint. Default: local Ollama. From inside the

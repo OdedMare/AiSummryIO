@@ -1,5 +1,6 @@
 import type {
-  AgentContent, Conversation, ConversationTurn, Evidence, PackageInspection,
+  AgentContent, Conversation, ConversationTurn, Evidence, EvidencePage,
+  PackageInspection,
   PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
   SummarySkill, ToolPlanChatTurn, ToolPlanDraft, WorkflowPlan,
   WorkflowPlanChatTurn, WorkflowVersion,
@@ -133,6 +134,11 @@ export const api = {
     }),
   run: (id: string) => request<SummaryRun>(`/api/runs/${id}`),
   evidence: (id: string) => request<Evidence[]>(`/api/runs/${id}/evidence`),
+  evidencePage: (runId: string, evidenceId: string, offset = 0, limit = 100) =>
+    request<EvidencePage>(
+      `/api/runs/${runId}/evidence/${evidenceId}` +
+      `?offset=${offset}&limit=${limit}`,
+    ),
   feedback: (runId: string, rating: -1 | 1, comment = "") =>
     request<{ id: string }>("/api/feedback", {
       method: "POST",

@@ -35,7 +35,7 @@ class RuntimeSettingsStore:
             database_port=env.database_port,
             database_name=env.database_name,
             database_schema=_safe_schema(
-                env.database_schema or extract_url_schema(env.database_url)
+                extract_url_schema(env.database_url) or env.database_schema
             ),
             llm_model=env.llm_model,
             llm_diet_mode=env.llm_diet_mode,
