@@ -1,0 +1,1913 @@
+/* The studio owns the viewport. Every region below scrolls on its own, so a
+   long form never drags the tool list or the interview along with it — which
+   is what made the old dialog feel stuck. */
+.studio-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.studio-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(100deg,
+      color-mix(in srgb, var(--primary-soft) 58%, var(--surface)),
+      color-mix(in srgb, var(--surface) 90%, transparent) 48%);
+}
+
+.studio-page-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.studio-back,
+.studio-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 13px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.studio-refresh {
+  margin-inline-start: auto;
+}
+
+.studio-back:hover,
+.studio-refresh:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.studio-page-body {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.studio-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-inline-start: 1px solid var(--border);
+}
+
+.studio-nav > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 12px;
+  color: var(--text-muted);
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.studio-nav > button:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.studio-nav > button.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  font-weight: 700;
+}
+
+.studio-nav-label {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.studio-nav-label small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.studio-nav-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  background: color-mix(in srgb, var(--surface-3) 84%, transparent);
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.studio-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Two panes, each its own scroll container. `min-height: 0` on both is what
+   lets them scroll instead of stretching the grid row to fit their content. */
+.studio-split,
+.workflow-studio {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-list,
+.workflow-library,
+.studio-form {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.studio-list,
+.workflow-library {
+  padding: 22px 18px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--primary-soft) 28%, var(--surface-2)),
+      var(--surface-2) 34%);
+  border-left: 1px solid var(--border);
+}
+
+.studio-list > header,
+.workflow-library > header,
+.step-editor > header,
+.review-queue > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.studio-list h3,
+.workflow-library h3,
+.step-editor h4,
+.review-queue h3 {
+  margin: 0;
+}
+
+.step-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The tool picker is anchored to its button, so the menu is positioned
+   against this wrapper rather than the scrolling form behind it. */
+.single-tool-workflow {
+  position: relative;
+}
+
+.single-tool-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 20;
+  width: 260px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+}
+
+.single-tool-menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  /* A 44px target, per the studio's own touch rule. */
+  min-height: 44px;
+  padding: 7px 9px;
+  text-align: start;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.single-tool-menu button:hover {
+  background: var(--surface-2);
+}
+
+.single-tool-menu button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.single-tool-menu small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.studio-list > header span,
+.workflow-library > header span,
+.review-queue > header span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.catalog-card,
+.content-card,
+.workflow-card {
+  width: 100%;
+  margin-bottom: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(10, 14, 24, 0.04);
+}
+
+.catalog-card:hover,
+.content-card:hover,
+.workflow-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+  box-shadow: var(--shadow-soft);
+}
+
+/* The card holds the edit button and the delete button side by side; the
+   grid that used to be on the card itself now belongs to the edit button,
+   which is what still spans the row. */
+.catalog-card {
+  display: flex;
+  align-items: stretch;
+}
+
+.catalog-card-main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 9px 10px;
+  text-align: right;
+}
+
+.catalog-card-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 44px minimum touch target, per the icon-button rule. */
+  min-width: 44px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  border-inline-start: 1px solid var(--border);
+  border-radius: 0 14px 14px 0;
+}
+
+.catalog-card-delete:hover,
+.workflow-card-actions .danger-action:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.catalog-card-main > span:nth-child(2),
+.workflow-card-main > span:nth-child(2),
+.content-card button > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.catalog-card-main small,
+.workflow-card small,
+.content-card small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-icon,
+.content-card button > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 8px;
+}
+
+.studio-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: clamp(22px, 3vw, 34px);
+}
+
+.planner-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fff;
+  font-weight: 800;
+  background: var(--primary);
+  border: 0;
+  border-radius: 9px;
+}
+
+.planner-result {
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.planner-result section {
+  margin-top: 10px;
+}
+
+.planner-result ul {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+
+.planner-result li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 10px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
+.planner-result li span,
+.planner-result li small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agent-tool-toggle {
+  display: flex !important;
+  align-items: flex-start;
+  flex-direction: row !important;
+  gap: 10px !important;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.agent-tool-toggle input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--primary);
+}
+
+.agent-tool-toggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agent-tool-toggle small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.tool-inspector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.tool-inspector > header,
+.inspection-result {
+  grid-column: 1 / -1;
+}
+
+.tool-inspector h4,
+.tool-inspector p {
+  margin: 0;
+}
+
+.tool-inspector p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.inspection-result {
+  min-width: 0;
+}
+
+.inspection-result > strong {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--success);
+  font-size: 12px;
+}
+
+.inspection-result pre {
+  max-height: 240px;
+  padding: 10px;
+  margin: 0;
+  overflow: auto;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  text-align: left;
+}
+
+.field-palette {
+  padding: 14px;
+  background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 14px;
+}
+
+.field-palette > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.field-palette h4,
+.field-palette p {
+  margin: 0;
+}
+
+.field-palette p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.field-palette > header label {
+  min-width: 190px;
+}
+
+.field-palette select {
+  min-height: 44px;
+}
+
+.field-chip-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 9px;
+}
+
+.field-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.field-chip.listening {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
+.field-chip.ignored {
+  background: var(--surface-2);
+}
+
+.field-chip > button {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  text-align: start;
+}
+
+.field-chip > button:hover {
+  background: var(--surface-2);
+}
+
+.field-chip > button > svg {
+  color: var(--text-muted);
+}
+
+.field-chip > button > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.field-chip bdi,
+.field-chip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-chip bdi {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field-chip small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.field-chip > label {
+  min-height: 44px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 6px;
+  padding: 6px 10px;
+  border-inline-start: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field-chip > label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--success);
+}
+
+.field-drop-target > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-drop-target > span small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.field-drop-target textarea {
+  border-style: dashed;
+}
+
+.field-drop-target textarea:focus {
+  border-style: solid;
+}
+
+.studio-form > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.studio-form > header > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 12px;
+}
+
+.studio-form h3,
+.studio-form header p {
+  margin: 0;
+}
+
+.studio-form header p,
+.step-editor header p,
+.review-queue header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.advanced-block {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.advanced-block[open] {
+  padding-bottom: 14px;
+}
+
+.advanced-block label {
+  margin: 12px 14px 0;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.workflow-card-main {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 10px;
+  text-align: right;
+  background: transparent;
+  border: 0;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  background: var(--text-muted);
+  border-radius: 50%;
+}
+
+.status-dot.published {
+  background: var(--success);
+  box-shadow: 0 0 0 4px var(--success-soft);
+}
+
+.status-dot.draft {
+  background: var(--warning);
+}
+
+.workflow-card-actions {
+  display: flex;
+  gap: 5px;
+  padding: 0 9px 9px;
+}
+
+.workflow-card-actions button,
+.content-card > button:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--text-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.dry-run-field {
+  margin-top: 14px;
+}
+
+.step-editor {
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.step-editor > header > div {
+  flex: 1;
+}
+
+.step-card {
+  position: relative;
+  padding: 14px 54px 14px 14px;
+  margin-bottom: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(10, 14, 24, 0.04);
+}
+
+.step-number {
+  position: absolute;
+  inset: 14px 14px auto auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--primary);
+  font-weight: 800;
+  background: var(--primary-soft);
+  border-radius: 8px;
+}
+
+.step-card .icon-danger {
+  position: absolute;
+  inset: auto auto 13px 13px;
+  color: var(--danger);
+}
+
+/* The drag-to-connect authoring canvas. Its height is fixed rather than
+   content-driven: React Flow measures its container, and a container that
+   grows with the graph would resize on every pan. */
+.workflow-canvas {
+  margin-bottom: 12px;
+}
+
+/* What the graph will do when it runs: a parallel bundle, a chain, or a mix.
+   The engine infers this from the connections alone, so the banner reads the
+   graph rather than any stored mode flag. */
+.canvas-mode {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+  padding: 8px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.canvas-mode p {
+  flex: 1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.canvas-mode strong {
+  color: var(--text);
+}
+
+.canvas-mode span {
+  color: var(--text-muted);
+}
+
+.canvas-mode-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+/* Each mode gets its own tint, but the banner always states the mode in
+   words too, so the distinction never rests on color. */
+.canvas-mode.is-bundle .canvas-mode-icon {
+  color: var(--accent);
+  background: var(--surface-3);
+}
+
+.canvas-mode.is-chain .canvas-mode-icon,
+.canvas-mode.is-mixed .canvas-mode-icon {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* One row per execution level, widest-first reading: how many packages fire
+   at once at each stage of the run. */
+.canvas-mode-levels {
+  display: flex;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.canvas-mode-levels li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 10px;
+}
+
+.canvas-mode-levels b {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 50%;
+  font-size: 9px;
+}
+
+.canvas-mode-levels span {
+  color: var(--text-soft);
+}
+
+.workflow-canvas-surface {
+  position: relative;
+  height: 340px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+}
+
+/* Fullscreen. The overlay owns the viewport, so the surface stops being a
+   fixed 340px box and fills whatever is left beside the hint. */
+.canvas-overlay {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  inset: 0;
+  padding: 18px;
+  background: var(--bg);
+}
+
+.canvas-overlay .workflow-canvas {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+.canvas-overlay .workflow-canvas-surface {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  box-shadow: var(--shadow);
+}
+
+/* Sits above the graph, clear of the bottom-left Controls and the minimap. */
+/* The canvas gained a second overlay control (reset layout), so the buttons
+   are positioned as one row rather than each pinning itself to the corner. */
+.canvas-tools {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+}
+
+.canvas-expand {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.canvas-expand:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.canvas-expand:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.workflow-canvas .react-flow__minimap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.workflow-canvas .react-flow__renderer {
+  /* The app is RTL, but the graph is laid out along a left-to-right x axis,
+     so the canvas opts back out for its own coordinate space. */
+  direction: ltr;
+}
+
+/* Panning reads as moving the sheet under the pointer, so the background
+   carries a grab cursor while nodes and handles keep their own. */
+.workflow-canvas .react-flow__pane {
+  cursor: grab;
+}
+
+.workflow-canvas .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* A dragged node lifts off the sheet; the shadow is the only motion cue that
+   survives a reduced-motion preference. */
+.workflow-canvas .react-flow__node.dragging .canvas-node {
+  box-shadow: var(--shadow);
+}
+
+.workflow-canvas .react-flow__node {
+  transition: filter 120ms ease;
+}
+
+.workflow-canvas .react-flow__node:hover {
+  filter: brightness(1.02);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-canvas .react-flow__node {
+    transition: none;
+  }
+
+  /* The marching-ants dash on a mapped edge is decorative, and it never
+     stops — exactly the kind of motion this preference asks to remove. */
+  .workflow-canvas .react-flow__edge-path {
+    animation: none;
+  }
+}
+
+.workflow-canvas .react-flow__background {
+  background: var(--surface-2);
+}
+
+.workflow-canvas .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text-soft);
+}
+
+.workflow-canvas .react-flow__controls-button:hover {
+  background: var(--surface-3);
+}
+
+.workflow-canvas .react-flow__edge-path {
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+
+.workflow-canvas .react-flow__edge.selected .react-flow__edge-path,
+.workflow-canvas .react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--primary);
+}
+
+/* The default feed from a workflow-level input, which every unconnected step
+   gets for free. Dashed and faint so a bundle of parallel tools reads as a
+   set rather than as a chain someone drew. */
+.workflow-canvas .react-flow__edge.is-implicit .react-flow__edge-path {
+  stroke: var(--border);
+  stroke-dasharray: 3 4;
+}
+
+.workflow-canvas .react-flow__edge.is-implicit .react-flow__arrowhead,
+.workflow-canvas .react-flow__edge.is-implicit marker path {
+  fill: var(--border);
+}
+
+.workflow-canvas .react-flow__edge-text {
+  fill: var(--text-muted);
+  font-size: 10px;
+}
+
+.workflow-canvas .react-flow__edge-textbg {
+  fill: var(--surface-2);
+}
+
+.workflow-canvas .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--primary);
+  border: 2px solid var(--surface);
+}
+
+/* A field's own connection point. React Flow positions handles against the
+   node, so a handle inside a row is pulled back out to the node's left edge
+   and re-centred on the row it belongs to. */
+.canvas-node-fields .react-flow__handle,
+.canvas-node-empty .react-flow__handle {
+  top: 50%;
+  left: -6px;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%);
+  background: var(--border-strong);
+}
+
+.canvas-node-fields li:hover .react-flow__handle,
+.canvas-node-fields li.is-consumed .react-flow__handle {
+  background: var(--primary);
+}
+
+/* Dragging a connection is a fine-motor task, so the grab area is widened
+   well past the dot without enlarging the dot itself. */
+.canvas-node-fields .react-flow__handle::after,
+.canvas-node-empty .react-flow__handle::after {
+  position: absolute;
+  content: "";
+  inset: -9px;
+}
+
+.canvas-node {
+  width: 232px;
+  direction: rtl;
+  text-align: right;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  box-shadow: var(--shadow-soft);
+}
+
+.canvas-node-source {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+}
+
+.canvas-node-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+}
+
+.canvas-node-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  padding: 3px 11px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+
+.canvas-node-input span {
+  color: var(--text-muted);
+}
+
+.canvas-node-input b {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node strong {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.canvas-node small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* The output contract. Each row is a connection point, so rows are the
+   node's real interactive surface and get the padding to match. */
+.canvas-node-fields {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.canvas-node-fields li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 11px;
+  direction: ltr;
+  font-size: 10px;
+}
+
+.canvas-node-fields b {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.canvas-node-fields span {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+/* A field a later step reads. Marked by weight and a leading rule as well as
+   color, so the distinction survives a color-blind reader. */
+.canvas-node-fields li.is-consumed {
+  background: var(--primary-soft);
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.canvas-node-fields li.is-consumed b {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.canvas-node-empty {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.canvas-node-empty {
+  position: relative;
+  margin: 0;
+  padding: 8px 11px;
+  border-top: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.canvas-node-warning {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 4px 11px 6px;
+  color: var(--warning);
+  font-size: 10px;
+}
+
+.canvas-node-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 8px;
+}
+
+/* The two workflow-level inputs. Dashed, because they are given to the
+   workflow rather than produced by a step. */
+.canvas-node-source {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.canvas-node-step.is-selected {
+  border-color: var(--primary);
+  box-shadow: var(--focus);
+}
+
+/* A step that cannot be published yet: no tool chosen, or a mapped step with
+   no field. Marked by a border and an icon tint, never by color alone --
+   the missing value is also visible in the node's own text. */
+.canvas-node-step.is-incomplete {
+  border-color: var(--warning);
+}
+
+.canvas-node-step.is-incomplete .canvas-node-icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.canvas-hint {
+  margin: 8px 2px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.step-card.is-selected {
+  border-color: var(--primary);
+}
+
+.panel-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 18px 8px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.content-card {
+  overflow: hidden;
+}
+
+.content-card > button:first-child {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 10px;
+  text-align: right;
+  background: transparent;
+  border: 0;
+}
+
+.content-card > button:last-child {
+  margin: 0 10px 9px;
+}
+
+.specialist-card {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 9px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(10, 14, 24, 0.04);
+}
+
+.specialist-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+  box-shadow: var(--shadow-soft);
+}
+
+.specialist-card-main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 34px minmax(0, 1fr) 10px;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 9px 10px;
+  text-align: right;
+  background: transparent;
+  border: 0;
+}
+
+.specialist-card-main > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.specialist-card-main small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specialist-publish {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 74px;
+  min-height: 44px;
+  padding: 0 9px;
+  color: var(--text-soft);
+  background: var(--surface-2);
+  border: 0;
+  border-inline-start: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.specialist-publish:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.specialist-form-note {
+  padding: 11px 12px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.capability-picker {
+  min-width: 0;
+  padding: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.capability-picker legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 5px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.capability-picker > p {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.capability-picker .capability-empty {
+  margin: 0;
+  padding: 10px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.capability-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.capability-options > label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.capability-options > label:hover,
+.capability-options > label.selected {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.capability-options > label.selected {
+  background: var(--primary-soft);
+}
+
+.capability-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.capability-options > label:focus-within {
+  box-shadow: var(--focus);
+}
+
+.capability-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.capability-options > label.selected .capability-check {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.capability-options > label > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.capability-options strong,
+.capability-options small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-options small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.content-editor {
+  min-height: 300px;
+  direction: rtl;
+  text-align: right;
+}
+
+.admin-login {
+  width: min(380px, calc(100% - 36px));
+  margin: 50px auto;
+  text-align: center;
+}
+
+.admin-login .login-icon {
+  margin: 0 auto;
+}
+
+.admin-login h3,
+.admin-login p {
+  margin: 0;
+}
+
+.admin-login p {
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.admin-login label {
+  text-align: right;
+}
+
+.review-queue {
+  padding: 22px;
+}
+
+.review-queue > header > div {
+  flex: 1;
+}
+
+.review-queue article {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 66px;
+  padding: 11px 13px;
+  margin-bottom: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.review-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-radius: 9px;
+}
+
+.review-queue article div {
+  display: flex;
+  flex-direction: column;
+}
+
+.review-queue small {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.studio-global-error {
+  margin: 12px 16px 0;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Skill tester: try Skill instructions without running a full summary. */
+.skill-tester {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 13px;
+}
+
+.skill-tester > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skill-tester > header > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--primary);
+  background: var(--surface);
+  border-radius: 9px;
+}
+
+.skill-tester h4,
+.skill-tester p {
+  margin: 0;
+}
+
+.skill-tester header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skill-tester label > small,
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skill-tester textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.skill-tester > button {
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+.skill-tester-result {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.skill-tester-result h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.skill-tester-result p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.skill-tester-result ul {
+  margin: 10px 0 0;
+  padding-inline-start: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.skill-tester-sources {
+  margin-top: 10px !important;
+  color: var(--text-muted);
+  font-size: 11px !important;
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  .app-shell.has-map {
+    grid-template-columns: 1fr;
+  }
+
+  /* No room for a side column: the panel becomes a bounded block under the
+     conversation instead of a full-height rail. */
+  .map-panel {
+    height: auto;
+    border-inline-end: 0;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .map-picker-canvas {
+    min-height: 180px;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(320px, 88vw);
+    transform: translateX(105%);
+    transition: transform 220ms ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .mobile-close,
+  .menu-button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    z-index: 15;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    border: 0;
+  }
+
+  .studio-split,
+  .workflow-studio {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-list,
+  .workflow-library {
+    max-height: 300px;
+    overflow-y: auto;
+    border-left: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 680px) {
+  .conversation-shell {
+    grid-template-rows: 64px minmax(0, 1fr) auto;
+  }
+
+  .topbar {
+    padding: 0 10px;
+  }
+
+  .topbar .trust-indicator {
+    padding: 7px;
+  }
+
+  .topbar .trust-indicator svg + * {
+    display: none;
+  }
+
+  .topbar .end-conversation span {
+    display: none;
+  }
+
+  .end-conversation {
+    justify-content: center;
+    width: 36px;
+    padding: 7px;
+  }
+
+  .workspace {
+    width: calc(100% - 24px);
+    padding-top: 24px;
+  }
+
+  .skill-hint-list,
+  .skill-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-workspace {
+    gap: 20px;
+  }
+
+  .skill-hint {
+    padding: 14px;
+  }
+
+  .composer {
+    grid-template-columns: 1fr;
+    width: calc(100% - 16px);
+    margin-bottom: 8px;
+    border-radius: 14px;
+  }
+
+  .workspace-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .modal-backdrop {
+    padding: 0;
+  }
+
+  .modal,
+  .settings-workspace-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* The nav becomes a horizontal strip, and the two panes stack: the list
+     collapses to a bounded strip so the form keeps most of the height. */
+  .studio-page-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .studio-nav {
+    flex-direction: row;
+    padding: 9px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-inline-start: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .studio-nav > button {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .agent-trace > summary {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .agent-trace > summary small {
+    grid-column: 2;
+  }
+
+  .agent-trace-selection > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .form-grid.two,
+  .capability-options {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-nav-label small {
+    display: none;
+  }
+
+  .studio-split,
+  .workflow-studio {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 34%) minmax(0, 1fr);
+  }
+
+  .agent-chat-drawer {
+    width: 100vw;
+  }
+
+  .form-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  /* The category rail becomes a horizontal strip above the fields. */
+  .settings-workspace-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "nav" "content";
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    gap: 8px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-inline-start: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-nav-label {
+    display: none;
+  }
+
+  .settings-nav > button {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 44px;
+    grid-template-columns: 18px auto;
+  }
+
+  .settings-nav > button small {
+    display: none;
+  }
+
+  .settings-content {
+    padding: 18px 16px;
+  }
+
+  .settings-input-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .settings-footer {
+    padding: 12px 16px;
+  }
+
+  .studio-form {
+    padding: 14px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  .planner-button {
+    width: 100%;
+  }
+
+  .tool-inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-inspector > button {
+    width: 100%;
+  }
+
+  .field-palette > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-palette > header label {
+    min-width: 0;
+  }
+
+  .field-chip-list {
+    grid-template-columns: 1fr;
+  }
+
+  .field-chip {
+    grid-template-columns: 1fr;
+  }
+
+  .field-chip > label {
+    justify-content: center;
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .step-card {
+    padding-left: 12px;
+  }
+}
+

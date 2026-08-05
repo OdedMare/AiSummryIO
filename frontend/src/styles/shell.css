@@ -1,0 +1,734 @@
+/* Warm, paper-like theme: cream ground, terracotta accent, near-black warm
+   text. Depth comes from borders and generous space rather than elevation and
+   glow, so shadows stay quiet and the background stays flat. */
+:root {
+  --bg: #f5f4ee;
+  --surface: #ffffff;
+  --surface-2: #faf9f5;
+  --surface-3: #eeece3;
+  --sidebar: #262624;
+  --sidebar-2: #35342f;
+  --text: #1f1e1d;
+  --text-soft: #4a483f;
+  /* Light-mode ink runs darker than the terracotta brand fill: these carry
+     text and icons, so each clears 4.5:1 on both --bg and --surface. */
+  --text-muted: #726f66;
+  --text-on-dark: #f5f4ee;
+  --border: #e5e2d9;
+  --border-strong: #cfcabb;
+  --primary: #a94f32;
+  --primary-hover: #8f3f24;
+  --primary-soft: #f7ebe4;
+  --primary-action: #b8563c;
+  --primary-action-end: #a94f32;
+  --primary-action-hover: #a94f32;
+  --primary-action-hover-end: #8f3f24;
+  --accent: #a94f32;
+  --success: #42704f;
+  --success-soft: #eaf1ea;
+  --warning: #946619;
+  --warning-soft: #faf0dc;
+  --danger: #b3402f;
+  --danger-soft: #fbeae6;
+  --shadow: 0 12px 32px rgba(31, 30, 29, 0.09);
+  --shadow-soft: 0 2px 8px rgba(31, 30, 29, 0.05);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --focus: 0 0 0 3px rgba(217, 119, 87, 0.32);
+  /* SumOrAI signature: one gradient reused by the logo, hero and agent
+     surfaces so the brand reads as a single system. */
+  --brand-gradient: linear-gradient(135deg, #d97757, #b8563c);
+  --brand-glow: 0 6px 18px rgba(217, 119, 87, 0.22);
+  /* Dims the area of the workflow minimap that is off-screen. */
+  --canvas-minimap-mask: rgba(238, 236, 227, 0.72);
+}
+
+:root[data-theme="dark"] {
+  --bg: #1f1e1d;
+  --surface: #262624;
+  --surface-2: #2d2c2a;
+  --surface-3: #35342f;
+  --text: #f5f4ee;
+  --text-soft: #d4d1c7;
+  --text-muted: #a6a29a;
+  --sidebar: #1a1917;
+  --sidebar-2: #2d2c2a;
+  --border: #3a3937;
+  --border-strong: #524f4a;
+  --primary: #e08a6b;
+  --primary-hover: #eda087;
+  --primary-soft: #3a2c25;
+  --primary-action: #d97757;
+  --primary-action-end: #b8563c;
+  --primary-action-hover: #e08a6b;
+  --primary-action-hover-end: #c25f3f;
+  --accent: #e08a6b;
+  --success: #7fae87;
+  --success-soft: #26332a;
+  --warning: #d9a94e;
+  --warning-soft: #3a2f1c;
+  --danger: #e07a63;
+  --danger-soft: #3d2520;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --brand-gradient: linear-gradient(135deg, #e08a6b, #c25f3f);
+  --brand-glow: 0 6px 20px rgba(217, 119, 87, 0.26);
+  --canvas-minimap-mask: rgba(31, 30, 29, 0.72);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* The ground stays a flat sheet of paper. Ambient colour wash would fight the
+   warm neutral and read as a tint bug rather than atmosphere. */
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: "Noto Sans Hebrew", "Arial Hebrew", Arial, sans-serif;
+  font-size: 14px;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  inset: 8px 8px auto auto;
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 9px;
+  transform: translateY(-150%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+/* Third column holds the map panel. The document is RTL, so the nav rail is
+   the visual right edge and this track lands on the visual left. */
+.app-shell.has-map {
+  grid-template-columns: 288px minmax(0, 1fr) minmax(320px, 27%);
+}
+
+.sidebar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px 16px;
+  color: var(--text-on-dark);
+  background:
+    radial-gradient(circle at 18% -2%,
+      color-mix(in srgb, var(--primary-action) 18%, transparent), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 40%),
+    var(--sidebar);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 4px 18px;
+}
+
+.brand-mark,
+.modal-icon,
+.login-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  color: #fff;
+  background: var(--brand-gradient);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  box-shadow: var(--brand-glow);
+}
+
+/* Diagonal sheen across the logo tile — static, so it reads as a lit
+   surface rather than an animation competing with the content. */
+.brand-mark::after,
+.modal-icon::after,
+.login-icon::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(150deg,
+    rgba(255, 255, 255, 0.32), transparent 46%);
+  pointer-events: none;
+}
+
+.brand > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand strong {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.brand-word {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* The pivot syllable is tinted, not italic — it separates the three parts of
+   the name without the slant fighting the surrounding Hebrew. */
+.brand-word em {
+  color: #6fdcea;
+  font-style: normal;
+}
+
+.brand small {
+  margin-top: 2px;
+  color: #9aa4b8;
+  font-size: 12px;
+}
+
+.mobile-close {
+  display: none;
+  margin-inline-start: auto;
+}
+
+.new-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 6px 0 24px;
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg,
+    var(--primary-action), var(--primary-action-end));
+  border: 0;
+  border-radius: 14px;
+  box-shadow: var(--brand-glow);
+  transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.new-summary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary-action) 30%, transparent);
+  background: linear-gradient(135deg,
+    var(--primary-action-hover), var(--primary-action-hover-end));
+}
+
+.history-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 8px;
+  color: #8993a8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.history-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 120px;
+  overflow-y: auto;
+}
+
+.history-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 10px;
+  color: #c3c9d7;
+  text-align: right;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.history-list button:hover,
+.history-list button.active {
+  color: #fff;
+  background: var(--sidebar-2);
+  border-color: color-mix(in srgb, var(--primary-action) 30%, transparent);
+}
+
+.history-list button > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.history-list strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-list small {
+  margin-top: 3px;
+  color: #798398;
+  font-size: 10px;
+}
+
+.history-empty {
+  margin: 18px 10px;
+  color: #707a90;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sidebar-actions button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 10px;
+  color: #aeb6c8;
+  text-align: right;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+}
+
+.sidebar-actions button:hover {
+  color: #fff;
+  background: var(--sidebar-2);
+}
+
+.sidebar-actions .fde-studio-action {
+  min-height: 60px;
+  padding: 8px 10px;
+  color: var(--text-on-dark);
+  background: color-mix(in srgb, var(--primary-action) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-action) 32%, transparent);
+}
+
+.sidebar-actions .fde-studio-action:hover {
+  background: color-mix(in srgb, var(--primary-action) 30%, transparent);
+  border-color: color-mix(in srgb, var(--primary-action) 48%, transparent);
+}
+
+.agent-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  background: var(--brand-gradient);
+  border-radius: 11px;
+  box-shadow: var(--brand-glow);
+}
+
+/* "Agent is live" tell. Colour alone never carries status here — the label
+   beside it already names the destination, so this is decoration. */
+.agent-pulse {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  background: #22d7a1;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(69, 214, 168, 0.55);
+  animation: agent-pulse 2.4s ease-out infinite;
+}
+
+@keyframes agent-pulse {
+  70% { box-shadow: 0 0 0 7px rgba(69, 214, 168, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(69, 214, 168, 0); }
+}
+
+.fde-studio-action .nav-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.fde-studio-action .nav-copy strong {
+  font-size: 13px;
+}
+
+.fde-studio-action .nav-copy small {
+  margin-top: 2px;
+  color: #9ba6bb;
+  font-size: 10px;
+}
+
+.conversation-shell {
+  display: grid;
+  /* The composer row is `auto` but capped: without a max the composer's tall
+     content (fixed-height map + fields) outgrows the shell, squeezes the
+     `1fr` workspace above it and clips the conversation behind it. */
+  grid-template-rows: 72px minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  height: 100vh;
+  height: 100dvh;
+  background:
+    radial-gradient(circle at 78% 2%,
+      color-mix(in srgb, var(--primary) 7%, transparent), transparent 34%),
+    var(--bg);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 clamp(16px, 3vw, 32px);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+}
+
+.topbar > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.topbar span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.topbar strong {
+  max-width: 50vw;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar .trust-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  min-height: 36px;
+  padding: 7px 12px;
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 18%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.topbar .topbar-actions {
+  display: flex;
+  align-items: center;
+  margin-inline-start: auto;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.topbar-actions .trust-indicator {
+  margin-inline-start: 0;
+}
+
+.end-conversation {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 10px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.topbar .end-conversation span {
+  color: inherit;
+  font-size: inherit;
+}
+
+.end-conversation:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 48%, transparent);
+}
+
+.menu-button {
+  display: none;
+}
+
+.workspace {
+  width: min(1040px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 44px 0 32px;
+  overflow-y: auto;
+}
+
+.empty-workspace {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 28px;
+  text-align: center;
+}
+
+.empty-intro {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+.empty-illustration {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  color: #fff;
+  background: var(--brand-gradient);
+  border: 1px solid color-mix(in srgb, var(--primary) 36%, transparent);
+  border-radius: 26px;
+  box-shadow: 0 22px 50px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+/* Slow halo behind the hero mark. Sits behind via a negative z-index so it
+   never intercepts pointer events on the surrounding copy. */
+.empty-illustration::before {
+  position: absolute;
+  z-index: -1;
+  inset: -18px;
+  content: "";
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--primary) 26%, transparent), transparent 68%);
+  border-radius: 50%;
+  animation: hero-halo 4.5s ease-in-out infinite;
+}
+
+@keyframes hero-halo {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* Gradient text needs a colour fallback first: if `background-clip: text` is
+   unsupported the text stays readable instead of rendering transparent. */
+.hero-accent {
+  color: var(--primary);
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .hero-accent {
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+.empty-workspace h1 {
+  max-width: 720px;
+  margin: 18px 0 10px;
+  font-size: clamp(30px, 4vw, 44px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.empty-workspace > p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* Brand name inside running Hebrew copy: `dir="ltr"` on the element keeps the
+   Latin glyphs ordered, this just keeps it from shouting. */
+.empty-workspace > p b {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.welcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-top: 16px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.skill-hint {
+  width: min(820px, 100%);
+  padding: 20px;
+  text-align: right;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 13%, var(--border));
+  border-radius: 22px;
+  box-shadow: var(--shadow-soft);
+}
+
+.skill-hint > header {
+  margin-bottom: 14px;
+}
+
+.skill-hint h2,
+.skill-hint p,
+.skill-results h2,
+.skill-results h3 {
+  margin: 0;
+}
+
+.skill-hint h2,
+.skill-results h2 {
+  margin-top: 3px;
+  font-size: 19px;
+}
+
+.skill-hint p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.skill-hint code {
+  padding: 1px 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.skill-command {
+  unicode-bidi: isolate;
+  font-size: 13px;
+}
+
+.skill-hint-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skill-hint-list > li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 76px;
+  padding: 11px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.skill-card-icon,
+.skill-result-card > header > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.skill-hint-list > li > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.skill-hint-list small,
+.skill-menu small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.skill-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.message-input {
+  position: relative;
+}
+

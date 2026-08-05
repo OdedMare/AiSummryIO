@@ -1,0 +1,558 @@
+/* The form header stays put while the fields under it scroll, so the agent
+   button is reachable without scrolling back up. */
+.studio-form-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-block: 4px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.studio-form-header > div {
+  min-width: 0;
+}
+
+/* Small by design: the agent is an offer beside the form, not a wall in
+   front of it. Filling the fields by hand stays the default path. */
+/* Carries the alignment the button used to own, so the hint sits under it. */
+.agent-chat-launch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.agent-chat-hint {
+  max-width: 22ch;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: end;
+}
+
+.agent-chat-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--primary);
+  white-space: nowrap;
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, transparent);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-chat-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+/* Waiting on Fetch 1 ID, not broken: the hint beside it says which. */
+.agent-chat-button:disabled {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.agent-chat-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 40;
+  width: min(460px, 100vw);
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
+}
+
+.agent-chat-close {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-start: auto;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-chat-drawer {
+    animation: drawer-in 160ms ease-out;
+  }
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(-12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* The per-field agent: a small button on the field's own label. */
+.field-agent-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.field-agent-button {
+  display: grid;
+  place-items: center;
+  /* Smaller than the 44px minimum on purpose: this sits inline in a field
+     label, and the label itself is a much larger target for the same field.
+     The full-size control for the same agent is the header's launch button. */
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.field-agent-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+.field-agent-button:disabled {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.field-agent-hint {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* The step-editor heading is a flex row, so the anchor needs to sit in it
+   rather than push the heading's own baseline around. */
+.step-editor h4 .field-agent-anchor {
+  vertical-align: baseline;
+}
+
+.field-agent-popover {
+  position: fixed;
+  z-index: 45;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(70vh, 620px);
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 24%);
+}
+
+.field-agent-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field-agent-popover-header .agent-chat-close {
+  margin-inline-start: auto;
+}
+
+/* The popover already names the field in its header. */
+.field-agent-popover .plan-chat > header {
+  display: none;
+}
+
+.field-agent-popover .plan-chat-thread {
+  max-height: 220px;
+}
+
+.field-agent-proposal-label {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field-agent-proposal {
+  margin: 0 0 8px;
+  padding: 9px 11px;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .field-agent-popover {
+    animation: popover-in 140ms ease-out;
+  }
+}
+
+@keyframes popover-in {
+  from { transform: translateY(-6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Clickable answers, in place of the lone recommendation button. */
+.plan-options {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--text);
+  text-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.plan-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised, var(--surface));
+}
+
+/* The agent's own pick, first in the list and marked as such. */
+.plan-option.recommended {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  font-weight: 700;
+}
+
+.plan-option.recommended:hover {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+.plan-option small {
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* Options are a shortcut, never the only way to answer. */
+.plan-options-other {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plan-chat {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--primary-soft), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 17px;
+}
+
+.plan-chat-count {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.plan-chat-draft > div.empty dd {
+  color: var(--text-muted);
+}
+
+.plan-chat-draft > div.filled dt::after {
+  content: " ✓";
+  color: var(--success);
+}
+
+.plan-chat > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plan-chat > header > svg {
+  color: var(--primary);
+}
+
+.plan-chat h3,
+.plan-chat > header p {
+  margin: 0;
+}
+
+.plan-chat > header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plan-chat-reset {
+  margin-inline-start: auto;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plan-chat-reset:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.plan-chat-reset:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.plan-chat-thread {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.plan-chat-message {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.plan-chat-message.fde {
+  justify-self: start;
+  background: var(--primary-soft);
+}
+
+.plan-chat-message.agent {
+  justify-self: end;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.plan-chat-message.pending {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+}
+
+.plan-chat-role {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.plan-question {
+  display: grid;
+  gap: 7px;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-inline-start: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+}
+
+.plan-question-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.plan-question-recommendation {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.plan-question-recommendation strong {
+  color: var(--primary);
+}
+
+.plan-question-why {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.plan-confirm {
+  display: grid;
+  gap: 9px;
+  padding: 13px 15px;
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border));
+  border-radius: var(--radius-sm);
+}
+
+.plan-confirm p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plan-progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 11px 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.plan-progress h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.plan-progress section:first-child h4 {
+  color: var(--success);
+}
+
+.plan-progress ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-inline-start: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.plan-chat-draft {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.plan-chat-draft dt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plan-chat-draft dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.plan-chat-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 12px;
+}
+
+.plan-chat-steps small {
+  display: block;
+  color: var(--text-muted);
+}
+
+.plan-chat-note {
+  margin: 0;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.plan-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.plan-chat-composer textarea {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.plan-chat-composer button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--text-on-dark);
+  background: linear-gradient(
+    135deg, var(--primary-action), var(--primary-action-end)
+  );
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.plan-chat-composer button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,242 @@
+/* ---- Settings workspace (category rail, ported from LocatoAI) ---- */
+
+.settings-workspace-modal {
+  width: min(1080px, 100%);
+  height: min(790px, calc(100vh - 48px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-workspace {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-workspace-layout {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 232px;
+  grid-template-areas: "content nav";
+  direction: ltr;
+}
+
+.settings-nav {
+  grid-area: nav;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 18px 14px;
+  overflow-y: auto;
+  direction: rtl;
+  background: var(--surface-2);
+  border-inline-start: 1px solid var(--border);
+}
+
+.settings-nav-label {
+  margin: 0 10px 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.settings-nav > button {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  color: var(--text-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-align: start;
+}
+
+.settings-nav > button:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.settings-nav > button.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.settings-nav > button strong,
+.settings-nav > button small {
+  display: block;
+}
+
+.settings-nav > button strong {
+  color: inherit;
+  font-size: 13px;
+}
+
+.settings-nav > button small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.settings-content {
+  grid-area: content;
+  min-width: 0;
+  min-height: 0;
+  padding: 26px clamp(20px, 4vw, 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  direction: rtl;
+}
+
+.settings-section {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.settings-section h3 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.settings-content .field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.settings-input {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.settings-input:focus {
+  border-color: var(--primary);
+  box-shadow: var(--focus);
+}
+
+.settings-input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.model-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.models-refresh {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.models-refresh:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+
+.models-status {
+  margin: -6px 0 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.models-status.error {
+  color: var(--danger);
+}
+
+.key-hint,
+.optional {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.settings-section > .field-label:has(input[type="checkbox"]) {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-section input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  accent-color: var(--primary);
+}
+
+.settings-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 72px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.settings-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: auto;
+  font-size: 12px;
+}
+
+.settings-save {
+  width: auto;
+  min-width: 150px;
+}
+
+.form-error,
+.form-success {
+  margin: 0;
+  font-size: 12px;
+}
+
+.form-success {
+  color: var(--success);
+}
+
