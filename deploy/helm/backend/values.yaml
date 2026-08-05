@@ -115,8 +115,7 @@ ingress:
 
 # /api/health checks database reachability, which makes it a readiness
 # signal: a pod that cannot reach Postgres should leave the Service, not be
-# killed. Liveness uses a TCP probe so a database blip cannot restart-loop
-# the pod.
+# killed.
 readinessProbe:
   enabled: true
   path: /api/health
@@ -125,8 +124,15 @@ readinessProbe:
   timeoutSeconds: 5
   failureThreshold: 3
 
+# Liveness deliberately does NOT check the database — a blip there must not
+# restart-loop the pod, which is why this was a TCP probe. But a TCP probe
+# stays green in the one state a restart actually fixes: every worker thread
+# abandoned to a FLAPI timeout, so no run can ever start again while the port
+# is still open. /api/health/live reports exactly that condition and nothing
+# else, so the probe keeps ignoring the database while catching a wedged pool.
 livenessProbe:
   enabled: true
+  path: /api/health/live
   initialDelaySeconds: 30
   periodSeconds: 20
   timeoutSeconds: 5

@@ -185,6 +185,13 @@ writes progress to the run row, and always finishes by marking the run
 `completed` / `partial` / `failed` — the `finally` block clears `_submitted`
 even on failure.
 
+`capacity()` exposes `_full_capacity` for `/api/health/live`, which compares
+it against `abandoned_workers()`. flunks cannot be cancelled, so a thread lost
+to a package timeout is never reclaimed; once as many have been abandoned as
+the pool holds, **no full run can ever start again** while the port stays open
+and the process looks healthy. The watchdog already logged that state — the
+liveness route is what makes something act on it.
+
 ## Rules
 
 - Only published, version-pinned workflows or the latest FDE-approved

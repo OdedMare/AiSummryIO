@@ -20,6 +20,9 @@ python -m pytest -q
 | Conversation memory | An opening follow-up pays for no rewrite; a reference is resolved against the thread; the user's wording is what is persisted; every rewrite failure routes the original question; the router sees the thread only when there is one |
 | Identifier mapping | Fan-out over list values plus deduplication |
 | Settings | URL/schema normalization, JDBC translation, secret masking |
+| LLM client | `llm_timeout_seconds` reaches the SDK and is part of the client cache key, so a saved change takes effect |
+| Leader review | The review payload carries `fact_count`, not every fact, while the worker's own view keeps them |
+| Health | `/health/live` fails only once abandoned threads have eaten the pool; `/health` keeps reporting either way |
 | Auth | scrypt hashing and verification |
 
 ## Testing without `flunks`

@@ -8,9 +8,11 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from app.common.errors import AgentError, ProviderError
+from app.common.errors import AgentError, ProviderError, UnavailableError
 from app.api.models import GeoBoundaries
 from app.api.routers import conversations as conversation_routes
+from app.api.routers import health as health_routes
+from app.api.routers import summaries as summary_routes
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
     extract_url_schema,
@@ -21,6 +23,7 @@ from app.common.runtime_settings.normalizers import (
 from app.common.runtime_settings.runtime_settings_store import (
     RuntimeSettingsStore,
 )
+from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.provider import FlapiProvider
 from app.dal.providers.flapi.runner_config import (
@@ -1638,6 +1641,48 @@ def test_saved_settings_survive_a_restart(tmp_path):
     assert _store(tmp_path).get().llm_model == "gemma4:31b-cloud-v2"
 
 
+def test_llm_timeout_reaches_the_client_and_reacts_to_a_saved_change(
+    tmp_path, monkeypatch
+):
+    """`llm_timeout_seconds` was a setting the UI exposed and nothing applied,
+    leaving the SDK's 600s default in force — long enough for one hung local
+    model server to hold a job worker. The timeout also has to be part of the
+    client cache key, or a client built before the change keeps serving every
+    later call and the saved value silently does nothing."""
+    built = []
+
+    class _Recorder:
+        def __init__(self, **kwargs):
+            built.append(kwargs)
+
+    monkeypatch.setattr("app.dal.llm.openai_client.OpenAI", _Recorder)
+    store = _store(tmp_path)
+    store.update({"llm_timeout_seconds": 7, "openai_api_key": "sk-test"})
+    client = OpenAIJsonClient(store)
+
+    settings = store.get()
+    client._client_for(
+        settings.openai_api_key, settings.llm_base_url,
+        settings.llm_timeout_seconds,
+    )
+    assert built[-1]["timeout"] == 7
+
+    # The same values must not rebuild; a changed timeout must.
+    client._client_for(
+        settings.openai_api_key, settings.llm_base_url,
+        settings.llm_timeout_seconds,
+    )
+    assert len(built) == 1
+
+    updated = store.update({"llm_timeout_seconds": 9})
+    client._client_for(
+        updated.openai_api_key, updated.llm_base_url,
+        updated.llm_timeout_seconds,
+    )
+    assert built[-1]["timeout"] == 9
+    assert len(built) == 2
+
+
 def test_invalid_saved_value_does_not_prevent_boot(tmp_path):
     path = tmp_path / "runtime-settings.json"
     store = _store(tmp_path)
@@ -2282,6 +2327,92 @@ def test_specialists_share_duplicate_workflows_and_cap_total_breadth():
     assert [item["id"] for item in states[1]["workflows"]] == ["w1", "w3"]
 
 
+def test_the_leader_review_sees_summaries_not_every_fact():
+    """The review payload must not grow with the rows collected.
+
+    It is resent on every round, so carrying whole `facts` made a long run
+    truncate on a local model — and a truncated review returns an arbitrary
+    done=true instead of a visible error. The leader only decides *whether*
+    to ask more, so a count replaces the facts while patterns and outliers,
+    already bounded summaries, stay.
+
+    `_report_section` is asserted in the same test on purpose: the worker
+    answers *from* the evidence and still needs the facts, so this pins which
+    of the two views may be trimmed.
+    """
+    section = {
+        "workflow_key": "permits", "name": "היתרי בנייה", "status": "partial",
+        "summary": "נמצאו 41 היתרים", "coverage": "412 שורות",
+        "facts": ["fact-%d" % index for index in range(40)],
+        "patterns": ["263 מתוך 412 באזור א׳"],
+        "outliers": ["היתר אחד מ-1987"],
+        "warnings": ["שלב 2 נכשל"],
+    }
+
+    review = specialists._review_section(section)
+
+    assert "facts" not in review
+    assert review["fact_count"] == 40
+    assert review["patterns"] == ["263 מתוך 412 באזור א׳"]
+    assert review["outliers"] == ["היתר אחד מ-1987"]
+    assert review["warnings"] == ["שלב 2 נכשל"]
+    assert review["summary"] == "נמצאו 41 היתרים"
+    assert review["status"] == "partial"
+
+    # The worker's own view is the one that must keep them.
+    assert specialists._report_section(section)["facts"] == section["facts"]
+
+    states = [{
+        "agent": {"content_key": "permits-agent", "name": "מומחה היתרים"},
+        "status": "partial", "sections": [section], "answers": [],
+    }]
+    assert specialists._reports(states)[0]["sections"][0] == review
+
+
+def test_liveness_fails_only_once_abandoned_threads_have_eaten_the_pool(
+    monkeypatch
+):
+    """A wedged pool has to be visible to something that can act on it.
+
+    A thread lost inside flunks is never reclaimed, so once as many have been
+    abandoned as the pool holds, no full run can start again — while the port
+    stays open and a tcpSocket probe stays green. `/health` keeps answering
+    either way, because a human still needs the numbers when the answer is
+    bad.
+    """
+    counter = {"abandoned": 0}
+    monkeypatch.setattr(
+        health_routes, "abandoned_workers", lambda: counter["abandoned"]
+    )
+
+    class Context:
+        repository = type("R", (), {"health": staticmethod(lambda: {
+            "database": "ok"
+        })})()
+        jobs = type("J", (), {"capacity": staticmethod(lambda: 3)})()
+
+    router = health_routes.build(Context())
+    routes = {route.path: route.endpoint for route in router.routes}
+
+    assert routes["/health"]() == {
+        "status": "ok", "database": "ok",
+        "abandoned_workers": 0, "worker_capacity": 3,
+    }
+    assert routes["/health/live"]() == {"status": "ok"}
+
+    # Below capacity the pool still has a worker, so the pod must stay up.
+    counter["abandoned"] = 2
+    assert routes["/health/live"]() == {"status": "ok"}
+    assert routes["/health"]()["abandoned_workers"] == 2
+
+    counter["abandoned"] = 3
+    with pytest.raises(UnavailableError) as failure:
+        routes["/health/live"]()
+    assert failure.value.status_code == 503
+    # /health must keep reporting rather than failing with it.
+    assert routes["/health"]()["abandoned_workers"] == 3
+
+
 def test_delete_conversation_route_uses_the_callers_session():
     captured = {}
 
@@ -2315,6 +2446,61 @@ def test_delete_conversation_route_uses_the_callers_session():
     assert captured == {
         "conversation_id": "conversation-1", "session_id": "owned-session",
     }
+
+
+def test_evidence_routes_authorize_and_page_without_loading_all_records():
+    calls = []
+
+    class Repository:
+        @staticmethod
+        def get_run(run_id):
+            calls.append(("run", run_id))
+            return {"id": run_id, "conversation_id": "conversation-1"}
+
+        @staticmethod
+        def get_conversation(conversation_id, session_id):
+            calls.append(("conversation", conversation_id, session_id))
+            return {"id": conversation_id}
+
+        @staticmethod
+        def evidence_catalog(run_id):
+            calls.append(("catalog", run_id))
+            return [{"id": "evidence-1", "row_count": 6000}]
+
+        @staticmethod
+        def evidence_page(run_id, evidence_id, offset, limit):
+            calls.append(("page", run_id, evidence_id, offset, limit))
+            return {"records": [{"id": offset}], "has_more": True}
+
+    class Context:
+        repository = Repository()
+
+        @staticmethod
+        def user_session():
+            return "dependency-session"
+
+    router = summary_routes.build(Context())
+    catalog = next(
+        route.endpoint for route in router.routes
+        if route.path == "/runs/{run_id}/evidence"
+    )
+    page = next(
+        route.endpoint for route in router.routes
+        if route.path == "/runs/{run_id}/evidence/{evidence_id}"
+    )
+
+    assert catalog("run-1", "owned-session")[0]["row_count"] == 6000
+    assert page("run-1", "evidence-1", 200, 50, "owned-session") == {
+        "records": [{"id": 200}], "has_more": True,
+    }
+    assert calls == [
+        ("run", "run-1"),
+        ("conversation", "conversation-1", "owned-session"),
+        ("catalog", "run-1"),
+        ("run", "run-1"),
+        ("conversation", "conversation-1", "owned-session"),
+        ("page", "run-1", "evidence-1", 200, 50),
+    ]
 
 
 def test_a_section_falling_back_is_marked_degraded_rather_than_looking_thin():

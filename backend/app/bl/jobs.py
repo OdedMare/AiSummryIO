@@ -36,6 +36,15 @@ class JobRunner:
         )
         self._start_watchdog()
 
+    def capacity(self) -> int:
+        """Workers serving full summaries.
+
+        Exposed so a health check can compare it against the count of threads
+        abandoned to FLAPI timeouts: once they match, no full run can ever
+        start again, and that is the one failure a restart actually fixes.
+        """
+        return self._full_capacity
+
     def _start_watchdog(self) -> None:
         """Report long-running runs every 15s.
 

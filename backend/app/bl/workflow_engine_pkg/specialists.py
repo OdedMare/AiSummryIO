@@ -613,13 +613,41 @@ def _report_section(section) -> dict:
     }
 
 
+def _review_section(section) -> dict:
+    """What the leader needs to judge sufficiency — not the data itself.
+
+    The leader decides *whether* a follow-up question would help; it never
+    writes the answer. Sending whole `facts` made this payload grow linearly
+    with the rows collected and resend all of it every round, which on a
+    local model truncates silently — and a truncated review returns an
+    arbitrary done=true rather than an error anyone can see.
+
+    `patterns` and `outliers` stay because they are already summaries, bounded
+    in size, and they are what lets the leader notice a distribution worth
+    asking about. `fact_count` answers the only question `facts` was really
+    serving here: whether the section is empty or substantial.
+    """
+    return {
+        "workflow_key": section.get("workflow_key", ""),
+        "name": section.get("name", ""),
+        "status": section.get("status", ""),
+        "summary": section.get("summary", ""),
+        "coverage": section.get("coverage", ""),
+        "fact_count": len(section.get("facts", [])),
+        "patterns": section.get("patterns", []),
+        "outliers": section.get("outliers", []),
+        "warnings": section.get("warnings", []),
+    }
+
+
 def _reports(states) -> List[dict]:
+    """The leader's view of every specialist. Read only by `_review`."""
     return [
         {
             "agent_key": state["agent"]["content_key"],
             "name": state["agent"]["name"],
             "status": state["status"],
-            "sections": [_report_section(item) for item in state["sections"]],
+            "sections": [_review_section(item) for item in state["sections"]],
             "answers": [
                 {
                     "question": item["question"],

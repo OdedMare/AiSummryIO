@@ -22,6 +22,7 @@ exception handler needs no mapping table.
 | `ProviderError` | 502 | A FLAPI package failed |
 | `NotFoundError` | 404 | |
 | `AuthError` | 401 | |
+| `UnavailableError` | 503 | Alive, but out of capacity to accept work |
 
 Messages are **Hebrew** and user-facing — they reach the UI directly. Several
 tests match on them, so rewording is a behavior change.
