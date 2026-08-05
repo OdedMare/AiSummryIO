@@ -374,7 +374,16 @@ def _step_identifiers(step: dict, context: dict, source: str) -> List[str]:
     field = step.get("input_field") or _source_field(source)
     if not field:
         raise ValueError("נדרש שדה פלט למיפוי")
-    return list(dict.fromkeys(str(value) for value in _values(records, field)))
+    return list(dict.fromkeys(
+        _identifier_value(value) for value in _values(records, field)
+    ))
+
+
+def _identifier_value(value) -> str:
+    """Keep mapped geometry values as one FLAPI-ready identifier."""
+    if isinstance(value, dict) and value.get("type") == "MultiPolygon":
+        return multipolygon_to_wkt(value)
+    return str(value)
 
 
 def _source_step(source: str) -> str:

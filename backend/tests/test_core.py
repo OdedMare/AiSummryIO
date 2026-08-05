@@ -204,6 +204,35 @@ def test_workflow_identifier_mapping_supports_fanout_and_deduplication():
     assert SummaryService._identifiers(step, context) == ["001", "A-7"]
 
 
+def test_workflow_identifier_mapping_keeps_multipolygons_as_values():
+    step = {"input_source": "steps.places", "input_field": "geo"}
+    first = {
+        "type": "MultiPolygon",
+        "coordinates": [[[
+            [34.75, 32.05], [34.80, 32.05],
+            [34.80, 32.10], [34.75, 32.05],
+        ]]],
+    }
+    second = {
+        "type": "MultiPolygon",
+        "coordinates": [[[
+            [35.10, 31.90], [35.20, 31.90],
+            [35.20, 32.00], [35.10, 31.90],
+        ]]],
+    }
+    context = {
+        "workflow": {"id": "ROOT-1"},
+        "steps": {"places": [
+            {"geo": first}, {"geo": second}, {"geo": first}, {"geo": None},
+        ]},
+    }
+
+    assert SummaryService._identifiers(step, context) == [
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)))",
+        "MULTIPOLYGON (((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))",
+    ]
+
+
 def test_a_saved_input_value_is_valid_and_reaches_the_package_unchanged():
     step = {
         "key": "fixed-input", "input_source": "workflow.value",
