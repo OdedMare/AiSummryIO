@@ -74,12 +74,25 @@ jobs:
           version: v3.16.3
 
       # `lint` catches malformed charts; `template` catches templates that
-      # only break once values are rendered.
+      # only break once values are rendered. ci/test-values.yaml supplies the
+      # required credentials, so this renders the same paths a real install
+      # takes rather than the empty defaults.
       - name: Lint and render
         run: |
           for chart in deploy/helm/backend deploy/helm/frontend; do
             echo "::group::$chart"
-            helm lint "$chart"
-            helm template ci-test "$chart" > /dev/null
+            helm lint "$chart" --values "$chart/ci/test-values.yaml"
+            helm template ci-test "$chart" \
+              --values "$chart/ci/test-values.yaml" > /dev/null
             echo "::endgroup::"
           done
+
+      # The backend must refuse to render without a database rather than
+      # deploy a pod that points at a Secret nobody created.
+      - name: Backend rejects a missing database
+        run: |
+          if helm template ci-test deploy/helm/backend > /dev/null 2>&1; then
+            echo "expected the chart to fail without database.url" >&2
+            exit 1
+          fi
+          echo "guard fired as expected"

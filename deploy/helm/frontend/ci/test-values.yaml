@@ -1,0 +1,15 @@
+# Values used only to render the chart in CI.
+backend:
+  url: http://aisummry-backend.ci.svc.cluster.local:8000
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: aisummry.ci.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: true
