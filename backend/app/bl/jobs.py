@@ -121,19 +121,23 @@ class JobRunner:
                 conversation.get("root_id"),
             )
 
-            def progress(completed, total, sections):
+            def progress(
+                completed, total, sections, agent_trace=None, phase=None
+            ):
                 _log.info(
                     "run=%s progress %d/%d (%.1fs elapsed)",
                     run_id, completed, total, time.time() - started,
                 )
-                self._repository.update_run(
-                    run_id,
-                    progress={
-                        "completed": completed,
-                        "total": total,
-                        "sections": sections,
-                    },
-                )
+                payload = {
+                    "completed": completed,
+                    "total": total,
+                    "sections": sections,
+                }
+                if agent_trace is not None:
+                    payload["agent_trace"] = agent_trace
+                if phase:
+                    payload["phase"] = phase
+                self._repository.update_run(run_id, progress=payload)
 
             if run["kind"] == "full":
                 result = self._service.full_summary(

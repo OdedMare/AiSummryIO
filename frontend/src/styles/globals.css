@@ -1115,6 +1115,182 @@ button:disabled {
   font-weight: 700;
 }
 
+/* A compact audit trail of delegation and evidence-backed follow-up. It
+   deliberately shows decisions and citations, never hidden model reasoning. */
+.agent-trace {
+  margin: -8px 0 20px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.agent-trace > summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--text-soft);
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-trace > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-trace > summary svg {
+  color: var(--primary);
+}
+
+.agent-trace > summary small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agent-trace[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-trace-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+}
+
+.agent-trace-specialist {
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.agent-trace-specialist > header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.agent-trace-specialist > header svg {
+  color: var(--success);
+}
+
+.agent-trace-specialist.failed > header svg,
+.agent-trace-specialist.partial > header svg {
+  color: var(--warning);
+}
+
+.agent-trace-specialist > header small {
+  margin-inline-start: auto;
+  color: var(--text-muted);
+}
+
+.agent-trace-specialist > p {
+  margin: 7px 23px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.agent-trace-selection {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+}
+
+.agent-trace-selection > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.agent-trace-selection dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agent-trace-selection dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-soft);
+  font-size: 11px;
+  text-align: right;
+}
+
+.agent-trace-answer {
+  padding: 10px;
+  margin-top: 10px;
+  background: var(--surface-2);
+  border-inline-start: 3px solid var(--success);
+  border-radius: 8px;
+}
+
+.agent-trace-answer.failed {
+  border-inline-start-color: var(--warning);
+}
+
+.agent-trace-answer h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.agent-trace-answer h4:not(:first-child) {
+  margin-top: 9px;
+}
+
+.agent-trace-answer p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.agent-trace-limit,
+.agent-trace-error {
+  color: var(--warning) !important;
+}
+
+.agent-trace-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.agent-trace-evidence code {
+  padding: 2px 5px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.agent-trace-gaps {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 10px 12px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
 /* Questions the agent can answer, offered so the thread can continue without
    composing one. Never a prompt to the user — the composer stays the way to
    ask something else. */
@@ -3184,6 +3360,188 @@ select:focus {
   margin: 0 10px 9px;
 }
 
+.specialist-card {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 9px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(10, 14, 24, 0.04);
+}
+
+.specialist-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+  box-shadow: var(--shadow-soft);
+}
+
+.specialist-card-main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 34px minmax(0, 1fr) 10px;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 9px 10px;
+  text-align: right;
+  background: transparent;
+  border: 0;
+}
+
+.specialist-card-main > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.specialist-card-main small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specialist-publish {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 74px;
+  min-height: 44px;
+  padding: 0 9px;
+  color: var(--text-soft);
+  background: var(--surface-2);
+  border: 0;
+  border-inline-start: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.specialist-publish:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.specialist-form-note {
+  padding: 11px 12px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.capability-picker {
+  min-width: 0;
+  padding: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.capability-picker legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 5px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.capability-picker > p {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.capability-picker .capability-empty {
+  margin: 0;
+  padding: 10px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.capability-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.capability-options > label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.capability-options > label:hover,
+.capability-options > label.selected {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.capability-options > label.selected {
+  background: var(--primary-soft);
+}
+
+.capability-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.capability-options > label:focus-within {
+  box-shadow: var(--focus);
+}
+
+.capability-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.capability-options > label.selected .capability-check {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.capability-options > label > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.capability-options strong,
+.capability-options small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-options small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
 .content-editor {
   min-height: 300px;
   direction: rtl;
@@ -3502,6 +3860,24 @@ select:focus {
     width: auto;
     flex: 0 0 auto;
     min-height: 44px;
+  }
+
+  .agent-trace > summary {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .agent-trace > summary small {
+    grid-column: 2;
+  }
+
+  .agent-trace-selection > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .form-grid.two,
+  .capability-options {
+    grid-template-columns: 1fr;
   }
 
   .studio-nav-label small {

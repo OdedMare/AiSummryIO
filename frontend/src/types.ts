@@ -19,6 +19,47 @@ export interface SummarySection {
   /** The model did not answer; the text is counts, not a summary. */
   degraded?: boolean;
   evidence_ids: string[];
+  agent_key?: string;
+}
+
+export type AgentPhase =
+  | "delegating"
+  | "running_workflows"
+  | "questioning"
+  | "synthesizing"
+  | "completed";
+
+export interface SpecialistAnswer {
+  round: number;
+  question: string;
+  answer: string;
+  findings: string[];
+  limitations: string[];
+  evidence_ids: string[];
+  status: "completed" | "failed";
+}
+
+export interface SpecialistTrace {
+  agent_id: string;
+  agent_key: string;
+  version: number;
+  name: string;
+  task: string;
+  status: "planned" | "running" | "completed" | "partial" | "failed";
+  workflow_ids: string[];
+  workflow_keys: string[];
+  skill_ids: string[];
+  skill_keys: string[];
+  answers: SpecialistAnswer[];
+  error: string;
+}
+
+export interface AgentTrace {
+  phase: AgentPhase;
+  max_rounds: number;
+  rounds_used: number;
+  specialists: SpecialistTrace[];
+  missing_data?: string[];
 }
 
 export interface SummaryResult {
@@ -40,6 +81,7 @@ export interface SummaryResult {
   /** Clickable answers to the clarifying question. Empty when the honest
       answers were not a short list — free text stays the way out. */
   options?: ClarifyOption[];
+  agent_trace?: AgentTrace;
 }
 
 export interface ClarifyOption {
@@ -60,6 +102,8 @@ export interface SummaryRun {
     completed: number;
     total: number;
     sections: SummarySection[];
+    phase?: AgentPhase;
+    agent_trace?: AgentTrace;
   };
   result: SummaryResult | null;
   error: string;
@@ -255,10 +299,14 @@ export interface AgentContent {
   id: string;
   content_key: string;
   version: number;
-  kind: "skill" | "prompt";
+  kind: "skill" | "prompt" | "agent";
   name: string;
   description: string;
   content: string;
+  config?: {
+    workflow_keys: string[];
+    skill_keys: string[];
+  };
   user_selectable: boolean;
   status: "draft" | "published" | "archived";
 }

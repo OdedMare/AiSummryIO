@@ -61,6 +61,9 @@ function AgentSettings({ settings }: { settings: SettingsController }) {
         placeholder="http://localhost:11434/v1" />
       <Toggle settings={settings} name="llm_diet_mode"
         label="מצב חסכוני בטוקנים" optional="הנחיות קצרות ופלט מוגבל" />
+      <Field settings={settings} name="agent_max_rounds"
+        label="מספר סבבי העמקה מרבי" type="number" min="0" max="5"
+        optional="0 מכבה את מערכת המומחים; ברירת מחדל 2" />
     </section>
   );
 }

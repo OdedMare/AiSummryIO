@@ -2,7 +2,7 @@
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List
+from typing import List
 
 from app.bl.workflow_engine_pkg import execution, history, synthesis
 from app.bl.workflow_engine_pkg.schemas import (
@@ -11,7 +11,7 @@ from app.bl.workflow_engine_pkg.schemas import (
     WORKER_ANSWER_SCHEMA,
     WORKER_PLAN_SCHEMA,
 )
-from app.common.errors import AgentError
+from app.common.errors import AgentError, AppError
 
 
 _LEADER_FALLBACK = (
@@ -477,7 +477,7 @@ def _evidence_policy(service, workflow_id, step_key, cache):
         step = next(item for item in workflow["steps"] if item["key"] == step_key)
         package = service._repository.get_package(step["package_version_id"])
         cache[cache_key] = execution._summary_fields(package)
-    except (AttributeError, KeyError, StopIteration):
+    except (AppError, AttributeError, KeyError, StopIteration):
         cache[cache_key] = None
     return cache[cache_key]
 
@@ -554,11 +554,15 @@ def _cached_section(section) -> dict:
 
 def _report_section(section) -> dict:
     return {
-        key: section.get(key, [] if key != "summary" else "")
-        for key in (
-            "workflow_key", "name", "status", "summary", "coverage",
-            "facts", "patterns", "outliers", "warnings",
-        )
+        "workflow_key": section.get("workflow_key", ""),
+        "name": section.get("name", ""),
+        "status": section.get("status", ""),
+        "summary": section.get("summary", ""),
+        "coverage": section.get("coverage", ""),
+        "facts": section.get("facts", []),
+        "patterns": section.get("patterns", []),
+        "outliers": section.get("outliers", []),
+        "warnings": section.get("warnings", []),
     }
 
 

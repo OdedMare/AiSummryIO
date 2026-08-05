@@ -3,6 +3,7 @@ import { Database, ThumbsDown, ThumbsUp } from "lucide-react";
 import { api } from "@/services/api";
 import type { SummaryRun, SummarySection } from "@/types";
 import AgentStatus from "./AgentStatus";
+import AgentTrace from "./AgentTrace";
 import EvidenceDrawer from "./EvidenceDrawer";
 import NextQuestions from "./NextQuestions";
 import { RunHeader, SummaryContent } from "./RunContent";
@@ -54,6 +55,7 @@ export default function Turn({
       {run.question && <Question text={run.question} />}
       {first && <RunHeader run={run} />}
       <AgentStatus run={run} />
+      <AgentTrace run={run} />
       <SummaryContent run={run} />
       <SourceRow sections={sections} onSelect={selectSource}
         activeId={open ? source?.workflow_id ?? null : null} />

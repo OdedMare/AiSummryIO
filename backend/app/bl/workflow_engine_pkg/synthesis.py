@@ -41,10 +41,12 @@ def section_summary(service, workflow, facts, warnings) -> dict:
     system = (workflow.get("system_prompt") or (
         "סכם בעברית את עובדות תהליך העבודה. אל תוסיף מידע שלא קיים."
     )) + _TABULAR_GUIDANCE
-    user = json.dumps(
-        {"workflow": workflow["name"], "facts": facts, "warnings": warnings},
-        ensure_ascii=False,
-    )
+    payload = {
+        "workflow": workflow["name"], "facts": facts, "warnings": warnings,
+    }
+    if workflow.get("_agent_task"):
+        payload["delegated_task"] = workflow["_agent_task"]
+    user = json.dumps(payload, ensure_ascii=False)
     schema = merge_output_schema(workflow.get("output_schema"))
     try:
         return _section_result(service._llm.complete_json(system, user, schema))
@@ -88,10 +90,16 @@ def _section_fallback(workflow: dict, facts: List[dict]) -> dict:
     }
 
 
-def final_summary(service, root_id, question, sections, skills=None) -> dict:
+def final_summary(
+    service, root_id, question, sections, skills=None,
+    agent_context=None, leader_prompt="",
+) -> dict:
     skills = skills or []
     safe_sections = [_safe_section(section) for section in sections]
-    final = _shared_summary(service, question, sections, safe_sections)
+    final = _shared_summary(
+        service, question, sections, safe_sections,
+        agent_context or [], leader_prompt,
+    )
     final["skill_results"] = service._run_skills(
         question, skills, sections, safe_sections
     )
@@ -118,10 +126,15 @@ def _safe_section(section: dict) -> dict:
     return safe
 
 
-def _shared_summary(service, question, sections, safe_sections) -> dict:
+def _shared_summary(
+    service, question, sections, safe_sections,
+    agent_context=None, leader_prompt="",
+) -> dict:
     prompt = service._repository.published_content(
         "final-summary", "סכם בעברית על סמך העובדות בלבד והחזר JSON."
     )
+    if leader_prompt:
+        prompt = leader_prompt + "\n\n" + prompt
     prompt += (
         "\nהחזר skill_results כמערך ריק. כל Skill מופעל בקריאה נפרדת."
         "\n`headline` הוא משפט אחד שעונה על השאלה — מי שקורא רק אותו קיבל"
@@ -133,9 +146,10 @@ def _shared_summary(service, question, sections, safe_sections) -> dict:
         "\nהשתמש ב-patterns וב-outliers של החלקים: התפלגות רחבה שייכת"
         " ל-key_findings רק אם היא משנה מסקנה, וחריג שייך ל-risks."
     )
-    payload = json.dumps(
-        {"question": question, "sections": safe_sections}, ensure_ascii=False
-    )
+    data = {"question": question, "sections": safe_sections}
+    if agent_context:
+        data["specialist_reports"] = agent_context
+    payload = json.dumps(data, ensure_ascii=False)
     try:
         return service._llm.complete_json(prompt, payload, FINAL_SCHEMA)
     except AgentError:

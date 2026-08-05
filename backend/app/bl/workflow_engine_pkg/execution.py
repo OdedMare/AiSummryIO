@@ -52,6 +52,19 @@ def execute(
     return service._final_summary(root_id, question, sections, skills or [])
 
 
+def execute_sections(
+    service, run, root_id, workflows, progress_callback, boundaries=None
+) -> List[dict]:
+    """Execute selected workflows without consuming them in final synthesis."""
+    workflows = select_workflows(workflows, root_id, boundaries)
+    if not workflows:
+        progress_callback(0, 0, [])
+        return []
+    return _execute_all(
+        service, run, root_id, workflows, progress_callback, boundaries
+    )
+
+
 def _execute_all(
     service, run, root_id, workflows, progress_callback, boundaries
 ) -> List[dict]:
