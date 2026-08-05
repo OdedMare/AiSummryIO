@@ -30,8 +30,12 @@ from app.dal.repository.conversations import conversation_title
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.bl.workflow_engine_pkg import history
+from app.bl.workflow_engine_pkg import history, specialists
 from app.bl.workflow_engine_pkg.execution import chunk_facts
+from app.bl.workflow_engine_pkg.schemas import (
+    FINAL_SCHEMA, LEADER_DELEGATION_SCHEMA, LEADER_REVIEW_SCHEMA,
+    WORKER_ANSWER_SCHEMA, WORKER_PLAN_SCHEMA,
+)
 from app.api.models import (
     ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
     WorkflowStep,
@@ -574,6 +578,271 @@ def test_progress_is_reported_for_every_completed_workflow():
 
     assert seen[0] == (0, 2)
     assert seen[-1] == (2, 2)
+
+
+def test_leader_delegates_distinct_work_and_deepens_without_rerunning_tools():
+    """Workers get narrow contexts and follow-up reads the saved evidence.
+
+    The unselected Waze workflow must never run, and the Geo Skill's full
+    instructions must not leak into planning or the Web specialist.
+    """
+    workflows = {
+        "google-maps": _specialist_workflow(
+            "wf-google-v3", "google-maps", "Google Maps"
+        ),
+        "waze": _specialist_workflow("wf-waze-v1", "waze", "Waze"),
+        "web-search": _specialist_workflow(
+            "wf-web-v2", "web-search", "Web"
+        ),
+    }
+    agents = [
+        {
+            "id": "agent-geo-v2", "content_key": "geo", "version": 2,
+            "name": "מומחה Geo", "description": "מפות ותנועה",
+            "content": "GEO_AGENT_INSTRUCTIONS",
+            "config": {
+                "workflow_keys": ["google-maps", "waze"],
+                "skill_keys": ["geo-analysis"],
+            },
+        },
+        {
+            "id": "agent-web-v1", "content_key": "web", "version": 1,
+            "name": "מומחה Web", "description": "מידע פתוח ברשת",
+            "content": "WEB_AGENT_INSTRUCTIONS",
+            "config": {
+                "workflow_keys": ["web-search"], "skill_keys": [],
+            },
+        },
+    ]
+
+    class FakeRepository:
+        def __init__(self):
+            self.loaded_skills = []
+
+        @staticmethod
+        def published_specialists():
+            return agents
+
+        @staticmethod
+        def published_content(_key, fallback):
+            return fallback
+
+        @staticmethod
+        def published_workflows_by_keys(keys, _roles):
+            return [workflows[key] for key in keys if key in workflows]
+
+        @staticmethod
+        def published_skill_options(keys):
+            return [{
+                "id": "skill-geo-v4", "content_key": "geo-analysis",
+                "version": 4, "name": "ניתוח גאוגרפי",
+                "description": "מזהה דפוסים במרחב",
+            }] if "geo-analysis" in keys else []
+
+        def published_skills(self, keys):
+            self.loaded_skills.extend(keys)
+            return [{
+                "id": "skill-geo-v4", "content_key": "geo-analysis",
+                "version": 4, "name": "ניתוח גאוגרפי",
+                "description": "מזהה דפוסים במרחב",
+                "content": "GEO_SKILL_SECRET",
+            }] if "geo-analysis" in keys else []
+
+        @staticmethod
+        def published_summary_skills(_keys):
+            return []
+
+        @staticmethod
+        def run_evidence(_run_id):
+            return [
+                {
+                    "id": "ev-google", "workflow_id": "wf-google-v3",
+                    "step_key": "lookup", "records": [{"place": "פארק"}],
+                },
+                {
+                    "id": "ev-web", "workflow_id": "wf-web-v2",
+                    "step_key": "lookup", "records": [{"site": "עירייה"}],
+                },
+            ]
+
+        @staticmethod
+        def get_workflow(workflow_id):
+            return next(item for item in workflows.values()
+                        if item["id"] == workflow_id)
+
+        @staticmethod
+        def get_package(_package_id):
+            return {"output_schema": {}}
+
+    class FakeLlm:
+        def __init__(self):
+            self.review_calls = 0
+            self.plan_calls = []
+
+        def complete_json(self, system, user, schema):
+            payload = json.loads(user)
+            if schema is LEADER_DELEGATION_SCHEMA:
+                return {"assignments": [
+                    {"agent_key": "geo", "task": "בדוק מידע מהמפות"},
+                    {"agent_key": "web", "task": "בדוק מידע מהרשת"},
+                ]}
+            if schema is WORKER_PLAN_SCHEMA:
+                self.plan_calls.append((system, user))
+                if payload["delegated_task"] == "בדוק מידע מהמפות":
+                    return {
+                        "workflow_keys": ["google-maps"],
+                        "skill_keys": ["geo-analysis"],
+                        "use_cached": False,
+                    }
+                return {
+                    "workflow_keys": ["web-search"],
+                    "skill_keys": [], "use_cached": False,
+                }
+            if schema is LEADER_REVIEW_SCHEMA:
+                self.review_calls += 1
+                if self.review_calls == 1:
+                    return {
+                        "done": False,
+                        "questions": [{
+                            "agent_key": "geo",
+                            "question": "מה המשמעות של הקרבה לפארק?",
+                        }],
+                        "missing_data": [],
+                    }
+                return {"done": True, "questions": [], "missing_data": []}
+            if schema is WORKER_ANSWER_SCHEMA:
+                assert payload["leader_question"] == (
+                    "מה המשמעות של הקרבה לפארק?"
+                )
+                return {
+                    "answer": "נמצאה קרבה לפארק.",
+                    "findings": ["הפארק נמצא בנתוני המפה"],
+                    "limitations": [],
+                    # The Web citation is foreign and must be discarded.
+                    "evidence_ids": ["ev-web", "ev-google"],
+                }
+            if schema is FINAL_SCHEMA:
+                return {
+                    "headline": "נאסף מידע מהמפה ומהרשת.",
+                    "summary": "סיכום משולב.", "coverage": "שני מקורות",
+                    "key_findings": ["נמצא פארק"], "risks": [],
+                    "missing_data": [], "suggested_questions": [],
+                    "skill_results": [],
+                }
+            raise AssertionError("unexpected LLM schema")
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                max_parallel_workflows = 4
+                agent_max_rounds = 2
+            return Values()
+
+    repository = FakeRepository()
+    llm = FakeLlm()
+    service = SummaryService(repository, None, llm, FakeStore())
+    executed = []
+
+    def execute(_run, _root_id, workflow, **_kwargs):
+        executed.append({
+            "key": workflow["workflow_key"],
+            "system": workflow["system_prompt"],
+        })
+        return {
+            "workflow_id": workflow["id"],
+            "workflow_key": workflow["workflow_key"],
+            "name": workflow["name"], "status": "completed",
+            "summary": "סיכום " + workflow["name"],
+            "coverage": "רשומה אחת", "facts": ["עובדה"],
+            "patterns": [], "outliers": [], "warnings": [],
+            "suggested_questions": [],
+            "evidence_ids": [
+                "ev-google" if workflow["workflow_key"] == "google-maps"
+                else "ev-web"
+            ],
+        }
+
+    service._execute_workflow = execute
+    progress = []
+    result = service.full_summary(
+        {"id": "run-1", "question": "סכם את הפוליגון", "skill_keys": []},
+        {"root_id": "polygon-x", "boundaries": None, "runs": []},
+        lambda completed, total, sections, trace, phase: progress.append(phase),
+    )
+
+    assert sorted(item["key"] for item in executed) == [
+        "google-maps", "web-search",
+    ]
+    assert "waze" not in [item["key"] for item in executed]
+    assert repository.loaded_skills == ["geo-analysis"]
+    assert all("GEO_SKILL_SECRET" not in system + user
+               for system, user in llm.plan_calls)
+    by_workflow = {item["key"]: item["system"] for item in executed}
+    assert "GEO_SKILL_SECRET" in by_workflow["google-maps"]
+    assert "GEO_SKILL_SECRET" not in by_workflow["web-search"]
+    assert llm.review_calls == 2
+    assert result["agent_trace"]["rounds_used"] == 1
+    geo = next(item for item in result["agent_trace"]["specialists"]
+               if item["agent_key"] == "geo")
+    assert geo["answers"][0]["evidence_ids"] == ["ev-google"]
+    assert result["partial"] is False
+    assert "questioning" in progress
+
+
+def _specialist_workflow(version_id, key, name):
+    return {
+        "id": version_id, "workflow_key": key, "version": 1,
+        "name": name, "description": name, "role": "both",
+        "status": "published", "system_prompt": "WORKFLOW_INSTRUCTIONS",
+        "output_schema": {},
+        "steps": [{
+            "key": "lookup", "name": "בדיקה",
+            "package_version_id": "package-v1", "depends_on": [],
+            "input_source": "workflow.id", "input_field": "",
+            "input_value": "", "summary_prompt": "",
+        }],
+    }
+
+
+def test_worker_answer_with_only_foreign_evidence_is_rejected():
+    class FakeRepository:
+        @staticmethod
+        def get_workflow(_workflow_id):
+            return _specialist_workflow("wf-geo", "geo-map", "Geo")
+
+        @staticmethod
+        def get_package(_package_id):
+            return {"output_schema": {}}
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, _user, schema):
+            assert schema is WORKER_ANSWER_SCHEMA
+            return {
+                "answer": "טענה ללא ראיה שייכת", "findings": ["טענה"],
+                "limitations": [], "evidence_ids": ["ev-web"],
+            }
+
+    service = SummaryService(FakeRepository(), None, FakeLlm(), None)
+    state = {
+        "agent": {
+            "content_key": "geo", "content": "Geo",
+            "config": {"workflow_keys": ["geo-map"]},
+        },
+        "task": "בדוק מפה", "skills": [], "sections": [],
+    }
+    answer = specialists._answer(
+        service, state, "מה נמצא?", [{
+            "id": "ev-web", "workflow_id": "wf-web",
+            "step_key": "lookup", "records": [{"site": "x"}],
+            "_workflow_key": "web-search",
+        }], "worker", 1,
+    )
+
+    assert answer["status"] == "failed"
+    assert answer["evidence_ids"] == []
+    assert "נדחתה" in answer["limitations"][0]
 
 
 def test_workflow_output_schema_extends_the_shared_section_contract():
@@ -1239,6 +1508,21 @@ def test_an_invalid_environment_schema_does_not_prevent_boot(tmp_path):
         database_schema="evil; DROP TABLE x",
     ))
     assert store.get().database_schema == ""
+
+
+def test_agent_rounds_are_bounded_for_environment_and_ui(tmp_path):
+    high = RuntimeSettingsStore(Settings(
+        runtime_settings_file=str(tmp_path / "high.json"),
+        agent_max_rounds=99,
+    ))
+    low = RuntimeSettingsStore(Settings(
+        runtime_settings_file=str(tmp_path / "low.json"),
+        agent_max_rounds=-3,
+    ))
+
+    assert high.get().agent_max_rounds == 5
+    assert low.get().agent_max_rounds == 0
+    assert high.update({"agent_max_rounds": "2"}).agent_max_rounds == 2
 
 
 def _store(tmp_path):
