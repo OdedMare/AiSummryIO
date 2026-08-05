@@ -87,6 +87,71 @@ SKILL_SCHEMA = {
     "additionalProperties": False,
 }
 
+LEADER_DELEGATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "assignments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "agent_key": {"type": "string"},
+                    "task": {"type": "string"},
+                },
+                "required": ["agent_key", "task"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["assignments"],
+    "additionalProperties": False,
+}
+
+WORKER_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "workflow_keys": {"type": "array", "items": {"type": "string"}},
+        "skill_keys": {"type": "array", "items": {"type": "string"}},
+        "use_cached": {"type": "boolean"},
+    },
+    "required": ["workflow_keys", "skill_keys", "use_cached"],
+    "additionalProperties": False,
+}
+
+LEADER_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "done": {"type": "boolean"},
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "agent_key": {"type": "string"},
+                    "question": {"type": "string"},
+                },
+                "required": ["agent_key", "question"],
+                "additionalProperties": False,
+            },
+        },
+        "missing_data": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["done", "questions", "missing_data"],
+    "additionalProperties": False,
+}
+
+WORKER_ANSWER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "answer": {"type": "string"},
+        "findings": {"type": "array", "items": {"type": "string"}},
+        "limitations": {"type": "array", "items": {"type": "string"}},
+        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["answer", "findings", "limitations", "evidence_ids"],
+    "additionalProperties": False,
+}
+
 WORKFLOW_PLAN_SCHEMA = {
     "type": "object",
     "properties": {

@@ -20,6 +20,7 @@ class RuntimeSettings:
     flapi_token: str
     flapi_verify_tls: bool
     max_parallel_workflows: int
+    agent_max_rounds: int
     package_timeout_seconds: int
     conversation_retention_days: int
     log_retention_days: int

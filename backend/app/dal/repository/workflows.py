@@ -87,6 +87,19 @@ class WorkflowRepository:
         """, (roles,))
         return self._with_steps(rows)
 
+    def published_workflows_by_keys(
+        self, keys: List[str], roles: List[str]
+    ) -> List[dict]:
+        if not keys:
+            return []
+        rows = self._all("""
+            SELECT * FROM summary_workflows
+            WHERE status='published' AND workflow_key = ANY(%s)
+              AND role = ANY(%s)
+        """, (keys, roles))
+        by_key = {row["workflow_key"]: row for row in self._with_steps(rows)}
+        return [by_key[key] for key in keys if key in by_key]
+
     def _with_steps(self, rows: List[dict]) -> List[dict]:
         for row in rows:
             row["steps"] = self._steps(row["id"])

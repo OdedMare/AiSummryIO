@@ -46,6 +46,7 @@ class RuntimeSettingsStore:
             flapi_token=env.flapi_token,
             flapi_verify_tls=env.flapi_verify_tls,
             max_parallel_workflows=env.max_parallel_workflows,
+            agent_max_rounds=env.agent_max_rounds,
             package_timeout_seconds=env.package_timeout_seconds,
             conversation_retention_days=env.conversation_retention_days,
             log_retention_days=env.log_retention_days,
@@ -102,6 +103,8 @@ class RuntimeSettingsStore:
                     value = normalize_database_schema(value)
                 elif key == "llm_base_url":
                     value = normalize_llm_base_url(value)
+                elif key == "agent_max_rounds":
+                    value = min(5, max(0, int(value)))
                 elif key in (
                     "llm_timeout_seconds", "max_parallel_workflows",
                     "package_timeout_seconds",

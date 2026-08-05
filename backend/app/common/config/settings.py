@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     flapi_verify_tls: bool = True
 
     max_parallel_workflows: int = 4
+    agent_max_rounds: int = 2
     package_timeout_seconds: int = 120
     conversation_retention_days: int = 30
     log_retention_days: int = 90

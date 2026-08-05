@@ -74,10 +74,11 @@ CREATE TABLE IF NOT EXISTS agent_content (
     id TEXT PRIMARY KEY,
     content_key TEXT NOT NULL,
     version INTEGER NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('skill','prompt')),
+    kind TEXT NOT NULL CHECK (kind IN ('skill','prompt','agent')),
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
+    config JSONB NOT NULL DEFAULT '{}',
     user_selectable BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -87,6 +88,11 @@ CREATE TABLE IF NOT EXISTS agent_content (
 
 ALTER TABLE agent_content
     ADD COLUMN IF NOT EXISTS user_selectable BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE agent_content
+    ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE agent_content DROP CONSTRAINT IF EXISTS agent_content_kind_check;
+ALTER TABLE agent_content ADD CONSTRAINT agent_content_kind_check
+    CHECK (kind IN ('skill','prompt','agent'));
 
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,

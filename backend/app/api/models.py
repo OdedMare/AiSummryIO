@@ -127,12 +127,18 @@ class PackageInspect(PackageCreate):
         return cleaned
 
 
+class SpecialistConfig(BaseModel):
+    workflow_keys: List[str] = Field(default_factory=list)
+    skill_keys: List[str] = Field(default_factory=list)
+
+
 class AgentContentCreate(BaseModel):
     content_key: Optional[str] = None
-    kind: Literal["skill", "prompt"]
+    kind: Literal["skill", "prompt", "agent"]
     name: str
     description: str = ""
     content: str
+    config: SpecialistConfig = Field(default_factory=SpecialistConfig)
     user_selectable: bool = False
 
 
