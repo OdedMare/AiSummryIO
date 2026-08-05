@@ -14,15 +14,16 @@ from app.bl.workflow_engine_pkg.schemas import (
 # own prompt rather than replacing it: an FDE writes domain instructions, and
 # these describe the data's shape, which is the same for every workflow.
 _TABULAR_GUIDANCE = """
-מבנה הנתונים: כל פריט ב-facts הוא מקטע של עד 100 שורות, ובו `row_count`,
-`rows` (השורות עצמן), ו-`stats` לכל שדה. `stats` מחושב בקוד על כל שורות
-המקטע: `present`/`missing`, `distinct`, `counts` (שכיחות, לשדות עם עד 15
-ערכים), ו-`min`/`max`/`mean` לשדות מספריים.
+מבנה הנתונים: כל פריט ב-facts הוא digest של שלב שלם. `row_count` הוא מספר
+כל הרשומות שנאספו, `sampled_row_count` הוא מספר השורות המייצגות שב-`rows`,
+ו-`stats` מחושב בקוד על כל הרשומות: `present`/`missing`, `distinct`, `counts`
+(שכיחות, לשדות עם עד 15 ערכים), ו-`min`/`max`/`mean` לשדות מספריים.
 
 כללי קריאה:
 1. פתח בהיקף — כמה שורות ובאילו שלבים. `coverage` יכיל זאת במפורש.
 2. העדף התפלגות על דוגמה. "263 מתוך 412 פתוחים" הוא ממצא; שורה בודדת אינה.
-3. השתמש במספרים מ-`stats` כפי שהם. אל תספור בעצמך ואל תחשב אחוז ללא מכנה.
+3. השתמש במספרים מ-`stats` כפי שהם. אל תספור את `rows` בעצמך — זו דגימה.
+   אל תחשב אחוז ללא מכנה.
 4. `missing` גבוה בשדה הוא ממצא על כיסוי — ציין אותו.
 5. חריגים חשובים מהטיפוסי: תאריך עתידי, סגירה לפני פתיחה, כפילות, ערך קיצוני.
 

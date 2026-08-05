@@ -12,6 +12,11 @@ from app.dal.repository.validation import step_levels
 
 _log = trace("execution")
 
+# The model needs an honest view of the whole dataset, not every raw row. 100
+# evenly distributed rows preserve real value correlations while exact stats
+# below are still computed over every record, including a 6,000-row response.
+_SUMMARY_ROW_LIMIT = 100
+
 
 def geo_capable(workflow: dict) -> bool:
     """True when any step reads the drawn area.
@@ -410,41 +415,56 @@ def _values(records: List[dict], field: str):
 def chunk_facts(
     step_records: Dict[str, List[dict]], field_policies=None
 ) -> List[dict]:
+    """Build one bounded evidence digest per step.
+
+    This function used to create one item per 100 rows and then send every item
+    in a single LLM request. A 6,000-row result therefore still put all 6,000
+    rows in the prompt. The digest keeps exact whole-dataset statistics and a
+    representative row sample, so prompt size is bounded without pretending
+    the sample is the full coverage.
+    """
     field_policies = field_policies or {}
     return [
         _fact_chunk(
-            step_key, records, offset, field_policies.get(step_key)
+            step_key, records, field_policies.get(step_key)
         )
         for step_key, records in step_records.items()
-        for offset in range(0, len(records) or 1, 100)
     ]
 
 
 def _fact_chunk(
-    step_key: str, records: List[dict], offset: int, allowed_fields=None
+    step_key: str, records: List[dict], allowed_fields=None
 ) -> dict:
-    rows = records[offset:offset + 100]
-    available = {str(key) for row in rows for key in row}
+    available = {str(key) for row in records for key in row}
     fields = sorted(
         available if allowed_fields is None
         else available.intersection(allowed_fields)
     )
+    rows = _representative_rows(records, _SUMMARY_ROW_LIMIT)
     return {
         "step": step_key,
-        "chunk": offset // 100 + 1,
-        "row_count": len(rows),
+        "chunk": 1,
+        "row_count": len(records),
+        "sampled_row_count": len(rows),
         "fields": fields,
-        # Whole rows, so the model can see which values co-occur. `samples`
-        # grouped values by field, which destroyed the row: five names and
-        # five dates gave no way to tell which name held which date.
+        # Whole representative rows, so the model can still see which values
+        # co-occur without receiving the entire DataFrame.
         "rows": _rows(rows, fields),
-        # Computed over every row in the chunk, not over `rows`. Frequency,
-        # ranges, and emptiness are arithmetic — deriving them in Python is
-        # exact and cannot be hallucinated, and it is what lets a summary say
-        # "263 of 412" instead of naming a handful of values.
-        "stats": _stats(rows, fields),
-        "samples": _samples(rows, fields),
+        # Arithmetic is computed over all records, never over the bounded
+        # sample. This is what makes counts and coverage exact.
+        "stats": _stats(records, fields),
+        "samples": _samples(records, fields),
     }
+
+
+def _representative_rows(rows: List[dict], limit: int) -> List[dict]:
+    """Evenly sample the full result, including its first and last rows."""
+    if len(rows) <= limit:
+        return rows
+    return [
+        rows[index * (len(rows) - 1) // (limit - 1)]
+        for index in range(limit)
+    ]
 
 
 def _rows(rows: List[dict], fields: List[str]) -> List[dict]:
