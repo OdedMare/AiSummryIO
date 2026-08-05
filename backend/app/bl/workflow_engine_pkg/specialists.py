@@ -23,6 +23,12 @@ _WORKER_FALLBACK = (
     "הדרוש, וענה רק מראיות ששייכות לך."
 )
 
+# Agentic means selective, not unlimited. These caps keep one question from
+# multiplying into dozens of model and FLAPI calls. Raise them only after load
+# tests show the extra breadth improves answer quality.
+_MAX_SPECIALISTS = 2
+_MAX_WORKFLOWS = 3
+
 
 def available(service) -> List[dict]:
     """Published specialists when agent mode is enabled, otherwise none."""
@@ -54,7 +60,7 @@ def _orchestrate(
     service, run, conversation, progress, agents, question, is_follow_up, turns
 ) -> dict:
     settings = service._store.get()
-    limit = max(1, settings.max_parallel_workflows)
+    limit = min(_MAX_SPECIALISTS, max(1, settings.max_parallel_workflows))
     max_rounds = max(0, min(5, settings.agent_max_rounds))
     leader_prompt = _prompt(service, "leader-orchestrator", _LEADER_FALLBACK)
     worker_prompt = _prompt(service, "workflow-worker", _WORKER_FALLBACK)
@@ -68,9 +74,7 @@ def _orchestrate(
         service, assignments, prior_sections, question, is_follow_up,
         worker_prompt, limit,
     )
-    workflows = [
-        workflow for state in states for workflow in state["workflows"]
-    ]
+    workflows = _bounded_workflows(states)
     _emit(
         progress, 0, len(workflows), [], states, "delegating",
         max_rounds, 0,
@@ -178,9 +182,9 @@ def _delegations(
             break
     if assignments:
         return assignments
-    return [
-        {"agent": item, "task": question} for item in agents[:limit]
-    ]
+    # A routing failure must fail small. Assigning every available specialist
+    # here used to turn one bad model response into the most expensive path.
+    return [{"agent": agents[0], "task": question}] if agents else []
 
 
 def _plan_states(
@@ -249,7 +253,9 @@ def _plan_state(
         if is_follow_up and cached:
             use_cached = True
         else:
-            workflow_keys = [item["workflow_key"] for item in workflows]
+            # Fail small: one safe published workflow is preferable to running
+            # the entire catalog because planning returned no usable choice.
+            workflow_keys = [workflows[0]["workflow_key"]] if workflows else []
     selected = {
         item["workflow_key"]: item for item in workflows
         if item["workflow_key"] in workflow_keys
@@ -277,6 +283,28 @@ def _plan_state(
     }
 
 
+def _bounded_workflows(states) -> List[dict]:
+    """Run each workflow version once and share its section with its owners."""
+    unique = {}
+    for state in states:
+        agent_key = state["agent"]["content_key"]
+        bounded = []
+        for workflow in state["workflows"]:
+            workflow_id = workflow["id"]
+            selected = unique.get(workflow_id)
+            if selected is None:
+                if len(unique) == _MAX_WORKFLOWS:
+                    continue
+                selected = dict(workflow)
+                selected["_agent_keys"] = []
+                unique[workflow_id] = selected
+            if agent_key not in selected["_agent_keys"]:
+                selected["_agent_keys"].append(agent_key)
+            bounded.append(selected)
+        state["workflows"] = bounded
+    return list(unique.values())
+
+
 def _worker_workflow(workflow, agent, task, skills, worker_prompt) -> dict:
     prepared = dict(workflow)
     prepared["system_prompt"] = "\n\n".join(filter(None, [
@@ -296,7 +324,8 @@ def _execute_workflows(
     if not workflows:
         return []
     owners = {
-        item["id"]: item["_agent_key"] for item in workflows
+        item["id"]: item.get("_agent_keys", [item["_agent_key"]])
+        for item in workflows
     }
 
     def report(completed, total, sections):
@@ -319,14 +348,20 @@ def _execute_workflows(
         conversation.get("boundaries"),
     )
     for section in sections:
-        section["agent_key"] = owners.get(section["workflow_id"], "")
+        section["agent_keys"] = owners.get(section["workflow_id"], [])
+        section["agent_key"] = (
+            section["agent_keys"][0] if section["agent_keys"] else ""
+        )
     return sections
 
 
 def _attach_sections(states, sections) -> None:
     for state in states:
         key = state["agent"]["content_key"]
-        current = [item for item in sections if item.get("agent_key") == key]
+        current = [
+            item for item in sections
+            if key in item.get("agent_keys", [item.get("agent_key", "")])
+        ]
         current_keys = {item["workflow_key"] for item in current}
         cached = [
             _cached_section(item) for item in state["cached_sections"]
@@ -588,7 +623,26 @@ def _reports(states) -> List[dict]:
 
 
 def _agent_context(states) -> List[dict]:
-    return _reports(states)
+    # Section facts are already sent separately to final synthesis. Repeating
+    # them inside specialist_reports spent context on the same text twice.
+    return [
+        {
+            "agent_key": state["agent"]["content_key"],
+            "name": state["agent"]["name"],
+            "task": state["task"],
+            "status": state["status"],
+            "answers": [
+                {
+                    "question": item["question"],
+                    "answer": item["answer"],
+                    "findings": item["findings"],
+                    "limitations": item["limitations"],
+                }
+                for item in state["answers"]
+            ],
+        }
+        for state in states
+    ]
 
 
 def _all_sections(states) -> List[dict]:

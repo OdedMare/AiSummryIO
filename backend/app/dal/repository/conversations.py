@@ -5,6 +5,7 @@ from typing import List
 
 from psycopg.types.json import Jsonb
 
+from app.common.errors import ConflictError, NotFoundError
 from app.dal.database.postgres import connect
 from app.dal.repository.base import new_id
 
@@ -76,6 +77,33 @@ class ConversationRepository:
             WHERE session_id=%s AND expires_at > NOW()
             ORDER BY updated_at DESC LIMIT 30
         """, (session_id,))
+
+    def delete_conversation(self, conversation_id: str, session_id: str) -> dict:
+        """Delete one idle, owned conversation and all of its heavy evidence.
+
+        The schema's two ON DELETE CASCADE links remove runs, evidence, and
+        feedback in the same transaction. Active work is rejected so a worker
+        cannot recreate progress after its parent conversation disappeared.
+        """
+        with connect(self._store) as connection:
+            conversation = connection.execute("""
+                SELECT id, title FROM conversations
+                WHERE id=%s AND session_id=%s
+            """, (conversation_id, session_id)).fetchone()
+            if not conversation:
+                raise NotFoundError("השיחה לא נמצאה")
+            active = connection.execute("""
+                SELECT 1 FROM summary_runs
+                WHERE conversation_id=%s AND status IN ('queued','running')
+                LIMIT 1
+            """, (conversation_id,)).fetchone()
+            if active:
+                raise ConflictError("לא ניתן למחוק שיחה בזמן שהסיכום עדיין מופק")
+            connection.execute(
+                "DELETE FROM conversations WHERE id=%s", (conversation_id,)
+            )
+            connection.commit()
+        return {"deleted": conversation_id, "title": conversation["title"]}
 
 
 _TITLE_LIMIT = 80

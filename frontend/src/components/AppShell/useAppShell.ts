@@ -47,6 +47,23 @@ export function useAppShell() {
     setGeoMode("none"); setGeometry(null); setSidebarOpen(false);
   };
 
+  const endConversation = async () => {
+    if (!conversation || submitting || isActive(run)) return;
+    const confirmed = window.confirm(
+      "לסיים את השיחה ולמחוק לצמיתות את הסיכומים והראיות שלה?",
+    );
+    if (!confirmed) return;
+    setSubmitting(true); setError("");
+    try {
+      await api.deleteConversation(conversation.id);
+      startNew(); loadHistory();
+    } catch (reason) {
+      setError(errorMessage(reason, "לא ניתן למחוק את השיחה"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const selectConversation = async (id: string) => {
     setError("");
     try {
@@ -109,7 +126,7 @@ export function useAppShell() {
     geometry, setGeometry, conversations, skills,
     conversation, run, runs, error, submitting, sidebarOpen, setSidebarOpen,
     settingsOpen, setSettingsOpen, studioOpen, setStudioOpen, dark, setDark,
-    notice, startNew, selectConversation, submit, ask,
+    notice, startNew, endConversation, selectConversation, submit, ask,
   };
 }
 

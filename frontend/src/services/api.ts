@@ -96,6 +96,10 @@ export const api = {
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
+  deleteConversation: (id: string) =>
+    request<{ deleted: string; title: string }>(`/api/conversations/${id}`, {
+      method: "DELETE",
+    }),
   // The thread as question/answer turns, without the runs' evidence and
   // sections. `conversation` already carries the full runs the transcript
   // renders, so this is for a caller that wants the text alone.
