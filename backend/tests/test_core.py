@@ -744,7 +744,9 @@ def test_leader_delegates_distinct_work_and_deepens_without_rerunning_tools():
     service = SummaryService(repository, None, llm, FakeStore())
     executed = []
 
-    def execute(_run, _root_id, workflow, **_kwargs):
+    def execute(
+        _run, _root_id, workflow, _save_evidence=True, _boundaries=None
+    ):
         executed.append({
             "key": workflow["workflow_key"],
             "system": workflow["system_prompt"],
@@ -843,6 +845,44 @@ def test_worker_answer_with_only_foreign_evidence_is_rejected():
     assert answer["status"] == "failed"
     assert answer["evidence_ids"] == []
     assert "נדחתה" in answer["limitations"][0]
+
+
+def test_zero_agent_rounds_keeps_the_existing_summary_path():
+    class FakeRepository:
+        @staticmethod
+        def published_specialists():
+            raise AssertionError("specialists must stay disabled")
+
+        @staticmethod
+        def published_workflows(roles):
+            assert roles == ["baseline", "both"]
+            return [{"workflow_key": "legacy"}]
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                agent_max_rounds = 0
+            return Values()
+
+    service = SummaryService(FakeRepository(), None, None, FakeStore())
+    captured = {}
+
+    def execute(
+        _run, _root_id, _question, workflows, _progress, _skills,
+        _boundaries,
+    ):
+        captured["workflows"] = workflows
+        return {"summary": "legacy"}
+
+    service._execute = execute
+    result = service.full_summary(
+        {"id": "run-1", "question": "q", "skill_keys": []},
+        {"root_id": "001", "boundaries": None}, lambda *_args: None,
+    )
+
+    assert result == {"summary": "legacy"}
+    assert captured["workflows"] == [{"workflow_key": "legacy"}]
 
 
 def test_workflow_output_schema_extends_the_shared_section_contract():
