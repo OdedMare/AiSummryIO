@@ -59,12 +59,24 @@ uvicorn app.main:app --reload
   stays in the `agent_content` table** — Skills, the `workflow-planner` prompt,
   and a workflow's `system_prompt` are edited live in Agent Studio and must not
   move into files. See [app/bl/prompts/README.md](app/bl/prompts/README.md).
+- `bl/workflow_engine_pkg/specialists.py` — bounded leader/worker
+  orchestration over published specialists. A leader delegates a focused task
+  to at most two specialists; each worker plans only against the workflows and
+  Skills assigned to it; the leader then reviews and may ask follow-up
+  questions for up to `agent_max_rounds` rounds before synthesis. Active only
+  when `agent_max_rounds > 0` — at 0 the existing summary path runs unchanged.
 - `bl/workflow_engine_pkg/history.py` — conversation memory: the thread's
   recent turns, and the follow-up restated to stand alone before routing.
   The user's original wording is what is stored and shown; the rewrite is
   internal, and every failure path falls back to the question as typed.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
-  have priority.
+  have priority. A daemon watchdog reports in-flight runs every 15s, names any
+  past 180s as stuck, and purges expired conversations every 5 minutes.
+  `capacity()` is exposed so a health check can compare it against threads
+  abandoned to FLAPI timeouts.
+- `common/logging_setup.py` — logging configuration and the `trace(name)`
+  logger factory, called from `main.py` **before any other logger is
+  constructed** so no start-up line is lost. Also owns `abandoned_workers()`.
 - `api/` — Pydantic HTTP contracts and signed authentication.
 - `main.py` — FastAPI routes and composition root.
 
@@ -113,7 +125,25 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   the original question rather than failing the run.
 - Conversation history is derived from `summary_runs`, never stored in a
   second table, and only finished runs become turns.
-- Never log API keys, tokens, raw package bodies, or full user IDs.
+- **Agent mode is bounded on purpose.** At most 2 specialists per question and
+  3 workflows overall; `agent_max_rounds` is clamped to 0–5 in both settings
+  and the runtime store. Raise the caps only after load tests show the extra
+  breadth improves answers — otherwise one question multiplies into dozens of
+  model and FLAPI calls. A leader routing failure must fail *small*: it falls
+  back to one specialist, never to assigning all of them.
+- `agent_max_rounds = 0` must keep the pre-agent summary path byte-for-byte
+  intact; there is a test pinning exactly that.
+- `llm_timeout_seconds` bounds **one** HTTP completion, not a whole logical
+  call — the degradation ladder and the parse retry above it each get their
+  own, so a pathological call can take a multiple of it. It exists to stop a
+  hung model server from holding a worker for the SDK's 600s default.
+- Never log API keys, tokens, raw package bodies, or full user IDs. Diagnostic
+  logging of outbound credentials is masked; there is a test asserting it.
+- Unhandled exceptions are logged with a full traceback and returned as JSON.
+  Starlette's default is a bare non-JSON "Internal Server Error", which the
+  client then fails to parse — leaving a 500 with no cause on either side.
+- The run poll (`/api/runs/{id}`, every 1.5s) is traced at DEBUG only. At INFO
+  it buries every other line.
 - There is no authentication: FDE routes are open and the service must be
   deployed on a trusted network only. Anonymous conversation sessions still
   use an HttpOnly signed cookie.

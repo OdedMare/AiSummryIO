@@ -11,12 +11,14 @@ backend/app/
 │   ├── auth.py                     cookies and signed authentication
 │   └── models.py                   Pydantic HTTP contracts
 ├── bl/
-│   ├── jobs.py                     background execution
+│   ├── jobs.py                     background execution + watchdog
 │   ├── workflow_engine.py          stable SummaryService facade
 │   ├── prompts/                    prompt markdown + loader
-│   └── workflow_engine_pkg/        execution, routing, planning, synthesis
+│   └── workflow_engine_pkg/        execution, routing, planning, synthesis,
+│                                   specialists (agent mode), history
 ├── common/
 │   ├── config/                     environment defaults
+│   ├── logging_setup.py            logging config, trace(), worker accounting
 │   └── runtime_settings/           live configuration
 └── dal/
     ├── database/                   PostgreSQL connection setup
@@ -50,11 +52,23 @@ POST /api/summaries                     app/main.py
   ├── Repository.create_run             dal/repository/
   └── JobRunner.submit                  bl/jobs.py
         └── SummaryService              bl/workflow_engine.py
+              ├── specialists           bl/workflow_engine_pkg/specialists.py
+              │     (agent_max_rounds > 0; leader delegates, workers execute)
               ├── execution             bl/workflow_engine_pkg/execution.py
               ├── FlapiProvider         dal/providers/flapi/
               ├── Repository evidence   dal/repository/
               └── synthesis             bl/workflow_engine_pkg/synthesis.py
 ```
+
+With `agent_max_rounds = 0` the specialists branch is skipped entirely and the
+path above is exactly the pre-agent one.
+
+## Health and liveness
+
+| Endpoint | Answers |
+|---|---|
+| `GET /api/health` | database, `worker_capacity`, `abandoned_workers` |
+| `GET /api/health/live` | fails only when abandoned threads ate the pool |
 
 ## Non-negotiable rules
 
