@@ -1,0 +1,203 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aisummry-backend.fullname" . }}
+  labels:
+    {{- include "aisummry-backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- if .Values.persistence.enabled }}
+  # A ReadWriteOnce volume cannot be attached to an old and a new pod at
+  # once, so the default rolling update would deadlock on it.
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "aisummry-backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if include "aisummry-backend.createSecret" . }}
+        # Roll the pods when a secret value changes; without this a
+        # credential rotation would not reach a running pod.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "aisummry-backend.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "aisummry-backend.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: backend
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: AISUMMRY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.database.existingSecret }}
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "aisummry-backend.secretName" . }}
+                  key: database-url
+                  {{- end }}
+            - name: AISUMMRY_DATABASE_SCHEMA
+              value: {{ .Values.database.schema | quote }}
+            - name: AISUMMRY_LLM_MODEL
+              value: {{ .Values.llm.model | quote }}
+            - name: AISUMMRY_LLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+            - name: AISUMMRY_LLM_DIET_MODE
+              value: {{ .Values.llm.dietMode | quote }}
+            - name: AISUMMRY_LLM_TIMEOUT_SECONDS
+              value: {{ .Values.llm.timeoutSeconds | quote }}
+            {{- if or .Values.llm.existingSecret .Values.llm.apiKey }}
+            # Read by validation_alias OPENAI_API_KEY, not the AISUMMRY_ prefix.
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.llm.existingSecret }}
+                  name: {{ .Values.llm.existingSecret }}
+                  key: {{ .Values.llm.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "aisummry-backend.secretName" . }}
+                  key: openai-api-key
+                  {{- end }}
+            {{- end }}
+            {{- with .Values.flapi.username }}
+            - name: AISUMMRY_FLAPI_USERNAME
+              value: {{ . | quote }}
+            {{- end }}
+            - name: AISUMMRY_FLAPI_VERIFY_TLS
+              value: {{ .Values.flapi.verifyTls | quote }}
+            {{- if or .Values.flapi.existingSecret .Values.flapi.token }}
+            - name: AISUMMRY_FLAPI_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.flapi.existingSecret }}
+                  name: {{ .Values.flapi.existingSecret }}
+                  key: {{ .Values.flapi.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "aisummry-backend.secretName" . }}
+                  key: flapi-token
+                  {{- end }}
+            {{- end }}
+            {{- if or .Values.auth.existingSecret .Values.auth.adminPassword }}
+            - name: AISUMMRY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.auth.existingSecret }}
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.adminPasswordKey }}
+                  {{- else }}
+                  name: {{ include "aisummry-backend.secretName" . }}
+                  key: admin-password
+                  {{- end }}
+            {{- end }}
+            {{- if or .Values.auth.existingSecret .Values.auth.cookieSecret }}
+            - name: AISUMMRY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.auth.existingSecret }}
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.cookieSecretKey }}
+                  {{- else }}
+                  name: {{ include "aisummry-backend.secretName" . }}
+                  key: cookie-secret
+                  {{- end }}
+            {{- end }}
+            - name: AISUMMRY_MAX_PARALLEL_WORKFLOWS
+              value: {{ .Values.agent.maxParallelWorkflows | quote }}
+            - name: AISUMMRY_AGENT_MAX_ROUNDS
+              value: {{ .Values.agent.maxRounds | quote }}
+            - name: AISUMMRY_PACKAGE_TIMEOUT_SECONDS
+              value: {{ .Values.agent.packageTimeoutSeconds | quote }}
+            - name: AISUMMRY_CONVERSATION_RETENTION_DAYS
+              value: {{ .Values.retention.conversationDays | quote }}
+            - name: AISUMMRY_LOG_RETENTION_DAYS
+              value: {{ .Values.retention.logDays | quote }}
+            - name: AISUMMRY_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- if .Values.persistence.enabled }}
+            - name: AISUMMRY_RUNTIME_SETTINGS_FILE
+              value: {{ printf "%s/runtime-settings.json" .Values.persistence.mountPath | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: settings
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            # WORKDIR is /srv/backend and the app writes logs/requests.jsonl
+            # under it; this keeps that path writable.
+            - name: logs
+              mountPath: /srv/backend/logs
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: settings
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-settings" (include "aisummry-backend.fullname" .)) }}
+        {{- end }}
+        - name: logs
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

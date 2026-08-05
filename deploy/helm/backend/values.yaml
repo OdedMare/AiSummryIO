@@ -1,0 +1,143 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/odedmare/aisummry-backend
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# The image already runs as the non-root `app` user created in the
+# Dockerfile. Numeric IDs are left unset so the container keeps that user.
+podSecurityContext:
+  runAsNonRoot: true
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 2Gi
+
+# ---------------------------------------------------------------------------
+# Database — external. Set `url`, or point `existingSecret` at a Secret you
+# manage so the DSN (which carries the password) never sits in values.
+# ---------------------------------------------------------------------------
+database:
+  url: ""
+  existingSecret: ""
+  existingSecretKey: database-url
+  schema: mosaic_magen
+
+# ---------------------------------------------------------------------------
+# LLM — an OpenAI-compatible endpoint (Ollama by default).
+# ---------------------------------------------------------------------------
+llm:
+  model: gemma4:31b-cloud
+  baseUrl: http://ollama:11434/v1
+  dietMode: true
+  timeoutSeconds: 120
+  # Read from a Secret when set, otherwise from `apiKey` below.
+  existingSecret: ""
+  existingSecretKey: openai-api-key
+  apiKey: ""
+
+flapi:
+  username: ""
+  verifyTls: true
+  existingSecret: ""
+  existingSecretKey: flapi-token
+  token: ""
+
+agent:
+  maxParallelWorkflows: 4
+  # The backend clamps this to 0..5.
+  maxRounds: 2
+  packageTimeoutSeconds: 120
+
+retention:
+  conversationDays: 30
+  logDays: 90
+
+logLevel: INFO
+
+# The service has no authentication (see backend/CLAUDE.md) — the admin
+# password and cookie secret are the only credentials it holds. Generate
+# them into a Secret rather than committing values.
+auth:
+  existingSecret: ""
+  adminPasswordKey: admin-password
+  cookieSecretKey: cookie-secret
+  adminPassword: ""
+  cookieSecret: ""
+
+# `runtime-settings.json` is written at runtime by the Settings UI, so it
+# needs storage that survives a restart. With persistence disabled every
+# saved setting is lost when the pod is replaced.
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  mountPath: /data
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: aisummry.local
+      paths:
+        - path: /api
+          pathType: Prefix
+  tls: []
+
+# /api/health checks database reachability, which makes it a readiness
+# signal: a pod that cannot reach Postgres should leave the Service, not be
+# killed. Liveness uses a TCP probe so a database blip cannot restart-loop
+# the pod.
+readinessProbe:
+  enabled: true
+  path: /api/health
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  periodSeconds: 5
+  failureThreshold: 30
+
+# Extra env for anything this chart does not model.
+extraEnv: []
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
