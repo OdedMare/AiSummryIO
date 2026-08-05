@@ -131,6 +131,8 @@ spec:
               value: {{ .Values.agent.maxRounds | quote }}
             - name: AISUMMRY_PACKAGE_TIMEOUT_SECONDS
               value: {{ .Values.agent.packageTimeoutSeconds | quote }}
+            - name: AISUMMRY_CONVERSATION_IDLE_MINUTES
+              value: {{ .Values.retention.conversationIdleMinutes | quote }}
             - name: AISUMMRY_CONVERSATION_RETENTION_DAYS
               value: {{ .Values.retention.conversationDays | quote }}
             - name: AISUMMRY_LOG_RETENTION_DAYS

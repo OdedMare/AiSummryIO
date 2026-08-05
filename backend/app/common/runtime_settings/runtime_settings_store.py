@@ -48,6 +48,7 @@ class RuntimeSettingsStore:
             max_parallel_workflows=env.max_parallel_workflows,
             agent_max_rounds=min(5, max(0, env.agent_max_rounds)),
             package_timeout_seconds=env.package_timeout_seconds,
+            conversation_idle_minutes=env.conversation_idle_minutes,
             conversation_retention_days=env.conversation_retention_days,
             log_retention_days=env.log_retention_days,
             cookie_secret=env.cookie_secret,
@@ -108,7 +109,8 @@ class RuntimeSettingsStore:
                 elif key in (
                     "llm_timeout_seconds", "max_parallel_workflows",
                     "package_timeout_seconds",
-                    "conversation_retention_days", "log_retention_days",
+                    "conversation_idle_minutes", "conversation_retention_days",
+                    "log_retention_days",
                 ):
                     value = max(1, int(value))
             except (TypeError, ValueError):

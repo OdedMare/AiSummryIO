@@ -15,8 +15,8 @@ class ConversationRepository:
         self, session_id: str, root_id: str, boundaries=None, title: str = ""
     ) -> dict:
         row_id = new_id()
-        retention = self._store.get().conversation_retention_days
-        expires = datetime.now(timezone.utc) + timedelta(days=retention)
+        idle_minutes = self._store.get().conversation_idle_minutes
+        expires = datetime.now(timezone.utc) + timedelta(minutes=idle_minutes)
         with connect(self._store) as connection:
             connection.execute(
                 _INSERT_CONVERSATION,
@@ -67,6 +67,7 @@ class ConversationRepository:
         return [_turn(row) for row in reversed(rows)]
 
     def list_conversations(self, session_id: str) -> List[dict]:
+        self.purge_expired_conversations()
         return self._all("""
             SELECT c.*, (
                 SELECT status FROM summary_runs r
@@ -77,6 +78,22 @@ class ConversationRepository:
             WHERE session_id=%s AND expires_at > NOW()
             ORDER BY updated_at DESC LIMIT 30
         """, (session_id,))
+
+    def purge_expired_conversations(self) -> int:
+        """Remove idle conversations, except work that is still executing."""
+        with connect(self._store) as connection:
+            rows = connection.execute("""
+                DELETE FROM conversations AS conversation
+                WHERE expires_at <= NOW()
+                  AND NOT EXISTS (
+                      SELECT 1 FROM summary_runs
+                      WHERE conversation_id=conversation.id
+                        AND status IN ('queued','running')
+                  )
+                RETURNING id
+            """).fetchall()
+            connection.commit()
+        return len(rows)
 
     def delete_conversation(self, conversation_id: str, session_id: str) -> dict:
         """Delete one idle, owned conversation and all of its heavy evidence.

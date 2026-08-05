@@ -14,6 +14,7 @@ _log = trace("jobs")
 # 180s has outlived the bound that was supposed to cap it.
 _WATCHDOG_SECONDS = 15
 _STUCK_SECONDS = 180
+_CLEANUP_SECONDS = 300
 
 
 class JobRunner:
@@ -43,9 +44,24 @@ class JobRunner:
         run's age is invisible. Daemon, so it never holds up shutdown.
         """
         def watch():
+            last_cleanup = 0.0
             while True:
                 time.sleep(_WATCHDOG_SECONDS)
                 self._report_stuck()
+                now = time.time()
+                if now - last_cleanup >= _CLEANUP_SECONDS:
+                    purge = getattr(
+                        self._repository, "purge_expired_conversations", None
+                    )
+                    try:
+                        deleted = purge() if purge else 0
+                        if deleted:
+                            _log.info(
+                                "deleted %d expired conversation(s)", deleted
+                            )
+                    except Exception:
+                        _log.exception("expired-conversation cleanup failed")
+                    last_cleanup = now
 
         threading.Thread(
             target=watch, name="job-watchdog", daemon=True

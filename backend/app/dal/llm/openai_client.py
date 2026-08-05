@@ -15,6 +15,7 @@ Robustness policy, matching LocatoAI:
 """
 
 import json
+import threading
 
 import httpx
 from openai import BadRequestError, OpenAI
@@ -31,6 +32,11 @@ _DIET_MAX_COMPLETION_TOKENS = 1200
 # The SDK requires a non-empty key; local servers/gateways ignore it.
 _LOCAL_SERVER_KEY_PLACEHOLDER = "null"
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+# A run may parallelize specialists and Skills, but the local model server is a
+# shared finite resource. Bound actual HTTP completions across every run in the
+# process instead of letting nested thread pools multiply them without limit.
+_LLM_SLOTS = threading.BoundedSemaphore(2)
 
 
 class OpenAIJsonClient:
@@ -111,15 +117,16 @@ class OpenAIJsonClient:
         # schema → JSON mode → plain → plain with the system prompt merged
         # into the user turn (some Gemma deployments reject a system role).
         last_bad_request = None
-        for kwargs in OpenAIJsonClient._attempts(messages, max_tokens, schema):
-            try:
-                response = create_with_retry(client, model, kwargs)
-            except BadRequestError as exc:
-                last_bad_request = exc
-                continue
-            except Exception as exc:
-                raise AgentError("שגיאת מודל: " + str(exc))
-            return OpenAIJsonClient._response_data(response)
+        with _LLM_SLOTS:
+            for kwargs in OpenAIJsonClient._attempts(messages, max_tokens, schema):
+                try:
+                    response = create_with_retry(client, model, kwargs)
+                except BadRequestError as exc:
+                    last_bad_request = exc
+                    continue
+                except Exception as exc:
+                    raise AgentError("שגיאת מודל: " + str(exc))
+                return OpenAIJsonClient._response_data(response)
         raise AgentError("שגיאת מודל: " + str(last_bad_request))
 
     @staticmethod

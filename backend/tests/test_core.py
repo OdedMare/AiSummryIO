@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.common.errors import AgentError, ProviderError
 from app.api.models import GeoBoundaries
+from app.api.routers import conversations as conversation_routes
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
     extract_url_schema,
@@ -2230,6 +2231,90 @@ def test_summary_fields_policy_still_hides_internal_columns_from_rows():
 
     assert chunk["rows"] == [{"owner_name": "דנה"}]
     assert "internal_code" not in chunk["stats"]
+
+
+def test_six_thousand_rows_become_one_bounded_exact_digest():
+    records = [
+        {
+            "id": "ID-%04d" % index,
+            "state": ("פתוח", "סגור", "ממתין")[index % 3],
+            "amount": index,
+            "description": "רשומת בדיקה %d" % index,
+        }
+        for index in range(6000)
+    ]
+
+    facts = chunk_facts({"cases": records})
+
+    assert len(facts) == 1
+    digest = facts[0]
+    assert digest["row_count"] == 6000
+    assert digest["sampled_row_count"] == 100
+    assert digest["rows"][0]["id"] == "ID-0000"
+    assert digest["rows"][-1]["id"] == "ID-5999"
+    assert digest["stats"]["state"]["counts"] == {
+        "ממתין": 2000, "סגור": 2000, "פתוח": 2000,
+    }
+    assert len(json.dumps(facts, ensure_ascii=False).encode("utf-8")) < 100_000
+
+
+def test_specialists_share_duplicate_workflows_and_cap_total_breadth():
+    shared = {"id": "w1", "workflow_key": "shared", "_agent_key": "a"}
+    states = [
+        {
+            "agent": {"content_key": "a"},
+            "workflows": [shared, {"id": "w2", "workflow_key": "two"}],
+        },
+        {
+            "agent": {"content_key": "b"},
+            "workflows": [
+                dict(shared),
+                {"id": "w3", "workflow_key": "three"},
+                {"id": "w4", "workflow_key": "four"},
+            ],
+        },
+    ]
+
+    workflows = specialists._bounded_workflows(states)
+
+    assert [item["id"] for item in workflows] == ["w1", "w2", "w3"]
+    assert workflows[0]["_agent_keys"] == ["a", "b"]
+    assert [item["id"] for item in states[1]["workflows"]] == ["w1", "w3"]
+
+
+def test_delete_conversation_route_uses_the_callers_session():
+    captured = {}
+
+    class Repository:
+        @staticmethod
+        def delete_conversation(conversation_id, session_id):
+            captured.update(conversation_id=conversation_id, session_id=session_id)
+            return {"deleted": conversation_id, "title": "בדיקה"}
+
+    class Context:
+        repository = Repository()
+
+        @staticmethod
+        def user_session():
+            return "dependency-session"
+
+        @staticmethod
+        def set_session_cookie(_response, _session_id):
+            return None
+
+    router = conversation_routes.build(Context())
+    endpoint = next(
+        route.endpoint for route in router.routes
+        if route.path == "/conversations/{conversation_id}"
+        and "DELETE" in route.methods
+    )
+
+    result = endpoint("conversation-1", "owned-session")
+
+    assert result["deleted"] == "conversation-1"
+    assert captured == {
+        "conversation_id": "conversation-1", "session_id": "owned-session",
+    }
 
 
 def test_a_section_falling_back_is_marked_degraded_rather_than_looking_thin():

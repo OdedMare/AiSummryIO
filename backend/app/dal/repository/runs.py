@@ -13,6 +13,7 @@ class RunRepository:
         self, conversation_id: str, question: str, kind: str, skill_keys=None
     ) -> dict:
         row_id = new_id()
+        idle_minutes = self._store.get().conversation_idle_minutes
         with connect(self._store) as connection:
             connection.execute(
                 _INSERT_RUN,
@@ -22,8 +23,11 @@ class RunRepository:
                 ),
             )
             connection.execute(
-                "UPDATE conversations SET updated_at=NOW() WHERE id=%s",
-                (conversation_id,),
+                """UPDATE conversations
+                   SET updated_at=NOW(),
+                       expires_at=NOW() + (%s * INTERVAL '1 minute')
+                   WHERE id=%s""",
+                (idle_minutes, conversation_id),
             )
             connection.commit()
         return self.get_run(row_id)

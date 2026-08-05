@@ -68,10 +68,11 @@ flapi:
 agent:
   maxParallelWorkflows: 4
   # The backend clamps this to 0..5.
-  maxRounds: 2
+  maxRounds: 1
   packageTimeoutSeconds: 120
 
 retention:
+  conversationIdleMinutes: 60
   conversationDays: 30
   logDays: 90
 

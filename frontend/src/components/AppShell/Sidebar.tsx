@@ -8,7 +8,10 @@ export default function Sidebar({ app }: { app: AppShellController }) {
   return (
     <aside className={`sidebar ${app.sidebarOpen ? "open" : ""}`}>
       <Brand onClose={() => app.setSidebarOpen(false)} />
-      <button className="new-summary" type="button" onClick={app.startNew}>
+      <button className="new-summary" type="button"
+        onClick={app.conversation
+          ? () => void app.endConversation()
+          : app.startNew}>
         <Plus size={18} /> סיכום חדש
       </button>
       <div className="history-title"><History size={15} /> היסטוריה</div>

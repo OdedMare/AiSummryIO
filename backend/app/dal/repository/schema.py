@@ -157,4 +157,8 @@ CREATE INDEX IF NOT EXISTS conversations_session_idx
     ON conversations(session_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS runs_conversation_idx
     ON summary_runs(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS evidence_run_idx
+    ON summary_evidence(run_id, created_at);
+CREATE INDEX IF NOT EXISTS feedback_run_idx
+    ON summary_feedback(run_id, created_at);
 """

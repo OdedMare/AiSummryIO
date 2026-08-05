@@ -22,6 +22,7 @@ class RuntimeSettings:
     max_parallel_workflows: int
     agent_max_rounds: int
     package_timeout_seconds: int
+    conversation_idle_minutes: int
     conversation_retention_days: int
     log_retention_days: int
     cookie_secret: str
