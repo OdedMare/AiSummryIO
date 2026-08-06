@@ -11,8 +11,8 @@ Robustness policy, matching LocatoAI:
 - merges the system prompt into the user turn for servers/models that
   reject a system role (some Gemma deployments)
 - passes `repetition_penalty` through `extra_body` for the local servers that
-  implement it, and omits it entirely at its neutral 1.0 so OpenAI itself
-  never sees a key it would reject
+  implement it, and at its default 0 omits the key entirely, so OpenAI itself
+  never sees a field it would reject
 - strips markdown fences from the reply
 - retries once with the parse error appended before giving up
 - bounds each HTTP completion by `llm_timeout_seconds`, so a hung local

@@ -148,6 +148,9 @@ export function useAppShell() {
     setGeoMode,
     geometry,
     setGeometry,
+    addGeometry,
+    undoGeometry,
+    clearGeometry,
     conversations,
     skills,
     conversation,
@@ -179,7 +182,7 @@ async function submitRequest(
   rootId: string,
   message: string,
   skillKeys: string[],
-  geometry: GeoJSONPolygon | null,
+  geometry: GeoJSONPolygon[],
 ) {
   if (conversation) {
     if (!message.trim()) throw new Error("יש לכתוב שאלת המשך");
@@ -190,7 +193,7 @@ async function submitRequest(
     rootId.trim(),
     message.trim(),
     skillKeys,
-    geometry ? toMultiPolygon(geometry) : null,
+    toMultiPolygonParts(geometry),
   );
 }
 

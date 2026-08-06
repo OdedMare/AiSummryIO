@@ -8,10 +8,9 @@ import type { AppShellController } from "./useAppShell";
  * bottom row, which squeezed and clipped the conversation above it.
  */
 export default function MapPanel({ app }: { app: AppShellController }) {
-  const clear = () => { app.setGeometry(null); app.setGeoMode("none"); };
-  const drawn = (geometry: GeoJSONPolygon) => {
-    app.setGeometry(geometry); app.setGeoMode("none");
-  };
+  // The mode deliberately survives a finished shape: several parts make one
+  // MultiPolygon, and dropping back to "none" after each would force the user
+  // to reselect the tool between the areas of a single scope.
   return (
     <aside className="map-panel" aria-label="אזור על המפה">
       <div className="map-panel-head">
@@ -19,8 +18,9 @@ export default function MapPanel({ app }: { app: AppShellController }) {
         <span>לא חובה</span>
       </div>
       <MapWorkspace mode={app.geoMode} geometry={app.geometry}
-        onModeChange={app.setGeoMode} onGeometryDrawn={drawn}
-        onClear={clear} disabled={app.submitting} />
+        onModeChange={app.setGeoMode} onGeometryDrawn={app.addGeometry}
+        onUndo={app.undoGeometry} onClear={app.clearGeometry}
+        disabled={app.submitting} />
     </aside>
   );
 }
