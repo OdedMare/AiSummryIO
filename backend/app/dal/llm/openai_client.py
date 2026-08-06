@@ -10,6 +10,9 @@ Robustness policy, matching LocatoAI:
 - asks for JSON mode when the server supports it, falls back if not
 - merges the system prompt into the user turn for servers/models that
   reject a system role (some Gemma deployments)
+- passes `repetition_penalty` through `extra_body` for the local servers that
+  implement it, and omits it entirely at its neutral 1.0 so OpenAI itself
+  never sees a key it would reject
 - strips markdown fences from the reply
 - retries once with the parse error appended before giving up
 - bounds each HTTP completion by `llm_timeout_seconds`, so a hung local
@@ -31,6 +34,9 @@ from app.dal.llm.model_id_extractor import extract_model_ids
 # One initial attempt + one retry with the parse error appended.
 _MAX_JSON_ATTEMPTS = 2
 _DIET_MAX_COMPLETION_TOKENS = 1200
+# 0 means "send no repetition_penalty at all", keeping the request byte-for-byte
+# what it was for OpenAI and any other server without the extension.
+_NEUTRAL_PENALTY = 0.0
 # The SDK requires a non-empty key; local servers/gateways ignore it.
 _LOCAL_SERVER_KEY_PLACEHOLDER = "null"
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
@@ -67,6 +73,7 @@ class OpenAIJsonClient:
         for _attempt in range(_MAX_JSON_ATTEMPTS):
             content, current = self._complete(
                 client, settings.llm_model, messages, max_tokens, schema,
+                settings.llm_repetition_penalty,
             )
             for key in usage:
                 usage[key] += current.get(key, 0)
@@ -124,13 +131,15 @@ class OpenAIJsonClient:
         return self._cached_client
 
     @staticmethod
-    def _complete(client, model, messages, max_tokens, schema):
+    def _complete(client, model, messages, max_tokens, schema, penalty):
         # Degradation ladder for OpenAI-compatible servers:
         # schema → JSON mode → plain → plain with the system prompt merged
         # into the user turn (some Gemma deployments reject a system role).
         last_bad_request = None
         with _LLM_SLOTS:
-            for kwargs in OpenAIJsonClient._attempts(messages, max_tokens, schema):
+            for kwargs in OpenAIJsonClient._attempts(
+                messages, max_tokens, schema, penalty,
+            ):
                 try:
                     response = create_with_retry(client, model, kwargs)
                 except BadRequestError as exc:
@@ -142,7 +151,7 @@ class OpenAIJsonClient:
         raise AgentError("שגיאת מודל: " + str(last_bad_request))
 
     @staticmethod
-    def _attempts(messages, max_tokens, schema) -> list:
+    def _attempts(messages, max_tokens, schema, penalty=_NEUTRAL_PENALTY) -> list:
         attempts = []
         if schema is not None:
             attempts.append({
@@ -160,9 +169,19 @@ class OpenAIJsonClient:
             {"messages": messages},
             {"messages": merge_system_into_user(messages)},
         ])
-        if max_tokens is None:
+        extras = {}
+        if max_tokens is not None:
+            extras["max_tokens"] = max_tokens
+        # `repetition_penalty` is not an OpenAI field, so the SDK has no
+        # named argument for it and it travels in `extra_body`. Sent only
+        # when it is off neutral: OpenAI itself 400s on the unknown key, and
+        # a 400 here is indistinguishable from the ones the ladder exists to
+        # step around — every rung would fail and the real cause be lost.
+        if abs(penalty - _NEUTRAL_PENALTY) > 1e-9:
+            extras["extra_body"] = {"repetition_penalty": penalty}
+        if not extras:
             return attempts
-        return [dict(kwargs, max_tokens=max_tokens) for kwargs in attempts]
+        return [dict(kwargs, **extras) for kwargs in attempts]
 
     @staticmethod
     def _response_data(response):

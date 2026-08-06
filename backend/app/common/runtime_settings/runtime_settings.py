@@ -13,6 +13,7 @@ class RuntimeSettings:
     database_schema: str
     llm_model: str
     llm_diet_mode: bool
+    llm_repetition_penalty: float
     llm_timeout_seconds: int
     llm_base_url: Optional[str]
     openai_api_key: str

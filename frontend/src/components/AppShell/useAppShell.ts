@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import { api } from "@/services/api";
 import type { Conversation, SummaryRun, SummarySkill } from "@/types";
 import type { GeographyMode, GeoJSONPolygon } from "@/types/geo";
-import { toMultiPolygon } from "@/types/geo";
+import { toMultiPolygonParts } from "@/types/geo";
 import {
   detectIdentifier,
   identifierNotice,
@@ -22,7 +22,9 @@ export function useAppShell() {
   const [rootId, setRootId] = useState("");
   const [message, setMessage] = useState("");
   const [geoMode, setGeoMode] = useState<GeographyMode>("none");
-  const [geometry, setGeometry] = useState<GeoJSONPolygon | null>(null);
+  // Every part the user drew. They are sent as one MultiPolygon, so a scope
+  // made of several disjoint areas is one request, not several.
+  const [geometry, setGeometry] = useState<GeoJSONPolygon[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [skills, setSkills] = useState<SummarySkill[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -53,9 +55,16 @@ export function useAppShell() {
     setError("");
     setNotice("");
     setGeoMode("none");
-    setGeometry(null);
+    setGeometry([]);
     setSidebarOpen(false);
   };
+
+  /** Appends a finished part; the draw tool stays armed for the next one. */
+  const addGeometry = (part: GeoJSONPolygon) => {
+    setGeometry((parts) => [...parts, part]);
+  };
+  const undoGeometry = () => setGeometry((parts) => parts.slice(0, -1));
+  const clearGeometry = () => { setGeometry([]); setGeoMode("none"); };
 
   const endConversation = async () => {
     if (!conversation || submitting || isActive(run)) return;

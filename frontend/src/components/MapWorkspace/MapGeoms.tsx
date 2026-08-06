@@ -7,7 +7,8 @@ import type { BBox, GeographyMode, GeoJSONPolygon } from "@/types/geo";
 
 interface MapGeomsProps {
   mode: GeographyMode;
-  value: GeoJSONPolygon | null;
+  /** Every part drawn so far; they travel as one MultiPolygon. */
+  value: GeoJSONPolygon[];
   onChange: (geometry: GeoJSONPolygon, bbox: BBox) => void;
 }
 
@@ -55,8 +56,15 @@ export default function MapGeoms({ mode, value, onChange }: MapGeomsProps) {
     if (feature.geometry.type !== "Polygon") return;
 
     const geometry = feature.geometry as GeoJSONPolygon;
+    // The finished shape is dropped from the draw group and re-rendered below
+    // as part of `value`. Leaving it here would paint it twice, and the group
+    // is cleared per draw session rather than per accumulated part.
     featureGroupRef.current?.clearLayers();
     onChange(geometry, bboxForPolygon(geometry));
+
+    // leaflet-draw disarms itself once a shape closes. Re-arming keeps the
+    // tool live so the next part is drawn without reselecting the tool.
+    activeDrawRef.current?.enable();
   };
 
   const drawEnabled = mode === "polygon" || mode === "rectangle";
@@ -88,13 +96,15 @@ export default function MapGeoms({ mode, value, onChange }: MapGeomsProps) {
           />
         )}
       </FeatureGroup>
-      {value && (
+      {value.map((part, index) => (
         <GeoJSON
-          key={JSON.stringify(bboxForPolygon(value))}
-          data={value}
+          // Keyed by index as well as extent: two parts can share a bbox, and
+          // a stale key would leave a removed part painted on the map.
+          key={`${index}-${JSON.stringify(bboxForPolygon(part))}`}
+          data={part}
           style={SHAPE}
         />
-      )}
+      ))}
     </>
   );
 }

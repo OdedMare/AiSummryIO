@@ -40,8 +40,36 @@ export function toMultiPolygon(polygon: GeoJSONPolygon): GeoJSONMultiPolygon {
   return { type: "MultiPolygon", coordinates: [polygon.coordinates] };
 }
 
+/**
+ * Combines every drawn part into the one MultiPolygon the backend expects.
+ * Each part becomes its own member polygon, so the WKT `multipolygon_to_wkt`
+ * emits keeps the parts separate rather than merging them into one ring.
+ *
+ * Returns null for an empty selection: the API contract sends `boundaries`
+ * as null when no area was drawn, and an empty `coordinates` array would be
+ * rejected by `GeoBoundaries` ("נדרש לפחות פוליגון אחד").
+ */
+export function toMultiPolygonParts(
+  parts: GeoJSONPolygon[],
+): GeoJSONMultiPolygon | null {
+  if (!parts.length) return null;
+  return {
+    type: "MultiPolygon",
+    coordinates: parts.map((part) => part.coordinates),
+  };
+}
+
 export function bboxForPolygon(geometry: GeoJSONPolygon): BBox {
-  const points = geometry.coordinates.flat();
+  return bboxForPoints(geometry.coordinates.flat());
+}
+
+/** Bounding box covering every part, for the status readout. */
+export function bboxForParts(parts: GeoJSONPolygon[]): BBox | null {
+  const points = parts.flatMap((part) => part.coordinates.flat());
+  return points.length ? bboxForPoints(points) : null;
+}
+
+function bboxForPoints(points: [number, number][]): BBox {
   const lngs = points.map(([lng]) => lng);
   const lats = points.map(([, lat]) => lat);
   return [

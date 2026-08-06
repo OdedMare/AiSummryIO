@@ -39,6 +39,7 @@ class RuntimeSettingsStore:
             ),
             llm_model=env.llm_model,
             llm_diet_mode=env.llm_diet_mode,
+            llm_repetition_penalty=_clamp_penalty(env.llm_repetition_penalty),
             llm_timeout_seconds=env.llm_timeout_seconds,
             llm_base_url=env.llm_base_url,
             openai_api_key=env.openai_api_key,
@@ -106,6 +107,10 @@ class RuntimeSettingsStore:
                     value = normalize_llm_base_url(value)
                 elif key == "agent_max_rounds":
                     value = min(5, max(0, int(value)))
+                elif key == "llm_repetition_penalty":
+                    # Float, and 0 is meaningful ("do not send it"), so it
+                    # cannot join the max(1, int(...)) group below.
+                    value = _clamp_penalty(value)
                 elif key in (
                     "llm_timeout_seconds", "max_parallel_workflows",
                     "package_timeout_seconds",
@@ -130,6 +135,15 @@ def _safe_database_url(value: str) -> str:
         return normalize_database_url(value)
     except (TypeError, ValueError):
         return value
+
+
+def _clamp_penalty(value) -> float:
+    """0 means "do not send the parameter at all" — the off switch, and the
+    default, since OpenAI rejects the key outright. 2.0 is the top of the
+    range the servers implementing it accept. Values between 0 and 1 reward
+    repetition rather than penalizing it; unusual, but a legitimate ask, so
+    they pass through rather than being floored to neutral."""
+    return min(2.0, max(0.0, float(value)))
 
 
 def _safe_schema(value: str) -> str:

@@ -10,8 +10,9 @@ import type { BBox, GeographyMode, GeoJSONPolygon } from "@/types/geo";
 
 export interface LeafletMapProps {
   mode: GeographyMode;
-  drawnGeometry: GeoJSONPolygon | null;
-  /** Called when the user finishes drawing a polygon or rectangle. */
+  /** Every part drawn so far; they travel as one MultiPolygon. */
+  drawnGeometry: GeoJSONPolygon[];
+  /** Called when the user finishes each polygon or rectangle. */
   onGeometryDrawn: (geometry: GeoJSONPolygon, bbox: BBox) => void;
   disabled?: boolean;
 }

@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     llm_diet_mode: bool = False
     """Use compact prompts, schema samples, and bounded completion output."""
 
+    llm_repetition_penalty: float = 0.0
+    """Penalty applied to already-emitted tokens, discouraging loops.
+
+    NOT an OpenAI parameter — it is a vLLM/TGI/Ollama extension, so it is sent
+    through `extra_body` and OpenAI itself rejects it. `0` means "do not send
+    it at all", which is the default so the standard endpoint keeps working;
+    `1.0` is neutral on servers that do support it, above that penalizes."""
+
     llm_timeout_seconds: int = 120
     """Maximum wall time for ONE HTTP completion to the model.
 
@@ -52,6 +60,16 @@ class Settings(BaseSettings):
     parse retry above it each get their own, so a pathological call can take
     a multiple of this. It exists to stop a hung model server from holding a
     worker for the SDK's 600-second default."""
+
+    llm_repetition_penalty: float = 0.0
+    """Penalty applied to already-emitted tokens, discouraging loops.
+
+    NOT a standard OpenAI field — it is a vLLM/Ollama/TGI extension, so it is
+    sent inside `extra_body`. `0` means "do not send it at all" and is the
+    default, because OpenAI itself rejects the unknown key; `1.0` is neutral
+    on the servers that do implement it, and above that penalizes. Past ~1.2
+    it starts to fight JSON mode, since the syntax a JSON object must repeat
+    (braces, quotes, commas) is exactly what the penalty suppresses."""
 
     llm_base_url: Optional[str] = "http://localhost:11434/v1"
     """OpenAI-compatible endpoint. Default: local Ollama. From inside the
