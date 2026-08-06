@@ -35,11 +35,6 @@ export interface MapViewState {
   bbox: BBox;
 }
 
-/** Wraps a single drawn Polygon as the MultiPolygon the backend expects. */
-export function toMultiPolygon(polygon: GeoJSONPolygon): GeoJSONMultiPolygon {
-  return { type: "MultiPolygon", coordinates: [polygon.coordinates] };
-}
-
 /**
  * Combines every drawn part into the one MultiPolygon the backend expects.
  * Each part becomes its own member polygon, so the WKT `multipolygon_to_wkt`
