@@ -8,9 +8,10 @@ Hebrew-first (`lang="he"`, `dir="rtl"`) workspace for complete summaries by
 identifier. The UI reuses LocatoAI's shell: dark history/navigation rail,
 bounded conversation, bottom composer, Settings, tool catalog, and Agent
 Studio. It also has a small optional map picker in the composer
-(`components/MapWorkspace/`), ported from LocatoAI: one drawn polygon or
-rectangle scopes the request. It is a picker, not LocatoAI's full map
-workspace — no result layers, no layer catalog, no plan pipeline.
+(`components/MapWorkspace/`), ported from LocatoAI: one or more drawn
+polygons/rectangles scope the request, travelling as a single GeoJSON
+`MultiPolygon`. It is a picker, not LocatoAI's full map workspace — no result
+layers, no layer catalog, no plan pipeline.
 
 ## Commands
 
@@ -123,6 +124,17 @@ ID/evidence, and reuse the conversation's stored boundaries.
   question still passes identifier detection, `/skill` parsing, and the busy
   guard. These offer the user their next question; they never ask the user
   anything, and the composer stays the way to ask something else.
+- **The map picker accumulates parts into one `MultiPolygon`.** `geometry` is
+  a `GeoJSONPolygon[]`, and each finished shape is appended rather than
+  replacing the last: a scope is often several disjoint areas, and redrawing
+  from scratch to add one is the wrong cost. The draw tool therefore stays
+  armed after a shape closes (leaflet-draw disarms itself, so `MapGeoms`
+  re-enables it) and the mode is not reset on `onGeometryDrawn`. Removing a
+  part is explicit — "ביטול אזור אחרון" drops the last one, "ניקוי הכל"
+  empties the selection — since a click on the map adds and never deletes.
+  `toMultiPolygonParts` returns `null` for an empty selection, because
+  `GeoBoundaries` rejects an empty `coordinates` ("נדרש לפחות פוליגון אחד")
+  while the API contract sends `boundaries: null` when nothing was drawn.
 - Conversation history is titled by the opening question; the raw identifier
   is secondary. Conversations created before titles fall back to the
   identifier.

@@ -1,5 +1,4 @@
 import MapWorkspace from "@/components/MapWorkspace";
-import type { GeoJSONPolygon } from "@/types/geo";
 import type { AppShellController } from "./useAppShell";
 
 /**

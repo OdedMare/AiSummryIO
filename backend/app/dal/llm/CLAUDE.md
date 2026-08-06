@@ -46,6 +46,13 @@ JSON, the bad reply and a correction instruction are appended to the messages
 and the whole ladder runs once more. Two failures raise
 `AgentError("המודל החזיר JSON לא תקין פעמיים: ...")`.
 
+`llm_repetition_penalty` rides in `extra_body`, not as a named SDK argument —
+`repetition_penalty` is a vLLM/Ollama/TGI extension, not an OpenAI field. It is
+attached to **every rung** of the ladder, and at its `0.0` default the key is
+omitted entirely. That default matters: OpenAI 400s on the unknown key, and a
+400 here is indistinguishable from the ones the ladder exists to step around,
+so every rung would fail and the real cause would be lost.
+
 `llm_diet_mode` caps completions at `_DIET_MAX_COMPLETION_TOKENS = 1200` and
 is on by default.
 
