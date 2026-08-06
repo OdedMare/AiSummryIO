@@ -45,14 +45,6 @@ class Settings(BaseSettings):
     llm_diet_mode: bool = False
     """Use compact prompts, schema samples, and bounded completion output."""
 
-    llm_repetition_penalty: float = 0.0
-    """Penalty applied to already-emitted tokens, discouraging loops.
-
-    NOT an OpenAI parameter — it is a vLLM/TGI/Ollama extension, so it is sent
-    through `extra_body` and OpenAI itself rejects it. `0` means "do not send
-    it at all", which is the default so the standard endpoint keeps working;
-    `1.0` is neutral on servers that do support it, above that penalizes."""
-
     llm_timeout_seconds: int = 120
     """Maximum wall time for ONE HTTP completion to the model.
 
