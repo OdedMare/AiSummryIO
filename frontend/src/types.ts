@@ -110,7 +110,6 @@ export interface ConversationTurn {
 export interface PackageVersion {
   id: string;
   package_key: string;
-  version: number;
   name: string;
   description: string;
   package_id: string;
@@ -152,7 +151,6 @@ export interface WorkflowStep {
 export interface WorkflowVersion {
   id: string;
   workflow_key: string;
-  version: number;
   name: string;
   description: string;
   role: "baseline" | "detail" | "both";
@@ -254,7 +252,6 @@ export interface WorkflowPlanChatTurn extends PlanChatTurn {
 export interface AgentContent {
   id: string;
   content_key: string;
-  version: number;
   kind: "skill" | "prompt";
   name: string;
   description: string;

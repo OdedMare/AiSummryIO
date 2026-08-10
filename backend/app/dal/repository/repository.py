@@ -53,17 +53,16 @@ class Repository(
             self.create_package(dict(EXAMPLE_PACKAGE))
         if self._workflow_key_exists(EXAMPLE_WORKFLOW_KEY):
             return
-        # The workflow's step pins a package version, so it can only be built
-        # against a tool that exists. If the FDE deleted the example tool but
-        # kept the workflow deleted too, there is nothing to point at and the
-        # example workflow is simply skipped.
-        versions = self._all(
-            "SELECT id FROM summary_packages WHERE package_key=%s"
-            " ORDER BY version DESC LIMIT 1",
+        # The workflow's step pins a tool row, so it can only be built against
+        # a tool that exists. If the FDE deleted the example tool but kept the
+        # workflow deleted too, there is nothing to point at and the example
+        # workflow is simply skipped.
+        tools = self._all(
+            "SELECT id FROM summary_packages WHERE package_key=%s",
             (EXAMPLE_PACKAGE_KEY,),
         )
-        if versions:
-            self.create_workflow(example_workflow(versions[0]["id"]))
+        if tools:
+            self.create_workflow(example_workflow(tools[0]["id"]))
 
     def _package_key_exists(self, package_key: str) -> bool:
         return bool(self._all(

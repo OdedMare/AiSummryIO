@@ -19,6 +19,12 @@ def build(context) -> APIRouter:
     def create_workflow(payload: WorkflowCreate):
         return context.repository.create_workflow(payload.model_dump())
 
+    @router.put("/{workflow_id}")
+    def update_workflow(workflow_id: str, payload: WorkflowCreate):
+        return context.repository.update_workflow(
+            workflow_id, payload.model_dump()
+        )
+
     @router.post("/plan-chat")
     def plan_workflow_chat(payload: PlanChatCreate):
         return context.service.plan_workflow_chat(

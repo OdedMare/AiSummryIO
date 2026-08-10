@@ -4,7 +4,6 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS summary_packages (
     id TEXT PRIMARY KEY,
     package_key TEXT NOT NULL,
-    version INTEGER NOT NULL,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     package_id TEXT NOT NULL,
@@ -21,8 +20,7 @@ CREATE TABLE IF NOT EXISTS summary_packages (
     agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     agent_instructions TEXT NOT NULL DEFAULT '',
     output_schema JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(package_key, version)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE summary_packages
@@ -39,7 +37,6 @@ ALTER TABLE summary_packages
 CREATE TABLE IF NOT EXISTS summary_workflows (
     id TEXT PRIMARY KEY,
     workflow_key TEXT NOT NULL,
-    version INTEGER NOT NULL,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL CHECK (role IN ('baseline','detail','both')),
@@ -48,8 +45,7 @@ CREATE TABLE IF NOT EXISTS summary_workflows (
     output_schema JSONB NOT NULL DEFAULT '{}',
     examples JSONB NOT NULL DEFAULT '[]',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMPTZ,
-    UNIQUE(workflow_key, version)
+    published_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
@@ -73,7 +69,6 @@ ALTER TABLE workflow_steps
 CREATE TABLE IF NOT EXISTS agent_content (
     id TEXT PRIMARY KEY,
     content_key TEXT NOT NULL,
-    version INTEGER NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('skill','prompt')),
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
@@ -81,8 +76,7 @@ CREATE TABLE IF NOT EXISTS agent_content (
     user_selectable BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMPTZ,
-    UNIQUE(content_key, version)
+    published_at TIMESTAMPTZ
 );
 
 ALTER TABLE agent_content
@@ -146,6 +140,99 @@ CREATE TABLE IF NOT EXISTS summary_feedback (
     comment TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ---------------------------------------------------------------------------
+-- Collapse the former append-only version history to one row per key.
+--
+-- Tools, workflows, and Skills used to be immutable versions: an FDE edit
+-- inserted a new row and the catalog showed `DISTINCT ON (key) ... version
+-- DESC`. Editing a published workflow therefore produced a fresh draft that
+-- hid the published row still serving traffic, which read as "publishing did
+-- not work". They are now edited in place, so a key has exactly one row.
+--
+-- Each block is guarded on the column it removes, so it runs once on an old
+-- database and is skipped from then on. `summary_evidence.workflow_id` has no
+-- foreign key and is deliberately left pointing at whatever ran — evidence is
+-- the audit trail of runs that really happened.
+-- ---------------------------------------------------------------------------
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'summary_packages' AND column_name = 'version'
+    ) THEN
+        -- Steps pin a tool row, so they are moved to the surviving one before
+        -- the others go: `package_version_id` has no ON DELETE clause and
+        -- would otherwise block the delete as a constraint violation.
+        UPDATE workflow_steps AS s
+        SET package_version_id = keep.id
+        FROM summary_packages AS old
+        JOIN LATERAL (
+            SELECT p.id FROM summary_packages AS p
+            WHERE p.package_key = old.package_key
+            ORDER BY p.version DESC LIMIT 1
+        ) AS keep ON TRUE
+        WHERE s.package_version_id = old.id
+          AND s.package_version_id <> keep.id;
+
+        DELETE FROM summary_packages AS p
+        WHERE p.id <> (
+            SELECT q.id FROM summary_packages AS q
+            WHERE q.package_key = p.package_key
+            ORDER BY q.version DESC LIMIT 1
+        );
+
+        ALTER TABLE summary_packages DROP COLUMN version;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'summary_workflows' AND column_name = 'version'
+    ) THEN
+        -- The published row wins over a newer draft: it is the one that was
+        -- actually answering requests, so keeping the draft would silently
+        -- retire a live route. Steps cascade with the rows that go.
+        DELETE FROM summary_workflows AS w
+        WHERE w.id <> (
+            SELECT x.id FROM summary_workflows AS x
+            WHERE x.workflow_key = w.workflow_key
+            ORDER BY (x.status = 'published') DESC, x.version DESC LIMIT 1
+        );
+
+        ALTER TABLE summary_workflows DROP COLUMN version;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agent_content' AND column_name = 'version'
+    ) THEN
+        DELETE FROM agent_content AS c
+        WHERE c.id <> (
+            SELECT x.id FROM agent_content AS x
+            WHERE x.content_key = c.content_key
+            ORDER BY (x.status = 'published') DESC, x.version DESC LIMIT 1
+        );
+
+        ALTER TABLE agent_content DROP COLUMN version;
+    END IF;
+END $$;
+
+-- The key is the identity now. Declared as indexes rather than table
+-- constraints so one statement serves both a fresh database and a migrated
+-- one; `UNIQUE(key, version)` went with the dropped column.
+CREATE UNIQUE INDEX IF NOT EXISTS summary_packages_key_idx
+    ON summary_packages(package_key);
+CREATE UNIQUE INDEX IF NOT EXISTS summary_workflows_key_idx
+    ON summary_workflows(workflow_key);
+CREATE UNIQUE INDEX IF NOT EXISTS agent_content_key_idx
+    ON agent_content(content_key);
 
 CREATE INDEX IF NOT EXISTS conversations_session_idx
     ON conversations(session_id, updated_at DESC);

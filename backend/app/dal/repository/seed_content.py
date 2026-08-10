@@ -132,8 +132,8 @@ workflow as broken when one package failed.
 
 ## Output
 Name the single root cause, show the evidence that points to it, and
-propose a new DRAFT version with the specific change. Never modify the
-published version; it stays immutable.""",
+propose the specific change to make. Say plainly when the change would
+touch a published workflow, so the FDE decides before it goes live.""",
     },
     {
         "content_key": "summary-executive",

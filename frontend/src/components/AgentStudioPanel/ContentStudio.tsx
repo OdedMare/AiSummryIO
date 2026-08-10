@@ -26,23 +26,33 @@ export default function ContentStudio({
   onRefresh: () => Promise<void>;
 }) {
   const [form, setForm] = useState(emptyContent);
+  /* Which item this form is editing, or "" for a new one. A Skill or prompt
+     is one row now rather than a stack of versions, so saving an edit updates
+     that row and a published Skill stays published through it. */
+  const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const edit = (item: AgentContent) => setForm({
-    content_key: item.content_key, kind: item.kind, name: item.name,
-    description: item.description, content: item.content,
-    user_selectable: item.user_selectable,
-  });
+  const edit = (item: AgentContent) => {
+    setEditingId(item.id); setError("");
+    setForm({
+      content_key: item.content_key, kind: item.kind, name: item.name,
+      description: item.description, content: item.content,
+      user_selectable: item.user_selectable,
+    });
+  };
+  const reset = () => { setForm(emptyContent); setEditingId(""); };
   const update = (patch: Partial<typeof emptyContent>) =>
     setForm((current) => ({ ...current, ...patch }));
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      await api.createContent({
+      const payload = {
         ...form, content_key: form.content_key || undefined,
         user_selectable: form.kind === "skill" && form.user_selectable,
-      });
-      setForm(emptyContent); await onRefresh();
+      };
+      if (editingId) await api.updateContent(editingId, payload);
+      else { await api.createContent(payload); reset(); }
+      await onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "השמירה נכשלה");
     } finally {
@@ -53,7 +63,7 @@ export default function ContentStudio({
     <div className="studio-split">
       <ContentList items={items} onEdit={edit} onRefresh={onRefresh} />
       <ContentForm form={form} update={update} save={save} error={error}
-        saving={saving} reset={() => setForm(emptyContent)} />
+        saving={saving} editing={!!editingId} reset={reset} />
     </div>
   );
 }
@@ -87,11 +97,12 @@ function ContentCard({
       <button type="button" onClick={() => onEdit(item)}>
         <span><Icon size={17} /></span><span><strong>{item.name}</strong>
           <small>{item.kind === "skill" ? "Skill" : "הנחיית מערכת"}{" · "}
-            v{item.version}{item.user_selectable ? " · מוצג למשתמשים" : ""}
+            {item.status === "published" ? "פורסם" : "טיוטה"}
+            {item.user_selectable ? " · מוצג למשתמשים" : ""}
           </small>
         </span>
       </button>
-      {item.status === "draft" && <button type="button"
+      {item.status !== "published" && <button type="button"
         onClick={() => void api.publishContent(item.id).then(onRefresh)}>
         <Send size={15} /> פרסום
       </button>}
@@ -100,19 +111,20 @@ function ContentCard({
 }
 
 function ContentForm({
-  form, update, save, error, saving, reset,
+  form, update, save, error, saving, editing, reset,
 }: {
   form: typeof emptyContent;
   update: (patch: Partial<typeof emptyContent>) => void;
   save: (event: FormEvent) => Promise<void>;
   error: string;
   saving: boolean;
+  editing: boolean;
   reset: () => void;
 }) {
   return (
     <form className="studio-form" onSubmit={save}>
       <header><span><BookOpen size={19} /></span><div>
-        <h3>{form.content_key ? "גרסה חדשה" : "Skill או הנחיה חדשים"}</h3>
+        <h3>{editing ? "עריכת Skill או הנחיה" : "Skill או הנחיה חדשים"}</h3>
         <p>Skill שמוצג למשתמש באמת משנה את תוצאת הסיכום.</p>
       </div></header>
       <div className="form-grid two">
@@ -135,11 +147,11 @@ function ContentForm({
         <SkillTester name={form.name} content={form.content} />}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-actions">
-        {form.content_key && <button type="button" className="secondary-button"
+        {editing && <button type="button" className="secondary-button"
           onClick={reset}>ביטול</button>}
         <button className="primary-button" type="submit"
           disabled={saving || !form.name || !form.content}>
-          <Save size={17} /> שמירת טיוטה
+          <Save size={17} /> {editing ? "שמירת שינויים" : "שמירת טיוטה"}
         </button>
       </div>
     </form>

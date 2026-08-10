@@ -2332,3 +2332,93 @@ def test_the_model_being_unavailable_still_offers_the_catalog_to_choose_from():
 
     assert selected["action"] == "clarify"
     assert len(selected["options"]) == 2
+
+
+class _EditableWorkflows(Repository):
+    """Repository with the database removed, to exercise the edit rules.
+
+    `update_workflow` is the operation that replaced append-only versioning,
+    so what matters here is which SQL it decides to send — not that psycopg
+    can send it.
+    """
+
+    def __init__(self, status, steps):
+        self._store = None
+        self._row = {
+            "id": "wf", "workflow_key": "ownership", "name": "Ownership",
+            "status": status, "steps": steps, "examples": [],
+        }
+        self.statements = []
+
+    def get_workflow(self, workflow_id):
+        return dict(self._row)
+
+    def get_package(self, package_version_id):
+        return {"name": "tool", "example_input": [], "example_output": []}
+
+
+class _FakeConnection:
+    def __init__(self, sink):
+        self._sink = sink
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def execute(self, query, params=()):
+        self._sink.append(" ".join(str(query).split()))
+
+    def commit(self):
+        pass
+
+
+def _capture_sql(monkeypatch, repository):
+    monkeypatch.setattr(
+        "app.dal.repository.workflows.connect",
+        lambda _store: _FakeConnection(repository.statements),
+    )
+
+
+_STEP = {
+    "key": "step1", "name": "S1", "package_version_id": "tool",
+    "depends_on": [], "input_source": "workflow.id",
+}
+
+
+def test_editing_a_published_workflow_keeps_it_published(monkeypatch):
+    """The bug this replaced: an edit appended a draft version that hid the
+    published row still serving traffic, so a live workflow reported itself
+    as unpublished."""
+    repository = _EditableWorkflows("published", [_STEP])
+    _capture_sql(monkeypatch, repository)
+
+    repository.update_workflow(
+        "wf", {"name": "Ownership", "steps": [_STEP], "examples": [{"a": 1}]}
+    )
+
+    update = next(s for s in repository.statements if s.startswith("UPDATE"))
+    assert "status" not in update, "an edit must not change publication state"
+
+
+def test_editing_a_published_workflow_cannot_break_it(monkeypatch):
+    """A published workflow is live, so an edit clears the same bar publishing
+    does rather than being demoted back to a draft."""
+    repository = _EditableWorkflows("published", [_STEP])
+    _capture_sql(monkeypatch, repository)
+
+    with pytest.raises(ValueError, match="ללא שלבים"):
+        repository.update_workflow("wf", {"name": "Ownership", "steps": []})
+
+    assert not repository.statements, "nothing may be written when refused"
+
+
+def test_editing_a_draft_workflow_skips_publish_validation(monkeypatch):
+    """A draft is not answering requests, so it may be saved half-built."""
+    repository = _EditableWorkflows("draft", [])
+    _capture_sql(monkeypatch, repository)
+
+    repository.update_workflow("wf", {"name": "Ownership", "steps": []})
+
+    assert any(s.startswith("UPDATE") for s in repository.statements)

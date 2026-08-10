@@ -102,6 +102,16 @@ ID/evidence, and reuse the conversation's stored boundaries.
   ordinary answer whose `suggested_questions` become the chips.
 - FDE language is concrete: “טול”, “חבילת FLAPI”, “קלט”, “פלט”, “שלב”,
   “טיוטה”, “פורסם”.
+- **Studio editors edit one row, they do not append versions.** Each of
+  `WorkflowEditor`, `PackageCatalog`, and `ContentStudio` holds an `editingId`:
+  set, the form saves through `api.update*`; empty, through `api.create*`.
+  Deriving "am I editing?" from the presence of `*_key` in the form is not
+  enough — a key survives a delete and a load-from-plan — so the row's id is
+  what the editors track. Saving an edit keeps the item's publication state,
+  which is why a published workflow no longer flips back to "טיוטה" the moment
+  it is touched; the backend refuses an edit that would break a published
+  route rather than demoting it. Cards therefore show a status word rather
+  than `v{n}`, and the publish button appears for anything not yet published.
 - AI workflow proposals are labeled as suggestions and loaded only as drafts
   for FDE review; missing tools show the required input and output contract.
 - Fetch 1 ID requires a visibly labeled safe test identifier, shows a bounded

@@ -585,7 +585,7 @@ function stepNodeData(
   }));
   return {
     name: step.name || step.key,
-    packageName: item ? `${item.name} · v${item.version}` : "לא נבחר טול",
+    packageName: item ? item.name : "לא נבחר טול",
     inputName: item?.input_cube_parameter || "input",
     packageChosen: Boolean(item),
     outputFields: fields,

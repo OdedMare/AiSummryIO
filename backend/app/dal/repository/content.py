@@ -1,4 +1,9 @@
-"""Versioned Skills and prompt persistence."""
+"""Skills and prompt persistence.
+
+One row per `content_key`: an FDE edit updates the Skill or prompt in place
+rather than appending a version, so a published Skill stays published across
+an edit instead of being hidden behind a newer draft.
+"""
 
 from typing import List
 
@@ -8,11 +13,7 @@ from app.dal.repository.base import new_id, slug
 
 class ContentRepository:
     def list_agent_content(self) -> List[dict]:
-        return self._all("""
-            SELECT DISTINCT ON (content_key) *
-            FROM agent_content
-            ORDER BY content_key, version DESC
-        """)
+        return self._all("SELECT * FROM agent_content ORDER BY name")
 
     def list_summary_skills(self) -> List[dict]:
         return self._all("""
@@ -35,37 +36,54 @@ class ContentRepository:
         by_key = {row["content_key"]: row for row in rows}
         return [by_key[key] for key in keys if key in by_key]
 
+    def get_agent_content(self, content_id: str) -> dict:
+        return self._one(
+            "SELECT * FROM agent_content WHERE id=%s", (content_id,)
+        )
+
     def create_agent_content(self, data: dict) -> dict:
         content_key = data.get("content_key") or slug(data["name"])
-        version = self._next_version(
-            "agent_content", "content_key", content_key
-        )
+        if self._key_taken("agent_content", "content_key", content_key):
+            raise ValueError(
+                "כבר קיים פריט במפתח %s. יש לערוך אותו או לבחור שם אחר."
+                % content_key
+            )
         row_id = new_id()
         with connect(self._store) as connection:
             connection.execute(
-                _INSERT_CONTENT,
-                _content_values(row_id, content_key, version, data),
+                _INSERT_CONTENT, _content_values(row_id, content_key, data)
             )
             connection.commit()
-        return self._one("SELECT * FROM agent_content WHERE id=%s", (row_id,))
+        return self.get_agent_content(row_id)
 
-    def publish_agent_content(self, version_id: str) -> dict:
-        item = self._one(
-            "SELECT * FROM agent_content WHERE id=%s", (version_id,)
-        )
+    def update_agent_content(self, content_id: str, data: dict) -> dict:
+        """Edit a Skill or prompt in place, keeping its publication state.
+
+        `content_key` is the identity `published_content` and the Skill
+        catalog look up by, so it is never rewritten from the payload. Unlike
+        a workflow there is nothing to validate: the content is free text and
+        a published Skill has no mapping that an edit could break.
+        """
+        # `_one` raises NotFoundError (404) when the id is unknown.
+        self.get_agent_content(content_id)
         with connect(self._store) as connection:
-            connection.execute(_ARCHIVE_CONTENT, (item["content_key"],))
-            connection.execute(_PUBLISH_CONTENT, (version_id,))
+            connection.execute(
+                _UPDATE_CONTENT, _content_update_values(content_id, data)
+            )
             connection.commit()
-        return self._one(
-            "SELECT * FROM agent_content WHERE id=%s", (version_id,)
-        )
+        return self.get_agent_content(content_id)
+
+    def publish_agent_content(self, content_id: str) -> dict:
+        self.get_agent_content(content_id)
+        with connect(self._store) as connection:
+            connection.execute(_PUBLISH_CONTENT, (content_id,))
+            connection.commit()
+        return self.get_agent_content(content_id)
 
     def published_content(self, key: str, fallback: str) -> str:
         rows = self._all("""
             SELECT content FROM agent_content
             WHERE content_key=%s AND status='published'
-            ORDER BY version DESC LIMIT 1
         """, (key,))
         return rows[0]["content"] if rows else fallback
 
@@ -82,24 +100,35 @@ class ContentRepository:
         ))
 
 
-def _content_values(row_id, content_key, version, data):
+def _content_fields(data):
+    """Every editable column, in the order both statements below use."""
     return (
-        row_id, content_key, version, data["kind"], data["name"],
-        data.get("description", ""), data["content"],
-        data.get("user_selectable", False),
+        data["kind"], data["name"], data.get("description", ""),
+        data["content"], data.get("user_selectable", False),
     )
+
+
+def _content_values(row_id, content_key, data):
+    return (row_id, content_key) + _content_fields(data)
+
+
+def _content_update_values(content_id, data):
+    return _content_fields(data) + (content_id,)
 
 
 _INSERT_CONTENT = """
     INSERT INTO agent_content (
-        id, content_key, version, kind, name, description,
+        id, content_key, kind, name, description,
         content, user_selectable, status
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft')
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,'draft')
 """
 
-_ARCHIVE_CONTENT = """
-    UPDATE agent_content SET status='archived'
-    WHERE content_key=%s AND status='published'
+# `status` is deliberately absent, as on workflows: an edit changes the
+# content, never whether it is published.
+_UPDATE_CONTENT = """
+    UPDATE agent_content SET
+        kind=%s, name=%s, description=%s, content=%s, user_selectable=%s
+    WHERE id=%s
 """
 
 _PUBLISH_CONTENT = """

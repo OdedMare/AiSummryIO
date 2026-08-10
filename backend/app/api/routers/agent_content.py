@@ -1,4 +1,4 @@
-"""Versioned Skills and prompts, plus unsaved-Skill preview."""
+"""Skills and prompts, plus unsaved-Skill preview."""
 
 from fastapi import APIRouter, Depends
 
@@ -18,6 +18,12 @@ def build(context) -> APIRouter:
     @router.post("")
     def create_agent_content(payload: AgentContentCreate):
         return context.repository.create_agent_content(payload.model_dump())
+
+    @router.put("/{content_id}")
+    def update_agent_content(content_id: str, payload: AgentContentCreate):
+        return context.repository.update_agent_content(
+            content_id, payload.model_dump()
+        )
 
     @router.post("/preview-skill")
     def preview_skill(payload: SkillPreview):

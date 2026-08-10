@@ -36,6 +36,11 @@ function useWorkflowEditor(
 ) {
   const [form, setForm] = useState(emptyWorkflow);
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
+  /* Which library row this form is editing, or "" for a new workflow. A
+     workflow is one row now rather than a stack of versions, so saving an
+     edit has to update that row — posting again would be rejected as a
+     duplicate key instead of quietly appending a draft. */
+  const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
   // Publishing and dry runs are triggered from the library column, so their
   // failures are reported there. Routing them to `error` put the reason in the
@@ -52,8 +57,9 @@ function useWorkflowEditor(
   const update = (key: keyof typeof emptyWorkflow, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
   const edit = (item: WorkflowVersion) => {
-    setForm(workflowForm(item));
+    setForm(workflowForm(item)); setEditingId(item.id);
     setSteps(item.steps.map((step) => ({ ...step }))); setDryResult("");
+    setError(""); setMessage("");
   };
   const addStep = () => setSteps((current) => {
     const step = newStep(current, packages);
@@ -102,12 +108,28 @@ function useWorkflowEditor(
   const disconnectStep = (targetKey: string) =>
     connectStep(targetKey, "workflow.id", "");
 
+  /**
+   * Save the form: update the workflow being edited, or create a new one.
+   *
+   * An edit keeps the workflow's publication state, so saving a published
+   * route leaves it published and live. The backend refuses an edit that
+   * would break a published workflow rather than demoting it to a draft —
+   * that silent demotion is what made a published workflow report itself as
+   * unpublished.
+   */
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
     try {
-      await api.createWorkflow(workflowPayload(form, steps));
-      setMessage("נשמרה טיוטת תהליך חדשה.");
-      setForm(emptyWorkflow); setSteps([]); await onRefresh();
+      const payload = workflowPayload(form, steps);
+      if (editingId) {
+        await api.updateWorkflow(editingId, payload);
+        setMessage("התהליך עודכן.");
+      } else {
+        await api.createWorkflow(payload);
+        setMessage("נשמרה טיוטת תהליך חדשה.");
+        reset();
+      }
+      await onRefresh();
     } catch (reason) {
       setError(errorMessage(reason, "השמירה נכשלה"));
     } finally {
@@ -123,23 +145,22 @@ function useWorkflowEditor(
     }
   };
   /**
-   * Delete a workflow and every version of it.
+   * Delete a workflow.
    *
-   * Confirmed first because it is not recoverable from the UI: versions are
-   * append-only, so there is no "restore" to undo it with. If the deleted
-   * workflow was the one open in the form, the form is reset too — it would
-   * otherwise keep editing a `workflow_key` that no longer exists and save a
-   * surprising new v1.
+   * Confirmed first because it is not recoverable from the UI: there is no
+   * older version left behind to restore from. If the deleted workflow was
+   * the one open in the form, the form is reset too — it would otherwise keep
+   * editing a row that no longer exists and fail on the next save.
    */
   const remove = async (item: WorkflowVersion) => {
     const confirmed = window.confirm(
-      `למחוק את התהליך „${item.name}” על כל הגרסאות שלו? הפעולה אינה הפיכה.`,
+      `למחוק את התהליך „${item.name}”? הפעולה אינה הפיכה.`,
     );
     if (!confirmed) return;
     setLibraryError("");
     try {
       await api.deleteWorkflow(item.id);
-      if (form.workflow_key === item.workflow_key) reset();
+      if (editingId === item.id) reset();
       await onRefresh();
     } catch (reason) {
       setLibraryError(errorMessage(reason, "המחיקה נכשלה"));
@@ -196,6 +217,8 @@ function useWorkflowEditor(
    * one call.
    */
   const createFromTool = (item: PackageVersion) => {
+    // A brand-new draft, not an edit of whatever was open in the form.
+    setEditingId("");
     setForm({
       ...emptyWorkflow,
       name: item.name,
@@ -222,11 +245,14 @@ function useWorkflowEditor(
     );
   };
 
-  const reset = () => { setForm(emptyWorkflow); setSteps([]); };
+  const reset = () => {
+    setForm(emptyWorkflow); setSteps([]); setEditingId("");
+    setSelectedKey("");
+  };
 
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
-    libraryError, selectedKey, setSelectedKey, update, edit, addStep,
+    editingId, libraryError, selectedKey, setSelectedKey, update, edit, addStep,
     updateStep, removeStep, removeStepByKey, connectStep, disconnectStep,
     save, publish, remove, dryRun, loadPlan, loadPlanSteps, createFromTool,
     reset,
@@ -260,18 +286,22 @@ function WorkflowLibrary({
 }
 
 function WorkflowCard({ item, editor }: { item: WorkflowVersion; editor: Editor }) {
+  const status = item.status === "published" ? "פורסם"
+    : item.status === "archived" ? "בארכיון" : "טיוטה";
   return (
     <article className="workflow-card">
       <button type="button" className="workflow-card-main"
         onClick={() => editor.edit(item)}>
         <span className={`status-dot ${item.status}`} />
         <span><strong>{item.name}</strong>
-          <small>{item.role} · v{item.version} · {item.steps.length} שלבים</small>
+          <small>
+            {item.role} · {status} · {item.steps.length} שלבים
+          </small>
         </span>
         <ChevronDown size={16} />
       </button>
       <div className="workflow-card-actions">
-        {item.status === "draft" &&
+        {item.status !== "published" &&
           <button type="button" onClick={() => void editor.publish(item.id)}>
             <Send size={15} /> פרסום
           </button>}
@@ -299,7 +329,7 @@ function WorkflowForm({
       <header className="studio-form-header">
         <span><Workflow size={19} /></span>
         <div>
-          <h3>{editor.form.workflow_key ? "גרסה חדשה לתהליך" : "תהליך חדש"}</h3>
+          <h3>{editor.editingId ? "עריכת תהליך" : "תהליך חדש"}</h3>
           <p>סדרת שלבים שמרכיבה סעיף אחד בסיכום.</p>
         </div>
         <WorkflowPlanChat editor={editor} />
@@ -526,7 +556,7 @@ function SingleToolWorkflow({
           <li key={item.id}>
             <button type="button" role="menuitem" onClick={() => choose(item)}>
               <strong>{item.name}</strong>
-              <small dir="ltr">{item.package_id} · v{item.version}</small>
+              <small dir="ltr">{item.package_id}</small>
             </button>
           </li>)}
       </ul>}
@@ -603,7 +633,7 @@ function StepCard({
           <option value="">בחירת טול</option>
           {packages.map((item) =>
             <option key={item.id} value={item.id}>
-              {item.name} · v{item.version}
+              {item.name}
             </option>)}
           </select>
           <small className="field-hint">
@@ -772,12 +802,13 @@ function AdvancedWorkflowFields({ editor }: { editor: Editor }) {
 function WorkflowActions({ editor }: { editor: Editor }) {
   return (
     <div className="form-actions">
-      {editor.form.workflow_key &&
+      {editor.editingId &&
         <button type="button" className="secondary-button"
           onClick={editor.reset}>ביטול עריכה</button>}
       <button className="primary-button" type="submit"
         disabled={editor.saving || !editor.steps.length}>
-        <Save size={17} /> {editor.saving ? "שומר…" : "שמירת טיוטה"}
+        <Save size={17} /> {editor.saving ? "שומר…"
+          : editor.editingId ? "שמירת שינויים" : "שמירת טיוטה"}
       </button>
     </div>
   );

@@ -154,13 +154,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updatePackage: (id: string, data: Record<string, unknown>) =>
+    request<PackageVersion>(`/api/packages/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   inspectPackage: (data: Record<string, unknown>) =>
     request<PackageInspection>("/api/packages/inspect", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  // Deletes every version of the tool, so the catalog row disappears rather
-  // than falling back to an older version.
   deletePackage: (id: string) =>
     request<{ deleted: string; name: string }>(`/api/packages/${id}`, {
       method: "DELETE",
@@ -182,6 +185,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updateWorkflow: (id: string, data: Record<string, unknown>) =>
+    request<WorkflowVersion>(`/api/workflows/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   planWorkflowChat: (
     messages: PlanChatMessage[], draft: WorkflowPlan | null, focusField = "",
   ) =>
@@ -193,8 +201,7 @@ export const api = {
     }),
   publishWorkflow: (id: string) =>
     request<WorkflowVersion>(`/api/workflows/${id}/publish`, { method: "POST" }),
-  // As with a tool, every version of the workflow goes; evidence from past
-  // runs is kept so an existing summary stays traceable.
+  // Evidence from past runs is kept so an existing summary stays traceable.
   deleteWorkflow: (id: string) =>
     request<{ deleted: string; name: string }>(`/api/workflows/${id}`, {
       method: "DELETE",
@@ -208,6 +215,11 @@ export const api = {
   createContent: (data: Record<string, unknown>) =>
     request<AgentContent>("/api/agent-content", {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateContent: (id: string, data: Record<string, unknown>) =>
+    request<AgentContent>(`/api/agent-content/${id}`, {
+      method: "PUT",
       body: JSON.stringify(data),
     }),
   publishContent: (id: string) =>

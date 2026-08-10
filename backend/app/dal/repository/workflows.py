@@ -1,4 +1,11 @@
-"""Versioned workflow and step persistence."""
+"""Workflow and step persistence.
+
+One row per `workflow_key`: an FDE edit updates the workflow in place rather
+than appending a version. That is what keeps a published workflow published
+across an edit — appending a draft used to hide the published row that was
+still serving traffic, so the studio reported the workflow as unpublished
+while it was in fact live.
+"""
 
 from typing import List
 
@@ -13,53 +20,76 @@ class WorkflowRepository:
     _validate_steps = staticmethod(validate_steps)
 
     def list_workflows(self) -> List[dict]:
-        rows = self._all("""
-            SELECT DISTINCT ON (workflow_key) *
-            FROM summary_workflows
-            ORDER BY workflow_key, version DESC
-        """)
+        rows = self._all("SELECT * FROM summary_workflows ORDER BY name")
         return self._with_steps(rows)
 
-    def get_workflow(self, version_id: str) -> dict:
+    def get_workflow(self, workflow_id: str) -> dict:
         row = self._one(
-            "SELECT * FROM summary_workflows WHERE id=%s", (version_id,)
+            "SELECT * FROM summary_workflows WHERE id=%s", (workflow_id,)
         )
-        row["steps"] = self._steps(version_id)
+        row["steps"] = self._steps(workflow_id)
         return row
 
     def create_workflow(self, data: dict) -> dict:
         workflow_key = data.get("workflow_key") or slug(data["name"])
-        version = self._next_version(
-            "summary_workflows", "workflow_key", workflow_key
-        )
+        if self._key_taken("summary_workflows", "workflow_key", workflow_key):
+            raise ValueError(
+                "כבר קיים תהליך במפתח %s. יש לערוך אותו או לבחור שם אחר."
+                % workflow_key
+            )
         row_id = new_id()
         validate_steps(data.get("steps", []))
         with connect(self._store) as connection:
             connection.execute(
-                _INSERT_WORKFLOW,
-                _workflow_values(row_id, workflow_key, version, data),
+                _INSERT_WORKFLOW, _workflow_values(row_id, workflow_key, data)
             )
             _insert_steps(connection, row_id, data.get("steps", []))
             connection.commit()
         return self.get_workflow(row_id)
 
-    def publish_workflow(self, version_id: str) -> dict:
-        workflow = self.get_workflow(version_id)
-        self._validate_for_publish(workflow)
+    def update_workflow(self, workflow_id: str, data: dict) -> dict:
+        """Edit a workflow in place, keeping its publication state.
+
+        A published workflow stays published through an edit, which is the
+        point of dropping versions — but it is also live, so the edit has to
+        clear the same bar publishing does. Saving steps that would fail
+        `_validate_for_publish` onto a published workflow is refused rather
+        than quietly demoted to a draft: silently unpublishing a route the
+        agent is currently selecting is the failure this change exists to
+        remove.
+
+        `workflow_key` is the identity the agent routes by and is never
+        rewritten from the payload. Steps are replaced wholesale — they are
+        positional and the canvas sends the whole array, so reconciling them
+        row by row would only invent a diff neither side asked for.
+        """
+        current = self.get_workflow(workflow_id)
+        steps = data.get("steps", [])
+        validate_steps(steps)
+        if current["status"] == "published":
+            self._validate_for_publish(dict(data, steps=steps))
         with connect(self._store) as connection:
             connection.execute(
-                _ARCHIVE_WORKFLOW, (workflow["workflow_key"],)
+                _UPDATE_WORKFLOW, _workflow_update_values(workflow_id, data)
             )
-            connection.execute(_PUBLISH_WORKFLOW, (version_id,))
+            connection.execute(
+                "DELETE FROM workflow_steps WHERE workflow_id=%s",
+                (workflow_id,),
+            )
+            _insert_steps(connection, workflow_id, steps)
             connection.commit()
-        return self.get_workflow(version_id)
+        return self.get_workflow(workflow_id)
 
-    def delete_workflow(self, version_id: str) -> dict:
-        """Remove a workflow and every version of it.
+    def publish_workflow(self, workflow_id: str) -> dict:
+        workflow = self.get_workflow(workflow_id)
+        self._validate_for_publish(workflow)
+        with connect(self._store) as connection:
+            connection.execute(_PUBLISH_WORKFLOW, (workflow_id,))
+            connection.commit()
+        return self.get_workflow(workflow_id)
 
-        The whole key goes, for the same reason as a tool: `list_workflows` is
-        `DISTINCT ON (workflow_key)`, so dropping one version would surface an
-        older one and read as a delete that did not happen.
+    def delete_workflow(self, workflow_id: str) -> dict:
+        """Remove a workflow.
 
         `workflow_steps` cascades from `summary_workflows`, so the steps go
         with it. Evidence rows reference `workflow_id` without a foreign key
@@ -69,12 +99,11 @@ class WorkflowRepository:
         """
         workflow = self._one(
             "SELECT workflow_key, name FROM summary_workflows WHERE id=%s",
-            (version_id,),
+            (workflow_id,),
         )
         with connect(self._store) as connection:
             connection.execute(
-                "DELETE FROM summary_workflows WHERE workflow_key=%s",
-                (workflow["workflow_key"],),
+                "DELETE FROM summary_workflows WHERE id=%s", (workflow_id,)
             )
             connection.commit()
         return {"deleted": workflow["workflow_key"], "name": workflow["name"]}
@@ -136,13 +165,21 @@ class WorkflowRepository:
         return missing
 
 
-def _workflow_values(row_id, workflow_key, version, data):
+def _workflow_fields(data):
+    """Every editable column, in the order both statements below use."""
     return (
-        row_id, workflow_key, version, data["name"],
-        data.get("description", ""), data.get("role", "detail"),
+        data["name"], data.get("description", ""), data.get("role", "detail"),
         data.get("system_prompt", ""), Jsonb(data.get("output_schema", {})),
         Jsonb(data.get("examples", [])),
     )
+
+
+def _workflow_values(row_id, workflow_key, data):
+    return (row_id, workflow_key) + _workflow_fields(data)
+
+
+def _workflow_update_values(workflow_id, data):
+    return _workflow_fields(data) + (workflow_id,)
 
 
 def _insert_steps(connection, workflow_id: str, steps: List[dict]) -> None:
@@ -164,9 +201,18 @@ def _step_values(workflow_id, position, step):
 
 _INSERT_WORKFLOW = """
     INSERT INTO summary_workflows (
-        id, workflow_key, version, name, description, role,
+        id, workflow_key, name, description, role,
         status, system_prompt, output_schema, examples
-    ) VALUES (%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s)
+    ) VALUES (%s,%s,%s,%s,%s,'draft',%s,%s,%s)
+"""
+
+# `status` is deliberately absent: an edit changes what the workflow does,
+# never whether it is published.
+_UPDATE_WORKFLOW = """
+    UPDATE summary_workflows SET
+        name=%s, description=%s, role=%s,
+        system_prompt=%s, output_schema=%s, examples=%s
+    WHERE id=%s
 """
 
 _INSERT_STEP = """
@@ -174,11 +220,6 @@ _INSERT_STEP = """
         id, workflow_id, position, step_key, name, package_version_id,
         depends_on, input_source, input_field, input_value, summary_prompt
     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-"""
-
-_ARCHIVE_WORKFLOW = """
-    UPDATE summary_workflows SET status='archived'
-    WHERE workflow_key=%s AND status='published'
 """
 
 _PUBLISH_WORKFLOW = """

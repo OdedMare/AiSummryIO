@@ -73,11 +73,10 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 
 ## Locked rules
 
-- The agent may select only published, version-pinned workflows or the latest
-  FDE-approved standalone tool version. It never invents package calls, HTTP,
-  SQL, or mappings.
-- Workflow planning creates a draft from catalog tool-version IDs or describes
-  a missing tool contract; it never publishes automatically.
+- The agent may select only published workflows or an FDE-approved standalone
+  tool. It never invents package calls, HTTP, SQL, or mappings.
+- Workflow planning creates a draft from catalog tool IDs or describes a
+  missing tool contract; it never publishes automatically.
 - A workflow input may reference `workflow.id`, `workflow.boundaries`, a saved
   `workflow.value`, or an earlier step output. `workflow.boundaries` is the
   area drawn on the map,
@@ -117,6 +116,13 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - There is no authentication: FDE routes are open and the service must be
   deployed on a trusted network only. Anonymous conversation sessions still
   use an HttpOnly signed cookie.
-- FDE edits create drafts. Publishing is blocked by invalid mappings or
-  failing mandatory examples.
+- **Tools, workflows, and Skills are edited in place: one row per key, no
+  version history.** Creating uses an unused key; editing updates the row the
+  FDE opened. Publishing is blocked by invalid mappings or failing mandatory
+  examples, and an edit to an already-published workflow must clear that same
+  bar — it stays published rather than being demoted to a draft. The old
+  append-only model inserted a new draft version on every edit, which hid the
+  published row still serving traffic and made a live workflow report itself
+  as unpublished. Because a row is now mutable, `summary_evidence` records
+  which workflow ran but no longer pins the exact steps it ran with.
 - Keep the design simple: add a module only when it owns a distinct boundary.
