@@ -38,4 +38,8 @@ def build(context) -> APIRouter:
     def publish_agent_content(content_id: str):
         return context.repository.publish_agent_content(content_id)
 
+    @router.delete("/{content_id}")
+    def delete_agent_content(content_id: str):
+        return context.repository.delete_agent_content(content_id)
+
     return router

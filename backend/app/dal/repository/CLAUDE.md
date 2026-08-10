@@ -57,4 +57,10 @@ column and is replaced by a unique index on the key alone.
   and `update_workflow` re-runs that same validation when the row is already
   published — an edit must not break a route the agent is currently selecting,
   and must not silently unpublish it either.
+- `delete_*` takes a row id. A tool is refused while a workflow step points at
+  it, and the blocking workflows are named; a workflow and a Skill or prompt
+  have nothing pinning them, so they go. Deleting content is a reset for a
+  built-in — seeding recreates a missing key at the next startup, and
+  `published_content` falls back to the prompt under `bl/prompts/` meanwhile —
+  and permanent for anything an FDE created.
 - Secrets, raw request bodies, and full identifiers are never logged.

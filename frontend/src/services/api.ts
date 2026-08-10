@@ -224,6 +224,12 @@ export const api = {
     }),
   publishContent: (id: string) =>
     request<AgentContent>(`/api/agent-content/${id}/publish`, { method: "POST" }),
+  // A built-in Skill or prompt returns at the next startup; deleting one
+  // resets it rather than removing it for good.
+  deleteContent: (id: string) =>
+    request<{ deleted: string; name: string }>(`/api/agent-content/${id}`, {
+      method: "DELETE",
+    }),
   previewSkill: (data: Record<string, unknown>) =>
     request<SkillPreviewResult>("/api/agent-content/preview-skill", {
       method: "POST",

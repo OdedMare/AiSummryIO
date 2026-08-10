@@ -2,12 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import {
-  Beaker, BookOpen, LoaderCircle, Save, Send, Sparkles,
+  Beaker, BookOpen, LoaderCircle, Save, Send, Sparkles, Trash2,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
   AgentContent, SkillPreviewResult,
 } from "@/types";
+import { NewItemButton } from "./StudioCommon";
 
 const emptyContent = {
   content_key: "", kind: "skill", name: "", description: "", content: "",
@@ -41,8 +42,35 @@ export default function ContentStudio({
     });
   };
   const reset = () => { setForm(emptyContent); setEditingId(""); };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); };
   const update = (patch: Partial<typeof emptyContent>) =>
     setForm((current) => ({ ...current, ...patch }));
+
+  /**
+   * Delete a Skill or prompt.
+   *
+   * The confirm names the item, and says built-ins come back on restart:
+   * seeding recreates a missing key, so deleting one of those resets it to
+   * the shipped text rather than removing it.
+   */
+  const remove = async (item: AgentContent) => {
+    const confirmed = window.confirm(
+      `למחוק את „${item.name}”? פריט מובנה יחזור לנוסח המקורי בהפעלה הבאה.`,
+    );
+    if (!confirmed) return;
+    setError("");
+    try {
+      await api.deleteContent(item.id);
+      // The form would otherwise keep editing a row that no longer exists
+      // and fail on the next save.
+      if (editingId === item.id) reset();
+      await onRefresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "המחיקה נכשלה");
+    }
+  };
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError("");
     try {
@@ -61,34 +89,43 @@ export default function ContentStudio({
   };
   return (
     <div className="studio-split">
-      <ContentList items={items} onEdit={edit} onRefresh={onRefresh} />
+      <ContentList items={items} onEdit={edit} onRemove={remove}
+        onNew={startNew} onRefresh={onRefresh} />
       <ContentForm form={form} update={update} save={save} error={error}
-        saving={saving} editing={!!editingId} reset={reset} />
+        saving={saving} editing={!!editingId} reset={startNew} />
     </div>
   );
 }
 
 function ContentList({
-  items, onEdit, onRefresh,
+  items, onEdit, onRemove, onNew, onRefresh,
 }: {
   items: AgentContent[];
   onEdit: (item: AgentContent) => void;
+  onRemove: (item: AgentContent) => void;
+  onNew: () => void;
   onRefresh: () => Promise<void>;
 }) {
   return (
     <section className="studio-list">
-      <header><h3>Skills והנחיות</h3><span>{items.length} פריטים</span></header>
+      <header><h3>Skills והנחיות</h3>
+        <div className="studio-list-actions">
+          <span>{items.length} פריטים</span>
+          <NewItemButton label="Skill או הנחיה חדשים" onClick={onNew} />
+        </div>
+      </header>
       {items.map((item) => <ContentCard key={item.id} item={item}
-        onEdit={onEdit} onRefresh={onRefresh} />)}
+        onEdit={onEdit} onRemove={onRemove} onRefresh={onRefresh} />)}
     </section>
   );
 }
 
 function ContentCard({
-  item, onEdit, onRefresh,
+  item, onEdit, onRemove, onRefresh,
 }: {
   item: AgentContent;
   onEdit: (item: AgentContent) => void;
+  onRemove: (item: AgentContent) => void;
   onRefresh: () => Promise<void>;
 }) {
   const Icon = item.kind === "skill" ? BookOpen : Sparkles;
@@ -102,10 +139,17 @@ function ContentCard({
           </small>
         </span>
       </button>
-      {item.status !== "published" && <button type="button"
-        onClick={() => void api.publishContent(item.id).then(onRefresh)}>
-        <Send size={15} /> פרסום
-      </button>}
+      <div className="content-card-actions">
+        {item.status !== "published" && <button type="button"
+          onClick={() => void api.publishContent(item.id).then(onRefresh)}>
+          <Send size={15} aria-hidden="true" /> פרסום
+        </button>}
+        <button type="button" className="danger-action"
+          onClick={() => onRemove(item)}
+          aria-label={`מחיקת ${item.name}`}>
+          <Trash2 size={15} aria-hidden="true" /> מחיקה
+        </button>
+      </div>
     </article>
   );
 }

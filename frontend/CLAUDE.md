@@ -112,6 +112,19 @@ ID/evidence, and reuse the conversation's stored boundaries.
   it is touched; the backend refuses an edit that would break a published
   route rather than demoting it. Cards therefore show a status word rather
   than `v{n}`, and the publish button appears for anything not yet published.
+- **Each list header carries a `NewItemButton` (`StudioCommon`).** Because
+  opening an item takes the form over, the only route back to a blank form
+  was the cancel button that appears while editing — which reads as undo, not
+  as a way to add something. Its `aria-label` names what would be created;
+  "חדש" alone does not. It calls `startNew`, which is `reset` plus clearing
+  the messages; `reset` on its own is what `save` calls after creating, where
+  the success message still has to be visible.
+- All three tabs delete. A Skill or prompt has nothing pinning it, so the
+  confirm warns about the one surprise instead: a **built-in comes back on
+  the next restart**, because seeding recreates a missing key — deleting one
+  resets it to the shipped text rather than removing it. A tool is refused
+  while a workflow uses it, and the backend's reason names those workflows,
+  so it is surfaced as-is.
 - AI workflow proposals are labeled as suggestions and loaded only as drafts
   for FDE review; missing tools show the required input and output contract.
 - Fetch 1 ID requires a visibly labeled safe test identifier, shows a bounded

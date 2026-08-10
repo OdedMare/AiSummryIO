@@ -13,6 +13,7 @@ import { emptyWorkflow, parseJson } from "./forms";
 import {
   FieldAgentPopover, PlanChat, PlanChatDrawer, usePlanChat,
 } from "./PlanChat";
+import { NewItemButton } from "./StudioCommon";
 import WorkflowCanvas, { mappedStep, orderedSteps } from "./WorkflowCanvas";
 
 export default function WorkflowEditor({
@@ -249,10 +250,14 @@ function useWorkflowEditor(
     setForm(emptyWorkflow); setSteps([]); setEditingId("");
     setSelectedKey("");
   };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); setMessage(""); };
 
   return {
     form, steps, error, message, dryRunId, setDryRunId, dryResult, saving,
-    editingId, libraryError, selectedKey, setSelectedKey, update, edit, addStep,
+    editingId, libraryError, selectedKey, setSelectedKey, update, edit,
+    addStep, startNew,
     updateStep, removeStep, removeStepByKey, connectStep, disconnectStep,
     save, publish, remove, dryRun, loadPlan, loadPlanSteps, createFromTool,
     reset,
@@ -269,7 +274,12 @@ function WorkflowLibrary({
 }) {
   return (
     <section className="workflow-library">
-      <header><h3>תהליכי עבודה</h3><span>{workflows.length} תהליכים</span></header>
+      <header><h3>תהליכי עבודה</h3>
+        <div className="studio-list-actions">
+          <span>{workflows.length} תהליכים</span>
+          <NewItemButton label="תהליך חדש" onClick={editor.startNew} />
+        </div>
+      </header>
       {workflows.map((item) =>
         <WorkflowCard key={item.id} item={item} editor={editor} />)}
       {editor.libraryError &&
@@ -804,7 +814,7 @@ function WorkflowActions({ editor }: { editor: Editor }) {
     <div className="form-actions">
       {editor.editingId &&
         <button type="button" className="secondary-button"
-          onClick={editor.reset}>ביטול עריכה</button>}
+          onClick={editor.startNew}>ביטול עריכה</button>}
       <button className="primary-button" type="submit"
         disabled={editor.saving || !editor.steps.length}>
         <Save size={17} /> {editor.saving ? "שומר…"

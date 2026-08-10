@@ -73,6 +73,32 @@ class ContentRepository:
             connection.commit()
         return self.get_agent_content(content_id)
 
+    def delete_agent_content(self, content_id: str) -> dict:
+        """Remove a Skill or prompt.
+
+        Nothing pins one by row id, so unlike a tool wired into a workflow
+        there is no reference that has to block the delete: a Skill is
+        selected by `content_key` at request time, and `published_content`
+        already falls back to the file-based prompt under `bl/prompts/` when
+        the key is missing. Deleting the `workflow-planner` prompt therefore
+        returns it to that default rather than breaking planning.
+
+        A built-in Skill or prompt comes back at the next startup, because
+        seeding keys on the row's absence — the same as the example tool and
+        workflow. Deleting one is a way to reset it, not to remove it.
+        """
+        # `_one` raises NotFoundError (404) when the id is unknown.
+        item = self._one(
+            "SELECT content_key, name FROM agent_content WHERE id=%s",
+            (content_id,),
+        )
+        with connect(self._store) as connection:
+            connection.execute(
+                "DELETE FROM agent_content WHERE id=%s", (content_id,)
+            )
+            connection.commit()
+        return {"deleted": item["content_key"], "name": item["name"]}
+
     def publish_agent_content(self, content_id: str) -> dict:
         self.get_agent_content(content_id)
         with connect(self._store) as connection:

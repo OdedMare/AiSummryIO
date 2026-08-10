@@ -2422,3 +2422,47 @@ def test_editing_a_draft_workflow_skips_publish_validation(monkeypatch):
     repository.update_workflow("wf", {"name": "Ownership", "steps": []})
 
     assert any(s.startswith("UPDATE") for s in repository.statements)
+
+
+class _DeletableContent(Repository):
+    """Repository with the database removed, to check what delete sends."""
+
+    def __init__(self):
+        self._store = None
+        self.statements = []
+
+    def _one(self, query, params=()):
+        return {"content_key": "summary-executive", "name": "תקציר מנהלים"}
+
+
+def test_deleting_a_skill_removes_the_row_it_was_given(monkeypatch):
+    """Content is one row per key, so a delete targets the id it was handed —
+    not the key, which would be the same statement by accident today and a
+    silent multi-row delete the moment that stops being true."""
+    repository = _DeletableContent()
+    monkeypatch.setattr(
+        "app.dal.repository.content.connect",
+        lambda _store: _FakeConnection(repository.statements),
+    )
+
+    removed = repository.delete_agent_content("content-1")
+
+    assert removed == {"deleted": "summary-executive", "name": "תקציר מנהלים"}
+    assert repository.statements == ["DELETE FROM agent_content WHERE id=%s"]
+
+
+def test_deleting_a_prompt_leaves_the_file_based_default(monkeypatch):
+    """`published_content` falls back to the prompt under `bl/prompts/`, which
+    is what makes deleting the planner prompt a reset rather than a break."""
+    repository = _DeletableContent()
+    monkeypatch.setattr(
+        "app.dal.repository.content.connect",
+        lambda _store: _FakeConnection(repository.statements),
+    )
+    monkeypatch.setattr(repository, "_all", lambda *_args, **_kwargs: [])
+
+    repository.delete_agent_content("content-1")
+
+    assert repository.published_content(
+        "workflow-planner", "file default"
+    ) == "file default"

@@ -2169,6 +2169,35 @@ select:focus {
   font-size: 11px;
 }
 
+/* Groups the count with the "new" button so the heading keeps the start of
+   the row and both controls sit together at the end. */
+.studio-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.studio-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* 44px target, matching every other studio control. */
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-new:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 .catalog-card,
 .content-card,
 .workflow-card {
@@ -2220,7 +2249,8 @@ select:focus {
 }
 
 .catalog-card-delete:hover,
-.workflow-card-actions .danger-action:hover {
+.workflow-card-actions .danger-action:hover,
+.content-card-actions .danger-action:hover {
   color: var(--danger);
   background: var(--danger-soft);
   border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
@@ -2636,7 +2666,7 @@ select:focus {
 }
 
 .workflow-card-actions button,
-.content-card > button:last-child {
+.content-card-actions button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -3185,8 +3215,10 @@ select:focus {
   border: 0;
 }
 
-.content-card > button:last-child {
-  margin: 0 10px 9px;
+.content-card-actions {
+  display: flex;
+  gap: 5px;
+  padding: 0 10px 9px;
 }
 
 .content-editor {

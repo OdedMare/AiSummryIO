@@ -15,6 +15,7 @@ import { emptyPackage, parseJson } from "./forms";
 import {
   FieldAgentPopover, PlanChat, PlanChatDrawer, usePlanChat,
 } from "./PlanChat";
+import { NewItemButton } from "./StudioCommon";
 
 type PackageForm = typeof emptyPackage;
 type FieldTarget =
@@ -74,6 +75,9 @@ export default function PackageCatalog({
   const reset = () => {
     setForm(emptyPackage); setEditingId(""); setInspection(null);
   };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); setMessage(""); };
 
   /**
    * Copy the interview's proposal into the form for the FDE to edit.
@@ -199,7 +203,8 @@ export default function PackageCatalog({
 
   return (
     <div className="studio-split">
-      <PackageList items={items} onEdit={edit} onRemove={remove} />
+      <PackageList items={items} onEdit={edit} onRemove={remove}
+        onNew={startNew} />
       <form className="studio-form" onSubmit={save}>
         <FormHeader form={form} editing={!!editingId}
           inspection={inspection} onApply={applyDraft} />
@@ -222,7 +227,7 @@ export default function PackageCatalog({
         </p>}
         <div className="form-actions">
           {editingId && <button type="button" className="secondary-button"
-            onClick={reset}>ביטול עריכה</button>}
+            onClick={startNew}>ביטול עריכה</button>}
           <button className="primary-button" type="submit" disabled={saving}>
             <Save size={17} /> {saving ? "שומר…"
               : editingId ? "שמירת שינויים" : "שמירת טול"}
@@ -397,15 +402,21 @@ function FieldAgent({
 }
 
 function PackageList({
-  items, onEdit, onRemove,
+  items, onEdit, onRemove, onNew,
 }: {
   items: PackageVersion[];
   onEdit: (item: PackageVersion) => void;
   onRemove: (item: PackageVersion) => void;
+  onNew: () => void;
 }) {
   return (
     <section className="studio-list">
-      <header><h3>מקורות מידע</h3><span>{items.length} מקורות</span></header>
+      <header><h3>מקורות מידע</h3>
+        <div className="studio-list-actions">
+          <span>{items.length} מקורות</span>
+          <NewItemButton label="טול חדש" onClick={onNew} />
+        </div>
+      </header>
       {items.map((item) => (
         // The row was a single <button>; a delete action cannot be nested
         // inside one, so the card is now a wrapper holding two controls.
