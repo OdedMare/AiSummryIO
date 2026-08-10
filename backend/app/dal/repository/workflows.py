@@ -1,10 +1,8 @@
 """Workflow and step persistence.
 
-One row per `workflow_key`: an FDE edit updates the workflow in place rather
-than appending a version. That is what keeps a published workflow published
-across an edit — appending a draft used to hide the published row that was
-still serving traffic, so the studio reported the workflow as unpublished
-while it was in fact live.
+One row per `workflow_key`, edited in place. There is no publishing step and
+no draft state: a saved workflow is what the agent sees, and `agent_enabled`
+alone decides whether it may be selected — the same switch tools use.
 """
 
 from typing import List
@@ -48,26 +46,21 @@ class WorkflowRepository:
         return self.get_workflow(row_id)
 
     def update_workflow(self, workflow_id: str, data: dict) -> dict:
-        """Edit a workflow in place, keeping its publication state.
-
-        A published workflow stays published through an edit, which is the
-        point of dropping versions — but it is also live, so the edit has to
-        clear the same bar publishing does. Saving steps that would fail
-        `_validate_for_publish` onto a published workflow is refused rather
-        than quietly demoted to a draft: silently unpublishing a route the
-        agent is currently selecting is the failure this change exists to
-        remove.
+        """Edit a workflow in place.
 
         `workflow_key` is the identity the agent routes by and is never
         rewritten from the payload. Steps are replaced wholesale — they are
         positional and the canvas sends the whole array, so reconciling them
         row by row would only invent a diff neither side asked for.
+
+        `validate_steps` is the whole gate. It runs here and on create, so a
+        workflow that reached the table is structurally sound whether or not
+        the agent is allowed to select it.
         """
-        current = self.get_workflow(workflow_id)
+        # `_one` raises NotFoundError (404) when the id is unknown.
+        self.get_workflow(workflow_id)
         steps = data.get("steps", [])
         validate_steps(steps)
-        if current["status"] == "published":
-            self._validate_for_publish(dict(data, steps=steps))
         with connect(self._store) as connection:
             connection.execute(
                 _UPDATE_WORKFLOW, _workflow_update_values(workflow_id, data)
@@ -77,14 +70,6 @@ class WorkflowRepository:
                 (workflow_id,),
             )
             _insert_steps(connection, workflow_id, steps)
-            connection.commit()
-        return self.get_workflow(workflow_id)
-
-    def publish_workflow(self, workflow_id: str) -> dict:
-        workflow = self.get_workflow(workflow_id)
-        self._validate_for_publish(workflow)
-        with connect(self._store) as connection:
-            connection.execute(_PUBLISH_WORKFLOW, (workflow_id,))
             connection.commit()
         return self.get_workflow(workflow_id)
 
@@ -108,10 +93,11 @@ class WorkflowRepository:
             connection.commit()
         return {"deleted": workflow["workflow_key"], "name": workflow["name"]}
 
-    def published_workflows(self, roles: List[str]) -> List[dict]:
+    def enabled_workflows(self, roles: List[str]) -> List[dict]:
+        """The workflows the agent may select, by role."""
         rows = self._all("""
             SELECT * FROM summary_workflows
-            WHERE status='published' AND role = ANY(%s)
+            WHERE agent_enabled IS TRUE AND role = ANY(%s)
             ORDER BY name
         """, (roles,))
         return self._with_steps(rows)
@@ -131,46 +117,13 @@ class WorkflowRepository:
             WHERE workflow_id=%s ORDER BY position
         """, (workflow_id,))
 
-    def _validate_for_publish(self, workflow: dict) -> None:
-        if not workflow["steps"]:
-            raise ValueError("אי אפשר לפרסם תהליך ללא שלבים")
-        validate_steps(workflow["steps"])
-        if workflow.get("examples"):
-            return
-        incomplete = self._packages_missing_examples(workflow)
-        if not incomplete:
-            return
-        # Naming the packages is the whole point: the generic form of this
-        # message left the FDE to open every tool in the workflow to find
-        # which one was unfinished.
-        raise ValueError(
-            "נדרשת דוגמת תהליך, או דוגמאות קלט ופלט לכל חבילה, לפני פרסום. "
-            "חסרות דוגמאות ב: %s" % "; ".join(incomplete)
-        )
-
-    def _packages_missing_examples(self, workflow: dict) -> List[str]:
-        """Names of step packages lacking an input or output example."""
-        missing = []
-        for step in workflow["steps"]:
-            item = self.get_package(step["package_version_id"])
-            gaps = []
-            if not item.get("example_input"):
-                gaps.append("דוגמת קלט")
-            if not item.get("example_output"):
-                gaps.append("דוגמת פלט")
-            if gaps:
-                missing.append(
-                    "%s (%s)" % (item.get("name", step["name"]), " ו".join(gaps))
-                )
-        return missing
-
 
 def _workflow_fields(data):
     """Every editable column, in the order both statements below use."""
     return (
         data["name"], data.get("description", ""), data.get("role", "detail"),
-        data.get("system_prompt", ""), Jsonb(data.get("output_schema", {})),
-        Jsonb(data.get("examples", [])),
+        data.get("agent_enabled", True), data.get("system_prompt", ""),
+        Jsonb(data.get("output_schema", {})), Jsonb(data.get("examples", [])),
     )
 
 
@@ -202,15 +155,13 @@ def _step_values(workflow_id, position, step):
 _INSERT_WORKFLOW = """
     INSERT INTO summary_workflows (
         id, workflow_key, name, description, role,
-        status, system_prompt, output_schema, examples
-    ) VALUES (%s,%s,%s,%s,%s,'draft',%s,%s,%s)
+        agent_enabled, system_prompt, output_schema, examples
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
-# `status` is deliberately absent: an edit changes what the workflow does,
-# never whether it is published.
 _UPDATE_WORKFLOW = """
     UPDATE summary_workflows SET
-        name=%s, description=%s, role=%s,
+        name=%s, description=%s, role=%s, agent_enabled=%s,
         system_prompt=%s, output_schema=%s, examples=%s
     WHERE id=%s
 """
@@ -222,7 +173,4 @@ _INSERT_STEP = """
     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
-_PUBLISH_WORKFLOW = """
-    UPDATE summary_workflows SET status='published', published_at=NOW()
-    WHERE id=%s
-"""
+

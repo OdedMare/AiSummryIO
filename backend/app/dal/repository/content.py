@@ -1,8 +1,8 @@
 """Skills and prompt persistence.
 
-One row per `content_key`: an FDE edit updates the Skill or prompt in place
-rather than appending a version, so a published Skill stays published across
-an edit instead of being hidden behind a newer draft.
+One row per `content_key`, edited in place. There is no publishing step and no
+draft state: a saved Skill or prompt is what the agent sees, and
+`agent_enabled` alone decides whether it may be used.
 """
 
 from typing import List
@@ -19,18 +19,18 @@ class ContentRepository:
         return self._all("""
             SELECT content_key, name, description
             FROM agent_content
-            WHERE kind='skill' AND status='published'
+            WHERE kind='skill' AND agent_enabled IS TRUE
               AND user_selectable IS TRUE
             ORDER BY name
         """)
 
-    def published_summary_skills(self, keys: List[str]) -> List[dict]:
+    def enabled_summary_skills(self, keys: List[str]) -> List[dict]:
         if not keys:
             return []
         rows = self._all("""
             SELECT content_key, name, description, content
             FROM agent_content
-            WHERE kind='skill' AND status='published'
+            WHERE kind='skill' AND agent_enabled IS TRUE
               AND user_selectable IS TRUE AND content_key = ANY(%s)
         """, (keys,))
         by_key = {row["content_key"]: row for row in rows}
@@ -57,12 +57,12 @@ class ContentRepository:
         return self.get_agent_content(row_id)
 
     def update_agent_content(self, content_id: str, data: dict) -> dict:
-        """Edit a Skill or prompt in place, keeping its publication state.
+        """Edit a Skill or prompt in place.
 
-        `content_key` is the identity `published_content` and the Skill
-        catalog look up by, so it is never rewritten from the payload. Unlike
-        a workflow there is nothing to validate: the content is free text and
-        a published Skill has no mapping that an edit could break.
+        `content_key` is the identity `enabled_content` and the Skill catalog
+        look up by, so it is never rewritten from the payload. Unlike a
+        workflow there is nothing to validate: the content is free text with
+        no mapping an edit could break.
         """
         # `_one` raises NotFoundError (404) when the id is unknown.
         self.get_agent_content(content_id)
@@ -78,7 +78,7 @@ class ContentRepository:
 
         Nothing pins one by row id, so unlike a tool wired into a workflow
         there is no reference that has to block the delete: a Skill is
-        selected by `content_key` at request time, and `published_content`
+        selected by `content_key` at request time, and `enabled_content`
         already falls back to the file-based prompt under `bl/prompts/` when
         the key is missing. Deleting the `workflow-planner` prompt therefore
         returns it to that default rather than breaking planning.
@@ -99,25 +99,23 @@ class ContentRepository:
             connection.commit()
         return {"deleted": item["content_key"], "name": item["name"]}
 
-    def publish_agent_content(self, content_id: str) -> dict:
-        self.get_agent_content(content_id)
-        with connect(self._store) as connection:
-            connection.execute(_PUBLISH_CONTENT, (content_id,))
-            connection.commit()
-        return self.get_agent_content(content_id)
+    def enabled_content(self, key: str, fallback: str) -> str:
+        """The prompt text for `key`, or the caller's built-in default.
 
-    def published_content(self, key: str, fallback: str) -> str:
+        A disabled or deleted prompt therefore returns the version under
+        `bl/prompts/` rather than failing — turning one off is a way back to
+        the shipped wording.
+        """
         rows = self._all("""
             SELECT content FROM agent_content
-            WHERE content_key=%s AND status='published'
+            WHERE content_key=%s AND agent_enabled IS TRUE
         """, (key,))
         return rows[0]["content"] if rows else fallback
 
     def _seed_agent_content(self, items: List[dict]) -> None:
         for item in items:
             if not self._content_exists(item["content_key"]):
-                created = self.create_agent_content(item)
-                self.publish_agent_content(created["id"])
+                self.create_agent_content(item)
 
     def _content_exists(self, content_key: str) -> bool:
         return bool(self._all(
@@ -131,6 +129,7 @@ def _content_fields(data):
     return (
         data["kind"], data["name"], data.get("description", ""),
         data["content"], data.get("user_selectable", False),
+        data.get("agent_enabled", True),
     )
 
 
@@ -145,19 +144,13 @@ def _content_update_values(content_id, data):
 _INSERT_CONTENT = """
     INSERT INTO agent_content (
         id, content_key, kind, name, description,
-        content, user_selectable, status
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,'draft')
+        content, user_selectable, agent_enabled
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
-# `status` is deliberately absent, as on workflows: an edit changes the
-# content, never whether it is published.
 _UPDATE_CONTENT = """
     UPDATE agent_content SET
-        kind=%s, name=%s, description=%s, content=%s, user_selectable=%s
-    WHERE id=%s
-"""
-
-_PUBLISH_CONTENT = """
-    UPDATE agent_content SET status='published', published_at=NOW()
+        kind=%s, name=%s, description=%s, content=%s,
+        user_selectable=%s, agent_enabled=%s
     WHERE id=%s
 """

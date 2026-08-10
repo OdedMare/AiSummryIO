@@ -595,7 +595,7 @@ function stepNodeData(
   };
 }
 
-/** Why this step cannot be published yet, or "" when it is complete. */
+/** Why this step is not usable yet, or "" when it is complete. */
 function incompleteReason(step: WorkflowStep): string {
   if (!step.package_version_id) return "לא נבחר טול";
   if (step.input_source === VALUE_SOURCE && !step.input_value?.trim()) {

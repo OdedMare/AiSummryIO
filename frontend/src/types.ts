@@ -154,7 +154,8 @@ export interface WorkflowVersion {
   name: string;
   description: string;
   role: "baseline" | "detail" | "both";
-  status: "draft" | "published" | "archived";
+  /** Whether the agent may select this route. There is no publishing step. */
+  agent_enabled: boolean;
   system_prompt: string;
   output_schema: Record<string, unknown>;
   examples: Array<Record<string, unknown>>;
@@ -257,7 +258,7 @@ export interface AgentContent {
   description: string;
   content: string;
   user_selectable: boolean;
-  status: "draft" | "published" | "archived";
+  agent_enabled: boolean;
 }
 
 export interface Evidence {

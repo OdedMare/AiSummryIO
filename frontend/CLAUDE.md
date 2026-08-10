@@ -101,17 +101,19 @@ ID/evidence, and reuse the conversation's stored boundaries.
   where questioning the FDE is the point. A clarification renders as an
   ordinary answer whose `suggested_questions` become the chips.
 - FDE language is concrete: “טול”, “חבילת FLAPI”, “קלט”, “פלט”, “שלב”,
-  “טיוטה”, “פורסם”.
+  “פעיל לסוכן”, “כבוי”. “טיוטה” and “פורסם” are gone with publishing.
 - **Studio editors edit one row, they do not append versions.** Each of
   `WorkflowEditor`, `PackageCatalog`, and `ContentStudio` holds an `editingId`:
   set, the form saves through `api.update*`; empty, through `api.create*`.
   Deriving "am I editing?" from the presence of `*_key` in the form is not
   enough — a key survives a delete and a load-from-plan — so the row's id is
-  what the editors track. Saving an edit keeps the item's publication state,
-  which is why a published workflow no longer flips back to "טיוטה" the moment
-  it is touched; the backend refuses an edit that would break a published
-  route rather than demoting it. Cards therefore show a status word rather
-  than `v{n}`, and the publish button appears for anything not yet published.
+  what the editors track. There is no publishing step: a save takes effect
+  immediately, including on a route the agent is already selecting, and
+  **`agent_enabled` is the only switch** —
+  a checkbox on both editors, matching the one tools already had. A card shows
+  "פעיל לסוכן" or "כבוי" with a matching dot, and dims via `is-off` when the
+  agent will not select it; the dimming is a hint beside that text, never the
+  only signal.
 - **Each list header carries a `NewItemButton` (`StudioCommon`).** Because
   opening an item takes the form over, the only route back to a blank form
   was the cancel button that appears while editing — which reads as undo, not
@@ -125,8 +127,9 @@ ID/evidence, and reuse the conversation's stored boundaries.
   resets it to the shipped text rather than removing it. A tool is refused
   while a workflow uses it, and the backend's reason names those workflows,
   so it is surfaced as-is.
-- AI workflow proposals are labeled as suggestions and loaded only as drafts
-  for FDE review; missing tools show the required input and output contract.
+- AI workflow proposals are labeled as suggestions and loaded into the form
+  for FDE review, never saved by the agent; missing tools show the required
+  input and output contract.
 - Fetch 1 ID requires a visibly labeled safe test identifier, shows a bounded
   preview, loads the inferred schema and empty examples into the unsaved tool
   form, and may fill empty description/instruction fields with editable model
@@ -153,7 +156,7 @@ ID/evidence, and reuse the conversation's stored boundaries.
 - A step holds one `input_source`, so a new edge replaces the old one.
   Deleting an edge — or deleting the step feeding it — returns the target to
   `workflow.id` **and clears `input_field`**, or the step keeps a mapping
-  nothing points at. Cycles are refused at drag time rather than at publish.
+  nothing points at. Cycles are refused at drag time rather than on save.
 - `workflow.value` is a literal input stored in the target step's
   `input_value`. It has its own canvas source node and a visibly labeled value
   field in the step card; an empty saved value is invalid.

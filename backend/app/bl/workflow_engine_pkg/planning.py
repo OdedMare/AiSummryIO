@@ -15,7 +15,7 @@ def plan_workflow(service, prompt: str) -> dict:
     tools = service._repository.list_packages()
     if not tools:
         return _empty_catalog_plan()
-    system = service._repository.published_content(
+    system = service._repository.enabled_content(
         "workflow-planner",
         "הרכב טיוטת workflow רק מהטולים שסופקו; ציין מה חסר.",
     )

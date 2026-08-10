@@ -34,10 +34,6 @@ def build(context) -> APIRouter:
             [section.model_dump() for section in payload.sections],
         )
 
-    @router.post("/{content_id}/publish")
-    def publish_agent_content(content_id: str):
-        return context.repository.publish_agent_content(content_id)
-
     @router.delete("/{content_id}")
     def delete_agent_content(content_id: str):
         return context.repository.delete_agent_content(content_id)

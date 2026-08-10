@@ -199,8 +199,6 @@ export const api = {
         messages, draft: draft ?? {}, focus_field: focusField,
       }),
     }),
-  publishWorkflow: (id: string) =>
-    request<WorkflowVersion>(`/api/workflows/${id}/publish`, { method: "POST" }),
   // Evidence from past runs is kept so an existing summary stays traceable.
   deleteWorkflow: (id: string) =>
     request<{ deleted: string; name: string }>(`/api/workflows/${id}`, {
@@ -222,8 +220,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  publishContent: (id: string) =>
-    request<AgentContent>(`/api/agent-content/${id}/publish`, { method: "POST" }),
   // A built-in Skill or prompt returns at the next startup; deleting one
   // resets it rather than removing it for good.
   deleteContent: (id: string) =>

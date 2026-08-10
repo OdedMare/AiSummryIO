@@ -40,12 +40,11 @@ CREATE TABLE IF NOT EXISTS summary_workflows (
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL CHECK (role IN ('baseline','detail','both')),
-    status TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
+    agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     system_prompt TEXT NOT NULL DEFAULT '',
     output_schema JSONB NOT NULL DEFAULT '{}',
     examples JSONB NOT NULL DEFAULT '[]',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
@@ -74,9 +73,8 @@ CREATE TABLE IF NOT EXISTS agent_content (
     description TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
     user_selectable BOOLEAN NOT NULL DEFAULT FALSE,
-    status TEXT NOT NULL CHECK (status IN ('draft','published','archived')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMPTZ
+    agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE agent_content
@@ -221,6 +219,49 @@ BEGIN
         );
 
         ALTER TABLE agent_content DROP COLUMN version;
+    END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- Replace draft/published/archived with the `agent_enabled` switch tools
+-- already use.
+--
+-- Publishing was a one-way transition guarded by its own validation, which
+-- meant a workflow could exist in a state nothing could reach and the studio
+-- had to explain the difference. What it actually controlled is whether the
+-- agent may select the row, which is exactly what `agent_enabled` says.
+--
+-- `agent_enabled = (status = 'published')` preserves today's live behaviour
+-- exactly: a draft or archived row was not being selected and stays
+-- unselected, rather than going live the moment this migration runs.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE summary_workflows
+    ADD COLUMN IF NOT EXISTS agent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE agent_content
+    ADD COLUMN IF NOT EXISTS agent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'summary_workflows' AND column_name = 'status'
+    ) THEN
+        UPDATE summary_workflows SET agent_enabled = (status = 'published');
+        ALTER TABLE summary_workflows DROP COLUMN status;
+        ALTER TABLE summary_workflows DROP COLUMN IF EXISTS published_at;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agent_content' AND column_name = 'status'
+    ) THEN
+        UPDATE agent_content SET agent_enabled = (status = 'published');
+        ALTER TABLE agent_content DROP COLUMN status;
+        ALTER TABLE agent_content DROP COLUMN IF EXISTS published_at;
     END IF;
 END $$;
 

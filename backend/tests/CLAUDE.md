@@ -16,7 +16,7 @@ python -m pytest -q
 | `runner_config` | Timeout precedence; `FlapiConfig` built for both modern and legacy classes |
 | Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed |
 | Workflow validation | No forward step references; `depends_on` must be declared |
-| In-place editing | An edit never changes publication state; editing a published workflow clears the publish bar; a draft does not; content deletes by row id and leaves the file-based prompt as the fallback |
+| In-place editing | `agent_enabled` rides along with an ordinary save and no publish state remains; a workflow the agent uses saves without examples; a bad mapping is still refused; content deletes by row id and leaves the file-based prompt as the fallback |
 | Conversational planning | Draft carries forward between turns; sample data stays bounded and drops internals; a chat draft still passes the shared validation gate |
 | Conversation memory | An opening follow-up pays for no rewrite; a reference is resolved against the thread; the user's wording is what is persisted; every rewrite failure routes the original question; the router sees the thread only when there is one |
 | Identifier mapping | Fan-out over list values plus deduplication |

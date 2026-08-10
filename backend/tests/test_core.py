@@ -480,7 +480,7 @@ def test_verify_tls_reaches_flapi_config_only_when_the_field_exists():
 def test_failed_workflow_keeps_successful_sections_visible():
     class FakeRepository:
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
     class FakeLlm:
@@ -535,7 +535,7 @@ def test_failed_workflow_keeps_successful_sections_visible():
 def test_progress_is_reported_for_every_completed_workflow():
     class FakeRepository:
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
     class FakeLlm:
@@ -644,7 +644,7 @@ _OWNERSHIP_SECTION = {
 
 class _SkillRepository:
     @staticmethod
-    def published_content(_key, fallback):
+    def enabled_content(_key, fallback):
         return fallback
 
 
@@ -819,7 +819,7 @@ def test_summary_request_limits_and_deduplicates_skills():
 def test_follow_up_router_can_choose_detail_workflow_despite_cached_evidence():
     class FakeRepository:
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
     class FakeLlm:
@@ -869,7 +869,7 @@ def test_fde_prompt_builds_a_draft_only_from_existing_tools():
             return tools
 
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
     class FakeLlm:
@@ -941,7 +941,7 @@ def test_follow_up_can_select_an_approved_tool_without_a_workflow():
 
     class FakeRepository:
         @staticmethod
-        def published_workflows(_roles):
+        def enabled_workflows(_roles):
             return []
 
         @staticmethod
@@ -1906,11 +1906,11 @@ def _history_service(llm, turns, **repository_extras):
             return turns
 
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
         @staticmethod
-        def published_workflows(_roles):
+        def enabled_workflows(_roles):
             return repository_extras.get("workflows", [])
 
         @staticmethod
@@ -2119,7 +2119,7 @@ def test_a_repository_without_history_still_answers_follow_ups():
     fake or older repository lacking it must degrade, not crash."""
     class OlderRepository:
         @staticmethod
-        def published_workflows(_roles):
+        def enabled_workflows(_roles):
             return []
 
         @staticmethod
@@ -2162,7 +2162,7 @@ def _clarifying_service(selection, workflows=None, tools=None):
     """A service whose router returns `selection` for any question."""
     class FakeRepository:
         @staticmethod
-        def published_workflows(_roles):
+        def enabled_workflows(_roles):
             return workflows or []
 
         @staticmethod
@@ -2295,7 +2295,7 @@ def test_a_router_naming_an_unavailable_workflow_still_offers_the_real_ones():
 
     class FakeRepository:
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
     service = SummaryService(FakeRepository(), None, FakeLlm(), None)
@@ -2323,7 +2323,7 @@ def test_the_model_being_unavailable_still_offers_the_catalog_to_choose_from():
 
     class FakeRepository:
         @staticmethod
-        def published_content(_key, fallback):
+        def enabled_content(_key, fallback):
             return fallback
 
     service = SummaryService(FakeRepository(), None, FailingLlm(), None)
@@ -2337,16 +2337,16 @@ def test_the_model_being_unavailable_still_offers_the_catalog_to_choose_from():
 class _EditableWorkflows(Repository):
     """Repository with the database removed, to exercise the edit rules.
 
-    `update_workflow` is the operation that replaced append-only versioning,
-    so what matters here is which SQL it decides to send — not that psycopg
-    can send it.
+    `update_workflow` is the operation that replaced publishing, so what
+    matters here is which SQL it decides to send — not that psycopg can send
+    it.
     """
 
-    def __init__(self, status, steps):
+    def __init__(self, agent_enabled=True, steps=None):
         self._store = None
         self._row = {
             "id": "wf", "workflow_key": "ownership", "name": "Ownership",
-            "status": status, "steps": steps, "examples": [],
+            "agent_enabled": agent_enabled, "steps": steps or [],
         }
         self.statements = []
 
@@ -2374,9 +2374,9 @@ class _FakeConnection:
         pass
 
 
-def _capture_sql(monkeypatch, repository):
+def _capture_sql(monkeypatch, repository, module="workflows"):
     monkeypatch.setattr(
-        "app.dal.repository.workflows.connect",
+        "app.dal.repository.%s.connect" % module,
         lambda _store: _FakeConnection(repository.statements),
     )
 
@@ -2387,41 +2387,50 @@ _STEP = {
 }
 
 
-def test_editing_a_published_workflow_keeps_it_published(monkeypatch):
-    """The bug this replaced: an edit appended a draft version that hid the
-    published row still serving traffic, so a live workflow reported itself
-    as unpublished."""
-    repository = _EditableWorkflows("published", [_STEP])
+def test_saving_a_workflow_carries_the_agent_switch(monkeypatch):
+    """`agent_enabled` replaced publishing, so it is an ordinary column on the
+    save rather than a separate transition."""
+    repository = _EditableWorkflows(steps=[_STEP])
     _capture_sql(monkeypatch, repository)
 
-    repository.update_workflow(
-        "wf", {"name": "Ownership", "steps": [_STEP], "examples": [{"a": 1}]}
-    )
+    repository.update_workflow("wf", {
+        "name": "Ownership", "agent_enabled": False, "steps": [_STEP],
+    })
 
     update = next(s for s in repository.statements if s.startswith("UPDATE"))
-    assert "status" not in update, "an edit must not change publication state"
+    assert "agent_enabled=%s" in update
+    assert "status" not in update, "publishing state no longer exists"
 
 
-def test_editing_a_published_workflow_cannot_break_it(monkeypatch):
-    """A published workflow is live, so an edit clears the same bar publishing
-    does rather than being demoted back to a draft."""
-    repository = _EditableWorkflows("published", [_STEP])
+def test_a_workflow_the_agent_uses_can_be_saved_without_examples(monkeypatch):
+    """The examples requirement was a publish gate and went with publishing.
+    `validate_steps` is the whole bar now, and it does not ask for examples."""
+    repository = _EditableWorkflows(agent_enabled=True, steps=[_STEP])
     _capture_sql(monkeypatch, repository)
 
-    with pytest.raises(ValueError, match="ללא שלבים"):
-        repository.update_workflow("wf", {"name": "Ownership", "steps": []})
-
-    assert not repository.statements, "nothing may be written when refused"
-
-
-def test_editing_a_draft_workflow_skips_publish_validation(monkeypatch):
-    """A draft is not answering requests, so it may be saved half-built."""
-    repository = _EditableWorkflows("draft", [])
-    _capture_sql(monkeypatch, repository)
-
-    repository.update_workflow("wf", {"name": "Ownership", "steps": []})
+    repository.update_workflow("wf", {
+        "name": "Ownership", "agent_enabled": True, "steps": [_STEP],
+        "examples": [],
+    })
 
     assert any(s.startswith("UPDATE") for s in repository.statements)
+
+
+def test_saving_a_workflow_still_rejects_an_undeclared_dependency(monkeypatch):
+    """Removing publishing removed a gate, not the structural one: a mapping
+    that would fail at run time is still refused on save."""
+    repository = _EditableWorkflows(steps=[_STEP])
+    _capture_sql(monkeypatch, repository)
+
+    with pytest.raises(ValueError, match="תלויות"):
+        repository.update_workflow("wf", {"name": "Ownership", "steps": [
+            _STEP,
+            {"key": "second", "name": "S2", "package_version_id": "tool",
+             "input_source": "steps.step1", "input_field": "entity_id",
+             "depends_on": []},
+        ]})
+
+    assert not repository.statements, "nothing may be written when refused"
 
 
 class _DeletableContent(Repository):
@@ -2440,10 +2449,7 @@ def test_deleting_a_skill_removes_the_row_it_was_given(monkeypatch):
     not the key, which would be the same statement by accident today and a
     silent multi-row delete the moment that stops being true."""
     repository = _DeletableContent()
-    monkeypatch.setattr(
-        "app.dal.repository.content.connect",
-        lambda _store: _FakeConnection(repository.statements),
-    )
+    _capture_sql(monkeypatch, repository, "content")
 
     removed = repository.delete_agent_content("content-1")
 
@@ -2452,17 +2458,15 @@ def test_deleting_a_skill_removes_the_row_it_was_given(monkeypatch):
 
 
 def test_deleting_a_prompt_leaves_the_file_based_default(monkeypatch):
-    """`published_content` falls back to the prompt under `bl/prompts/`, which
-    is what makes deleting the planner prompt a reset rather than a break."""
+    """`enabled_content` falls back to the prompt under `bl/prompts/`, which is
+    what makes deleting — or disabling — the planner prompt a reset rather
+    than a break."""
     repository = _DeletableContent()
-    monkeypatch.setattr(
-        "app.dal.repository.content.connect",
-        lambda _store: _FakeConnection(repository.statements),
-    )
+    _capture_sql(monkeypatch, repository, "content")
     monkeypatch.setattr(repository, "_all", lambda *_args, **_kwargs: [])
 
     repository.delete_agent_content("content-1")
 
-    assert repository.published_content(
+    assert repository.enabled_content(
         "workflow-planner", "file default"
     ) == "file default"

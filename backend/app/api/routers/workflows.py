@@ -1,4 +1,4 @@
-"""Workflow drafting, planning, publishing, and dry runs."""
+"""Workflow drafting, planning, and dry runs."""
 
 from fastapi import APIRouter, Depends
 
@@ -31,10 +31,6 @@ def build(context) -> APIRouter:
             [item.model_dump() for item in payload.messages], payload.draft,
             payload.focus_field,
         )
-
-    @router.post("/{workflow_id}/publish")
-    def publish_workflow(workflow_id: str):
-        return context.repository.publish_workflow(workflow_id)
 
     @router.delete("/{workflow_id}")
     def delete_workflow(workflow_id: str):

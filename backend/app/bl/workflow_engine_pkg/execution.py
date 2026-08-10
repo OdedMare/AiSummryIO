@@ -27,7 +27,7 @@ def geo_capable(workflow: dict) -> bool:
 
 
 def select_workflows(workflows: List[dict], root_id, boundaries) -> List[dict]:
-    """Narrow the published workflows to those the request can satisfy."""
+    """Narrow the agent-enabled workflows to those the request can satisfy."""
     if root_id:
         return workflows
     if not boundaries:
@@ -42,9 +42,9 @@ def execute(
     workflows = select_workflows(workflows, root_id, boundaries)
     if not workflows:
         return empty_result(
-            "לא פורסם תהליך עבודה שמקבל אזור על המפה."
+            "אין תהליך עבודה פעיל שמקבל אזור על המפה."
             if boundaries and not root_id
-            else "לא פורסמו תהליכי עבודה מתאימים."
+            else "אין תהליכי עבודה פעילים מתאימים."
         )
     sections = _execute_all(
         service, run, root_id, workflows, progress_callback, boundaries

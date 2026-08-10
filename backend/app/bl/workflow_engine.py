@@ -27,9 +27,9 @@ class SummaryService:
         self._store = settings_store
 
     def full_summary(self, run: dict, conversation: dict, progress) -> dict:
-        workflows = self._repository.published_workflows(["baseline", "both"])
+        workflows = self._repository.enabled_workflows(["baseline", "both"])
         keys = run.get("skill_keys", [])
-        skills = self._repository.published_summary_skills(keys) if keys else []
+        skills = self._repository.enabled_summary_skills(keys) if keys else []
         return self._execute(
             run, conversation["root_id"], run["question"], workflows, progress,
             skills, conversation.get("boundaries"),

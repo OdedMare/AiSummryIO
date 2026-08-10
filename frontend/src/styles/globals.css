@@ -2650,13 +2650,25 @@ select:focus {
   border-radius: 50%;
 }
 
-.status-dot.published {
+.status-dot.on {
   background: var(--success);
   box-shadow: 0 0 0 4px var(--success-soft);
 }
 
-.status-dot.draft {
-  background: var(--warning);
+.status-dot.off {
+  background: var(--text-muted);
+}
+
+/* A row the agent will not select. The card still opens and edits normally,
+   so this is a hint beside the text that says so — never the only signal. */
+.workflow-card.is-off,
+.content-card.is-off {
+  opacity: 0.72;
+}
+
+.workflow-card.is-off:hover,
+.content-card.is-off:hover {
+  opacity: 1;
 }
 
 .workflow-card-actions {

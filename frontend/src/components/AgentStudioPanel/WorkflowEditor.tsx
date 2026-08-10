@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import {
-  CheckCircle2, ChevronDown, Play, Plus, Save, Send, Sparkles,
+  CheckCircle2, ChevronDown, Play, Plus, Save, Sparkles,
   Trash2, Wand2, Workflow,
 } from "lucide-react";
 import { api } from "@/services/api";
@@ -43,7 +43,7 @@ function useWorkflowEditor(
      duplicate key instead of quietly appending a draft. */
   const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
-  // Publishing and dry runs are triggered from the library column, so their
+  // Deleting and dry runs are triggered from the library column, so their
   // failures are reported there. Routing them to `error` put the reason in the
   // form column, far from the button that caused it, where it went unread.
   const [libraryError, setLibraryError] = useState("");
@@ -55,8 +55,9 @@ function useWorkflowEditor(
   // node scrolls its card into view and highlights both.
   const [selectedKey, setSelectedKey] = useState("");
 
-  const update = (key: keyof typeof emptyWorkflow, value: string) =>
-    setForm((current) => ({ ...current, [key]: value }));
+  const update = <Key extends keyof typeof emptyWorkflow>(
+    key: Key, value: (typeof emptyWorkflow)[Key],
+  ) => setForm((current) => ({ ...current, [key]: value }));
   const edit = (item: WorkflowVersion) => {
     setForm(workflowForm(item)); setEditingId(item.id);
     setSteps(item.steps.map((step) => ({ ...step }))); setDryResult("");
@@ -112,11 +113,9 @@ function useWorkflowEditor(
   /**
    * Save the form: update the workflow being edited, or create a new one.
    *
-   * An edit keeps the workflow's publication state, so saving a published
-   * route leaves it published and live. The backend refuses an edit that
-   * would break a published workflow rather than demoting it to a draft —
-   * that silent demotion is what made a published workflow report itself as
-   * unpublished.
+   * There is no publishing step, so a save takes effect immediately —
+   * including on a workflow the agent is already selecting. `agent_enabled`
+   * is an ordinary field on the form and rides along with the save.
    */
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
@@ -127,7 +126,7 @@ function useWorkflowEditor(
         setMessage("התהליך עודכן.");
       } else {
         await api.createWorkflow(payload);
-        setMessage("נשמרה טיוטת תהליך חדשה.");
+        setMessage("התהליך נשמר.");
         reset();
       }
       await onRefresh();
@@ -135,14 +134,6 @@ function useWorkflowEditor(
       setError(errorMessage(reason, "השמירה נכשלה"));
     } finally {
       setSaving(false);
-    }
-  };
-  const publish = async (id: string) => {
-    setLibraryError("");
-    try {
-      await api.publishWorkflow(id); await onRefresh();
-    } catch (reason) {
-      setLibraryError(errorMessage(reason, "הפרסום נכשל"));
     }
   };
   /**
@@ -188,7 +179,7 @@ function useWorkflowEditor(
     if (plan.can_build) {
       setSteps(plan.steps.map((step) => ({ ...step })));
     }
-    setMessage("הצעת הסוכן נטענה כטיוטה. יש לבדוק אותה לפני השמירה.");
+    setMessage("הצעת הסוכן נטענה לטופס. יש לבדוק אותה לפני השמירה.");
   };
 
   /**
@@ -226,7 +217,7 @@ function useWorkflowEditor(
       description: item.description,
       role: "detail",
       // The section contract is shared and added by the backend; a workflow's
-      // own schema only extends it. Publishing the tool's output as `fields`
+      // own schema only extends it. Exposing the tool's output as `fields`
       // is what surfaces the package's JSON on the section it produces.
       output_schema: JSON.stringify(toolOutputSchema(item), null, 2),
       examples: "[]",
@@ -259,7 +250,7 @@ function useWorkflowEditor(
     editingId, libraryError, selectedKey, setSelectedKey, update, edit,
     addStep, startNew,
     updateStep, removeStep, removeStepByKey, connectStep, disconnectStep,
-    save, publish, remove, dryRun, loadPlan, loadPlanSteps, createFromTool,
+    save, remove, dryRun, loadPlan, loadPlanSteps, createFromTool,
     reset,
   };
 }
@@ -296,25 +287,21 @@ function WorkflowLibrary({
 }
 
 function WorkflowCard({ item, editor }: { item: WorkflowVersion; editor: Editor }) {
-  const status = item.status === "published" ? "פורסם"
-    : item.status === "archived" ? "בארכיון" : "טיוטה";
   return (
-    <article className="workflow-card">
+    <article
+      className={`workflow-card${item.agent_enabled ? "" : " is-off"}`}>
       <button type="button" className="workflow-card-main"
         onClick={() => editor.edit(item)}>
-        <span className={`status-dot ${item.status}`} />
+        <span className={`status-dot ${item.agent_enabled ? "on" : "off"}`} />
         <span><strong>{item.name}</strong>
           <small>
-            {item.role} · {status} · {item.steps.length} שלבים
+            {item.role} · {item.agent_enabled ? "פעיל לסוכן" : "כבוי"}
+            {" · "}{item.steps.length} שלבים
           </small>
         </span>
         <ChevronDown size={16} />
       </button>
       <div className="workflow-card-actions">
-        {item.status !== "published" &&
-          <button type="button" onClick={() => void editor.publish(item.id)}>
-            <Send size={15} /> פרסום
-          </button>}
         <button type="button" onClick={() => void editor.dryRun(item.id)}>
           <Play size={15} /> בדיקה חיה
         </button>
@@ -425,6 +412,13 @@ function WorkflowFields({ editor }: { editor: Editor }) {
           </small>
         </label>
       </div>
+      <label className="agent-tool-toggle">
+        <input type="checkbox" checked={form.agent_enabled}
+          onChange={(e) => update("agent_enabled", e.target.checked)} />
+        <span>פעיל לסוכן
+          <small>כשכבוי, התהליך נשמר וניתן לעריכה אך הסוכן לא יבחר בו.</small>
+        </span>
+      </label>
       <label><span>מתי להשתמש בתהליך
         <WorkflowFieldAgent field="description" editor={editor} /></span>
         <textarea value={form.description}
@@ -549,7 +543,7 @@ function SingleToolWorkflow({
     setOpen(false);
     const occupied = editor.steps.length || editor.form.name.trim();
     if (occupied && !window.confirm(
-      `להחליף את הטיוטה הנוכחית בתהליך חד-שלבי עם „${item.name}”?`
+      `להחליף את התהליך שבטופס בתהליך חד-שלבי עם „${item.name}”?`
     )) return;
     editor.createFromTool(item);
   };
@@ -690,7 +684,7 @@ function StepCard({
 /**
  * Which field of the source step's output carries the next identifier.
  *
- * A dropdown rather than a text box: a typo here is not caught until publish
+ * A dropdown rather than a text box: a typo here is not caught until save
  * validation rejects the mapping, long after the FDE has stopped thinking
  * about the shape of that data. A package with neither a schema nor examples
  * has no fields to offer, so it falls back to free text instead of showing an
@@ -818,7 +812,7 @@ function WorkflowActions({ editor }: { editor: Editor }) {
       <button className="primary-button" type="submit"
         disabled={editor.saving || !editor.steps.length}>
         <Save size={17} /> {editor.saving ? "שומר…"
-          : editor.editingId ? "שמירת שינויים" : "שמירת טיוטה"}
+          : editor.editingId ? "שמירת שינויים" : "שמירה"}
       </button>
     </div>
   );
@@ -828,7 +822,7 @@ function workflowForm(item: WorkflowVersion) {
   return {
     workflow_key: item.workflow_key, name: item.name,
     description: item.description, role: item.role,
-    system_prompt: item.system_prompt,
+    agent_enabled: item.agent_enabled, system_prompt: item.system_prompt,
     output_schema: JSON.stringify(item.output_schema, null, 2),
     examples: JSON.stringify(item.examples, null, 2),
   };
@@ -904,7 +898,7 @@ function workflowPayload(form: typeof emptyWorkflow, steps: WorkflowStep[]) {
  * Reset any step that read a now-deleted step back to the main identifier.
  *
  * Without this a removed step leaves its dependents pointing at a key that no
- * longer exists, which the canvas cannot draw and publish validation rejects
+ * longer exists, which the canvas cannot draw and step validation rejects
  * with a message about a step the FDE can no longer see.
  */
 function releaseDependents(steps: WorkflowStep[], removedKey: string) {

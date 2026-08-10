@@ -31,9 +31,9 @@ a model, or a flunks wheel.
 
 | Method | Trigger | Behavior |
 |---|---|---|
-| `full_summary` | A new question | Runs **all** published `baseline`/`both` workflows |
+| `full_summary` | A new question | Runs **all** `agent_enabled` `baseline`/`both` workflows |
 | `follow_up` | A message in an existing conversation | Reuses prior evidence; runs **one** `detail`/`both` workflow or one FDE-approved tool, or answers from cache |
-| `plan_workflow` | FDE asks for a workflow | Drafts one from catalog tools; never publishes |
+| `plan_workflow` | FDE asks for a workflow | Proposes one from catalog tools; only the FDE saves it |
 | `plan_tool_chat` | FDE discusses a tool | One conversational turn; opens on a sample the FDE already ran and proposes only the summary-facing fields |
 | `plan_workflow_chat` | FDE discusses a workflow | One conversational turn; draft passes the same validation gate |
 | `inspect_tool` | FDE previews a package | One identifier, bounded preview, inferred schema, no persistence |
@@ -187,8 +187,7 @@ even on failure.
 
 ## Rules
 
-- Only published, version-pinned workflows or the latest FDE-approved
-  standalone tool version may be selected.
+- Only `agent_enabled` workflows and tools may be selected.
 - Package failures stay visible as warnings and never discard successful
   sections.
 - Claims require evidence references.

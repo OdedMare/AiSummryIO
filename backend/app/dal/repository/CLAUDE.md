@@ -11,7 +11,7 @@ modules. It opens a connection per operation through
 | `repository.py` | Public façade and initialization only |
 | `base.py` | Shared connection/query primitives and IDs |
 | `packages.py` | FLAPI package (tool) catalog |
-| `workflows.py` | Workflows, steps, publishing |
+| `workflows.py` | Workflows and their steps |
 | `content.py` | Skills and prompts |
 | `conversations.py` | Conversations, retention, and thread history |
 | `runs.py` | Runs, progress, and evidence |
@@ -33,7 +33,7 @@ answer, and offering it as context would invite the model to treat a question
 that was never answered as if it had been. The newest turns are selected and
 then reversed, so a long thread keeps its most recent context.
 
-## Collapsing the old version history
+## Collapsing the old version history and publish state
 
 `schema.py` carries a one-time migration, guarded on the `version` column so
 it runs once on an old database and is skipped afterwards. Per key it keeps a
@@ -45,6 +45,10 @@ surviving tool before the others are deleted, because
 otherwise block the delete. `UNIQUE(key, version)` goes with the dropped
 column and is replaced by a unique index on the key alone.
 
+A second guarded block replaces `status` with `agent_enabled`, set from
+`status = 'published'` so a draft or archived row stays unselected instead of
+going live the moment the migration runs.
+
 ## Rules
 
 - All application SQL stays in this directory.
@@ -52,15 +56,15 @@ column and is replaced by a unique index on the key alone.
 - Add behavior to the module that owns its table; keep the façade thin.
 - Tools, workflows, and content are one row per key and edited in place.
   `create_*` refuses a key that already exists; `update_*` never rewrites the
-  key itself, since steps, routing, and `published_content` all resolve by it.
-- Publishing validates mappings and mandatory examples before changing state,
-  and `update_workflow` re-runs that same validation when the row is already
-  published — an edit must not break a route the agent is currently selecting,
-  and must not silently unpublish it either.
+  key itself, since steps, routing, and `enabled_content` all resolve by it.
+- There is no publishing. `agent_enabled` is an ordinary column written by
+  the same create/update as every other field, and `enabled_workflows`,
+  `enabled_summary_skills`, and `enabled_content` are what the agent reads.
+  `validate_steps` on create and update is the only gate a save must clear.
 - `delete_*` takes a row id. A tool is refused while a workflow step points at
   it, and the blocking workflows are named; a workflow and a Skill or prompt
   have nothing pinning them, so they go. Deleting content is a reset for a
   built-in — seeding recreates a missing key at the next startup, and
-  `published_content` falls back to the prompt under `bl/prompts/` meanwhile —
+  `enabled_content` falls back to the prompt under `bl/prompts/` meanwhile —
   and permanent for anything an FDE created.
 - Secrets, raw request bodies, and full identifiers are never logged.
