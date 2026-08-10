@@ -40,13 +40,13 @@ def _available(service, conversation):
         if run.get("status") in ("completed", "partial")
         for item in service._repository.run_evidence(run["id"])
     ]
-    workflows = service._repository.published_workflows(["detail", "both"])
+    workflows = service._repository.enabled_workflows(["detail", "both"])
     return prior, workflows, service._repository.agent_tools()
 
 
 def _skills(service, run):
     keys = run.get("skill_keys", [])
-    return service._repository.published_summary_skills(keys) if keys else []
+    return service._repository.enabled_summary_skills(keys) if keys else []
 
 
 def _clarification_result(selected, workflows, tools) -> dict:
@@ -130,7 +130,7 @@ def select_detail(
     if not workflows and not tools:
         return _no_options(evidence)
     payload = _router_payload(question, workflows, tools, evidence, turns)
-    prompt = service._repository.published_content(
+    prompt = service._repository.enabled_content(
         "tool-aware-router",
         "בחר ראיות קיימות, workflow, טול עצמאי או clarification.",
     )
@@ -146,7 +146,7 @@ def select_detail(
 def _no_options(evidence) -> dict:
     if evidence:
         return {"action": "use_cached", "workflow_key": None}
-    return _clarify("אין עדיין תהליך מפורסם שיכול לענות על השאלה.")
+    return _clarify("אין עדיין תהליך פעיל שיכול לענות על השאלה.")
 
 
 def _router_payload(question, workflows, tools, evidence, turns=None) -> dict:

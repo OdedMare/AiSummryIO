@@ -10,7 +10,8 @@ is documented in depth in
 ## Purpose
 
 The backend turns one opaque string identifier into a traceable Hebrew
-summary. An initial request runs all published `baseline`/`both` workflows.
+summary. An initial request runs every `agent_enabled` `baseline`/`both`
+workflow.
 Follow-ups reuse conversation evidence and run one relevant
 `detail`/`both` workflow or one FDE-approved standalone tool when needed.
 A follow-up is resolved against the conversation's prior turns first, so a
@@ -73,11 +74,10 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 
 ## Locked rules
 
-- The agent may select only published, version-pinned workflows or the latest
-  FDE-approved standalone tool version. It never invents package calls, HTTP,
-  SQL, or mappings.
-- Workflow planning creates a draft from catalog tool-version IDs or describes
-  a missing tool contract; it never publishes automatically.
+- The agent may select only `agent_enabled` workflows and tools. It never
+  invents package calls, HTTP, SQL, or mappings.
+- Workflow planning proposes from catalog tool IDs or describes a missing tool
+  contract; the proposal is loaded into the FDE's form and only they save it.
 - A workflow input may reference `workflow.id`, `workflow.boundaries`, a saved
   `workflow.value`, or an earlier step output. `workflow.boundaries` is the
   area drawn on the map,
@@ -117,6 +117,18 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - There is no authentication: FDE routes are open and the service must be
   deployed on a trusted network only. Anonymous conversation sessions still
   use an HttpOnly signed cookie.
-- FDE edits create drafts. Publishing is blocked by invalid mappings or
-  failing mandatory examples.
+- **Tools, workflows, and Skills are edited in place: one row per key, no
+  version history and no publishing step.** Creating uses an unused key;
+  editing updates the row the FDE opened, and a save takes effect
+  immediately — including on a route the agent is already selecting.
+- **`agent_enabled` is the only switch.** It replaced draft/published/archived
+  on workflows and content, and matches what tools already had: off means the
+  row exists and is editable but the agent will not select it. There is no
+  one-way transition and no separate publish validation — `validate_steps` on
+  every save is the whole structural gate, and a workflow's `examples` are
+  optional documentation rather than a requirement.
+- A disabled or deleted prompt falls back to the built-in text under
+  `bl/prompts/`, so turning one off is a way back to the shipped wording.
+- Because a row is mutable, `summary_evidence` records which workflow ran but
+  no longer pins the exact steps it ran with.
 - Keep the design simple: add a module only when it owns a distinct boundary.

@@ -1,4 +1,4 @@
-"""Versioned Skills and prompts, plus unsaved-Skill preview."""
+"""Skills and prompts, plus unsaved-Skill preview."""
 
 from fastapi import APIRouter, Depends
 
@@ -19,6 +19,12 @@ def build(context) -> APIRouter:
     def create_agent_content(payload: AgentContentCreate):
         return context.repository.create_agent_content(payload.model_dump())
 
+    @router.put("/{content_id}")
+    def update_agent_content(content_id: str, payload: AgentContentCreate):
+        return context.repository.update_agent_content(
+            content_id, payload.model_dump()
+        )
+
     @router.post("/preview-skill")
     def preview_skill(payload: SkillPreview):
         return context.service.preview_skill(
@@ -28,8 +34,8 @@ def build(context) -> APIRouter:
             [section.model_dump() for section in payload.sections],
         )
 
-    @router.post("/{content_id}/publish")
-    def publish_agent_content(content_id: str):
-        return context.repository.publish_agent_content(content_id)
+    @router.delete("/{content_id}")
+    def delete_agent_content(content_id: str):
+        return context.repository.delete_agent_content(content_id)
 
     return router

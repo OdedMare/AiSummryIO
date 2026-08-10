@@ -6,11 +6,11 @@ are guessable from the form itself. A worked example answers "what goes in
 these fields" by showing a filled one, and the workflow shows what a tool is
 *for* once it exists.
 
-These are seeded as **drafts**, never published, for two reasons. The
-`package_id` below is illustrative rather than a real FLAPI package, so a
-published workflow pointing at it would fail at run time against a live
-provider. And a draft is what the FDE is expected to do next: open it, edit it
-into something real, and publish it themselves.
+The example workflow is seeded with `agent_enabled` off. The `package_id`
+below is illustrative rather than a real FLAPI package, so a workflow the
+agent could select would fail at run time against a live provider. Turning it
+on is what the FDE does once it points at something real — the same switch
+they would use to retire a route later.
 
 Both carry `EXAMPLE_*` keys so the seeding check can tell an untouched example
 from an FDE's own work, and both are deletable from the Studio like anything
@@ -87,8 +87,8 @@ EXAMPLE_PACKAGE = {
             },
         },
     },
-    # Publishing requires both examples, so a complete pair is what makes this
-    # a workable starting point rather than a draft blocked on its first save.
+    # A complete input/output pair is what makes this a workable starting
+    # point: the planner reads `example_output` for sample data.
     "example_input": ["00123"],
     "example_output": [
         {
@@ -106,18 +106,20 @@ EXAMPLE_PACKAGE = {
 def example_workflow(package_version_id: str) -> dict:
     """The example workflow, wired to the example tool that was just created.
 
-    Takes the version id rather than holding one, because a step must pin the
-    exact package version it runs and that id only exists once the tool row
-    has been written.
+    Takes the tool id rather than holding one, because a step must pin the
+    tool row it runs and that id only exists once the tool has been written.
     """
     return {
         "workflow_key": EXAMPLE_WORKFLOW_KEY,
         "name": "דוגמה — סקירת ישות",
         "description": (
             "תהליך לדוגמה עם שלב אחד, שמראה איך טול הופך לסעיף בסיכום. "
-            "פתחו אותו, ערכו את השלבים, ופרסמו כשהוא מצביע על טול אמיתי."
+            "פתחו אותו, ערכו את השלבים, והפעילו לסוכן כשהוא מצביע על טול אמיתי."
         ),
         "role": "detail",
+        # Off until the step points at a real package: the example tool's
+        # `package_id` is illustrative and would fail against a live provider.
+        "agent_enabled": False,
         "system_prompt": (
             "סכם את רשומת הזיהוי שחזרה: מי הישות, מה הסטטוס שלה, ומתי נרשמה. "
             "אל תסיק דבר שאינו כתוב ברשומה. אם שדה ריק, ציין זאת במפורש "

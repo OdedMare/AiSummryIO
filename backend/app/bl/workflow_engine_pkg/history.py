@@ -88,7 +88,7 @@ def standalone_question(
 
 
 def _prompt(service) -> str:
-    return service._repository.published_content(
+    return service._repository.enabled_content(
         "question-rewriter", _FALLBACK_PROMPT
     )
 

@@ -28,15 +28,16 @@ class RepositoryBase:
             connection.execute("SELECT 1").fetchone()
         return {"database": "ok"}
 
-    def _next_version(
-        self, table: str, key_name: str, key_value: str
-    ) -> int:
-        query = "SELECT COALESCE(MAX(version), 0) AS version FROM %s WHERE %s=%%s"
-        with connect(self._store) as connection:
-            row = connection.execute(
-                query % (table, key_name), (key_value,)
-            ).fetchone()
-        return int(row["version"]) + 1
+    def _key_taken(self, table: str, key_name: str, key_value: str) -> bool:
+        """Whether `key_value` already names a row in `table`.
+
+        A key is one row now, so creating over an existing key is a mistake
+        rather than a new version. The unique index is what actually
+        guarantees it; this is here to answer with a readable Hebrew message
+        instead of a driver constraint violation.
+        """
+        query = "SELECT 1 FROM %s WHERE %s=%%s LIMIT 1"
+        return bool(self._all(query % (table, key_name), (key_value,)))
 
     def _one(self, query: str, params=()) -> dict:
         rows = self._all(query, params)

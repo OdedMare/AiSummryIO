@@ -15,6 +15,7 @@ import { emptyPackage, parseJson } from "./forms";
 import {
   FieldAgentPopover, PlanChat, PlanChatDrawer, usePlanChat,
 } from "./PlanChat";
+import { NewItemButton } from "./StudioCommon";
 
 type PackageForm = typeof emptyPackage;
 type FieldTarget =
@@ -37,6 +38,10 @@ export default function PackageCatalog({
   onRefresh: () => Promise<void>;
 }) {
   const [form, setForm] = useState(emptyPackage);
+  /* Which catalog row this form is editing, or "" for a new tool. A tool is
+     one row now rather than a stack of versions, so saving an edit updates
+     that row instead of appending a version beside it. */
+  const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,6 +56,7 @@ export default function PackageCatalog({
   ) => setForm((current) => ({ ...current, [key]: value }));
 
   const edit = (item: PackageVersion) => {
+    setEditingId(item.id);
     setForm({
       package_key: item.package_key, name: item.name,
       description: item.description, package_id: item.package_id,
@@ -63,8 +69,15 @@ export default function PackageCatalog({
       example_input: JSON.stringify(item.example_input, null, 2),
       example_output: JSON.stringify(item.example_output, null, 2),
     });
-    setInspection(null); setMessage("");
+    setInspection(null); setMessage(""); setError("");
   };
+
+  const reset = () => {
+    setForm(emptyPackage); setEditingId(""); setInspection(null);
+  };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); setMessage(""); };
 
   /**
    * Copy the interview's proposal into the form for the FDE to edit.
@@ -107,12 +120,20 @@ export default function PackageCatalog({
     setMessage("הצעת הסוכן נטענה לשדה. יש לבדוק אותה לפני השמירה.");
   };
 
+  /** Update the tool being edited, or create a new one. */
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
     try {
-      await api.createPackage(packagePayload(form));
-      setMessage("נשמרה גרסת טול חדשה.");
-      setForm(emptyPackage); setInspection(null); await onRefresh();
+      const payload = packagePayload(form);
+      if (editingId) {
+        await api.updatePackage(editingId, payload);
+        setMessage("הטול עודכן.");
+      } else {
+        await api.createPackage(payload);
+        setMessage("נשמר טול חדש.");
+        reset();
+      }
+      await onRefresh();
     } catch (reason) {
       setError(errorMessage(reason, "השמירה נכשלה"));
     } finally {
@@ -121,26 +142,24 @@ export default function PackageCatalog({
   };
 
   /**
-   * Delete a tool and every version of it.
+   * Delete a tool.
    *
-   * Confirmed first, because versions are append-only and the UI offers no
-   * way back. The backend refuses a tool still wired into a workflow and
-   * names those workflows, so that reason is surfaced as-is rather than
-   * replaced with a generic failure — it tells the FDE exactly what to fix.
+   * Confirmed first, because the UI offers no way back. The backend refuses a
+   * tool still wired into a workflow and names those workflows, so that
+   * reason is surfaced as-is rather than replaced with a generic failure — it
+   * tells the FDE exactly what to fix.
    */
   const remove = async (item: PackageVersion) => {
     const confirmed = window.confirm(
-      `למחוק את הטול „${item.name}” על כל הגרסאות שלו? הפעולה אינה הפיכה.`,
+      `למחוק את הטול „${item.name}”? הפעולה אינה הפיכה.`,
     );
     if (!confirmed) return;
     setError(""); setMessage("");
     try {
       await api.deletePackage(item.id);
-      // The form would otherwise keep editing a package_key that no longer
-      // exists and silently save it back as a new v1.
-      if (form.package_key === item.package_key) {
-        setForm(emptyPackage); setInspection(null);
-      }
+      // The form would otherwise keep editing a row that no longer exists
+      // and fail on the next save.
+      if (editingId === item.id) reset();
       setMessage(`הטול „${item.name}” נמחק.`);
       await onRefresh();
     } catch (reason) {
@@ -184,9 +203,10 @@ export default function PackageCatalog({
 
   return (
     <div className="studio-split">
-      <PackageList items={items} onEdit={edit} onRemove={remove} />
+      <PackageList items={items} onEdit={edit} onRemove={remove}
+        onNew={startNew} />
       <form className="studio-form" onSubmit={save}>
-        <FormHeader form={form} editing={!!form.package_key}
+        <FormHeader form={form} editing={!!editingId}
           inspection={inspection} onApply={applyDraft} />
         <PackageFields form={form} update={update}
           onDropField={(event, target) =>
@@ -206,12 +226,11 @@ export default function PackageCatalog({
           <CheckCircle2 size={16} /> {message}
         </p>}
         <div className="form-actions">
-          {form.package_key && <button type="button" className="secondary-button"
-            onClick={() => { setForm(emptyPackage); setInspection(null); }}>
-            ביטול עריכה
-          </button>}
+          {editingId && <button type="button" className="secondary-button"
+            onClick={startNew}>ביטול עריכה</button>}
           <button className="primary-button" type="submit" disabled={saving}>
-            <Save size={17} /> {saving ? "שומר…" : "שמירת גרסה"}
+            <Save size={17} /> {saving ? "שומר…"
+              : editingId ? "שמירת שינויים" : "שמירת טול"}
           </button>
         </div>
       </form>
@@ -383,15 +402,21 @@ function FieldAgent({
 }
 
 function PackageList({
-  items, onEdit, onRemove,
+  items, onEdit, onRemove, onNew,
 }: {
   items: PackageVersion[];
   onEdit: (item: PackageVersion) => void;
   onRemove: (item: PackageVersion) => void;
+  onNew: () => void;
 }) {
   return (
     <section className="studio-list">
-      <header><h3>מקורות מידע</h3><span>{items.length} מקורות</span></header>
+      <header><h3>מקורות מידע</h3>
+        <div className="studio-list-actions">
+          <span>{items.length} מקורות</span>
+          <NewItemButton label="טול חדש" onClick={onNew} />
+        </div>
+      </header>
       {items.map((item) => (
         // The row was a single <button>; a delete action cannot be nested
         // inside one, so the card is now a wrapper holding two controls.
@@ -400,7 +425,7 @@ function PackageList({
             onClick={() => onEdit(item)}>
             <span className="catalog-icon"><Wrench size={18} /></span>
             <span><strong>{item.name}</strong><small>
-              <bdi dir="ltr">{item.package_id} · v{item.version}</bdi>{" · "}
+              <bdi dir="ltr">{item.package_id}</bdi>{" · "}
               {item.agent_enabled ? "זמין לסוכן" : "ל-workflow בלבד"}
             </small></span>
             <ArrowLeft size={16} />

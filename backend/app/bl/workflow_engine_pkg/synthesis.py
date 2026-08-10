@@ -119,7 +119,7 @@ def _safe_section(section: dict) -> dict:
 
 
 def _shared_summary(service, question, sections, safe_sections) -> dict:
-    prompt = service._repository.published_content(
+    prompt = service._repository.enabled_content(
         "final-summary", "סכם בעברית על סמך העובדות בלבד והחזר JSON."
     )
     prompt += (

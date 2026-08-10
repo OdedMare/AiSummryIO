@@ -2,16 +2,17 @@
 
 import { FormEvent, useState } from "react";
 import {
-  Beaker, BookOpen, LoaderCircle, Save, Send, Sparkles,
+  Beaker, BookOpen, LoaderCircle, Save, Sparkles, Trash2,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
   AgentContent, SkillPreviewResult,
 } from "@/types";
+import { NewItemButton } from "./StudioCommon";
 
 const emptyContent = {
   content_key: "", kind: "skill", name: "", description: "", content: "",
-  user_selectable: true,
+  user_selectable: true, agent_enabled: true,
 };
 
 const sampleSections =
@@ -26,23 +27,61 @@ export default function ContentStudio({
   onRefresh: () => Promise<void>;
 }) {
   const [form, setForm] = useState(emptyContent);
+  /* Which item this form is editing, or "" for a new one. A Skill or prompt
+     is one row, edited in place: there is no publishing step, so a save takes
+     effect immediately and `agent_enabled` is what holds one back. */
+  const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const edit = (item: AgentContent) => setForm({
-    content_key: item.content_key, kind: item.kind, name: item.name,
-    description: item.description, content: item.content,
-    user_selectable: item.user_selectable,
-  });
+  const edit = (item: AgentContent) => {
+    setEditingId(item.id); setError("");
+    setForm({
+      content_key: item.content_key, kind: item.kind, name: item.name,
+      description: item.description, content: item.content,
+      user_selectable: item.user_selectable,
+      agent_enabled: item.agent_enabled,
+    });
+  };
+  const reset = () => { setForm(emptyContent); setEditingId(""); };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); };
   const update = (patch: Partial<typeof emptyContent>) =>
     setForm((current) => ({ ...current, ...patch }));
+
+  /**
+   * Delete a Skill or prompt.
+   *
+   * The confirm names the item, and says built-ins come back on restart:
+   * seeding recreates a missing key, so deleting one of those resets it to
+   * the shipped text rather than removing it.
+   */
+  const remove = async (item: AgentContent) => {
+    const confirmed = window.confirm(
+      `למחוק את „${item.name}”? פריט מובנה יחזור לנוסח המקורי בהפעלה הבאה.`,
+    );
+    if (!confirmed) return;
+    setError("");
+    try {
+      await api.deleteContent(item.id);
+      // The form would otherwise keep editing a row that no longer exists
+      // and fail on the next save.
+      if (editingId === item.id) reset();
+      await onRefresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "המחיקה נכשלה");
+    }
+  };
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      await api.createContent({
+      const payload = {
         ...form, content_key: form.content_key || undefined,
         user_selectable: form.kind === "skill" && form.user_selectable,
-      });
-      setForm(emptyContent); await onRefresh();
+      };
+      if (editingId) await api.updateContent(editingId, payload);
+      else { await api.createContent(payload); reset(); }
+      await onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "השמירה נכשלה");
     } finally {
@@ -51,68 +90,81 @@ export default function ContentStudio({
   };
   return (
     <div className="studio-split">
-      <ContentList items={items} onEdit={edit} onRefresh={onRefresh} />
+      <ContentList items={items} onEdit={edit} onRemove={remove}
+        onNew={startNew} />
       <ContentForm form={form} update={update} save={save} error={error}
-        saving={saving} reset={() => setForm(emptyContent)} />
+        saving={saving} editing={!!editingId} reset={startNew} />
     </div>
   );
 }
 
 function ContentList({
-  items, onEdit, onRefresh,
+  items, onEdit, onRemove, onNew,
 }: {
   items: AgentContent[];
   onEdit: (item: AgentContent) => void;
-  onRefresh: () => Promise<void>;
+  onRemove: (item: AgentContent) => void;
+  onNew: () => void;
 }) {
   return (
     <section className="studio-list">
-      <header><h3>Skills והנחיות</h3><span>{items.length} פריטים</span></header>
+      <header><h3>Skills והנחיות</h3>
+        <div className="studio-list-actions">
+          <span>{items.length} פריטים</span>
+          <NewItemButton label="Skill או הנחיה חדשים" onClick={onNew} />
+        </div>
+      </header>
       {items.map((item) => <ContentCard key={item.id} item={item}
-        onEdit={onEdit} onRefresh={onRefresh} />)}
+        onEdit={onEdit} onRemove={onRemove} />)}
     </section>
   );
 }
 
 function ContentCard({
-  item, onEdit, onRefresh,
+  item, onEdit, onRemove,
 }: {
   item: AgentContent;
   onEdit: (item: AgentContent) => void;
-  onRefresh: () => Promise<void>;
+  onRemove: (item: AgentContent) => void;
 }) {
   const Icon = item.kind === "skill" ? BookOpen : Sparkles;
   return (
-    <article className="content-card">
+    <article className={`content-card${item.agent_enabled ? "" : " is-off"}`}>
       <button type="button" onClick={() => onEdit(item)}>
-        <span><Icon size={17} /></span><span><strong>{item.name}</strong>
+        <span><Icon size={17} /></span>
+        <span><strong>{item.name}</strong>
           <small>{item.kind === "skill" ? "Skill" : "הנחיית מערכת"}{" · "}
-            v{item.version}{item.user_selectable ? " · מוצג למשתמשים" : ""}
+            {item.agent_enabled ? "פעיל לסוכן" : "כבוי"}
+            {item.user_selectable ? " · מוצג למשתמשים" : ""}
           </small>
         </span>
       </button>
-      {item.status === "draft" && <button type="button"
-        onClick={() => void api.publishContent(item.id).then(onRefresh)}>
-        <Send size={15} /> פרסום
-      </button>}
+      <div className="content-card-actions">
+        <button type="button" className="danger-action"
+          onClick={() => onRemove(item)}
+          aria-label={`מחיקת ${item.name}`}>
+          <Trash2 size={15} aria-hidden="true" /> מחיקה
+        </button>
+      </div>
     </article>
   );
 }
 
 function ContentForm({
-  form, update, save, error, saving, reset,
+  form, update, save, error, saving, editing, reset,
 }: {
   form: typeof emptyContent;
   update: (patch: Partial<typeof emptyContent>) => void;
   save: (event: FormEvent) => Promise<void>;
   error: string;
   saving: boolean;
+  editing: boolean;
   reset: () => void;
 }) {
   return (
     <form className="studio-form" onSubmit={save}>
       <header><span><BookOpen size={19} /></span><div>
-        <h3>{form.content_key ? "גרסה חדשה" : "Skill או הנחיה חדשים"}</h3>
+        <h3>{editing ? "עריכת Skill או הנחיה" : "Skill או הנחיה חדשים"}</h3>
         <p>Skill שמוצג למשתמש באמת משנה את תוצאת הסיכום.</p>
       </div></header>
       <div className="form-grid two">
@@ -126,6 +178,14 @@ function ContentForm({
       </div>
       <label><span>מה המשתמש יקבל?</span><input value={form.description}
         onChange={(e) => update({ description: e.target.value })} /></label>
+      <label className="agent-tool-toggle">
+        <input type="checkbox" checked={form.agent_enabled}
+          onChange={(e) => update({ agent_enabled: e.target.checked })} />
+        <span>פעיל לסוכן
+          <small>כשכבוי, הפריט נשמר וניתן לעריכה אך הסוכן לא ישתמש בו.
+            הנחיית מערכת כבויה חוזרת לנוסח המובנה.</small>
+        </span>
+      </label>
       {form.kind === "skill" && <SelectableToggle form={form} update={update} />}
       <label><span>הוראות הפעלה אמיתיות</span>
         <textarea className="content-editor" value={form.content}
@@ -135,11 +195,11 @@ function ContentForm({
         <SkillTester name={form.name} content={form.content} />}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-actions">
-        {form.content_key && <button type="button" className="secondary-button"
+        {editing && <button type="button" className="secondary-button"
           onClick={reset}>ביטול</button>}
         <button className="primary-button" type="submit"
           disabled={saving || !form.name || !form.content}>
-          <Save size={17} /> שמירת טיוטה
+          <Save size={17} /> {editing ? "שמירת שינויים" : "שמירה"}
         </button>
       </div>
     </form>

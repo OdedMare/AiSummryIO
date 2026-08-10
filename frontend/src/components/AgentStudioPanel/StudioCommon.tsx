@@ -1,6 +1,29 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
+
+/**
+ * "Start a blank one" for a studio list.
+ *
+ * Every editor edits one row in place, so opening an item takes the form
+ * over — without this the only way back to a blank form was the cancel
+ * button that appears while editing, which reads as undo rather than as a
+ * way to add something. `label` is the accessible name because "חדש" alone
+ * does not say what would be created.
+ */
+export function NewItemButton({
+  label, onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="studio-new" onClick={onClick}
+      aria-label={label} title={label}>
+      <Plus size={15} aria-hidden="true" /> חדש
+    </button>
+  );
+}
 
 export function ReviewQueue({
   items,
