@@ -10,9 +10,9 @@ modules. It opens a connection per operation through
 |---|---|
 | `repository.py` | Public façade and initialization only |
 | `base.py` | Shared connection/query primitives and IDs |
-| `packages.py` | Versioned FLAPI package catalog |
-| `workflows.py` | Workflows, steps, publishing |
-| `content.py` | Versioned Skills and prompts |
+| `packages.py` | FLAPI package (tool) catalog |
+| `workflows.py` | Workflows and their steps |
+| `content.py` | Skills and prompts |
 | `conversations.py` | Conversations, retention, and thread history |
 | `runs.py` | Runs, progress, and evidence |
 | `feedback.py` | Feedback and review queue |
@@ -33,11 +33,38 @@ answer, and offering it as context would invite the model to treat a question
 that was never answered as if it had been. The newest turns are selected and
 then reversed, so a long thread keeps its most recent context.
 
+## Collapsing the old version history and publish state
+
+`schema.py` carries a one-time migration, guarded on the `version` column so
+it runs once on an old database and is skipped afterwards. Per key it keeps a
+single row: for workflows and content the **published** row wins over a newer
+draft — that draft was the edit that hid the live row — and for tools the
+highest version wins, since tools have no status. Steps are repointed to the
+surviving tool before the others are deleted, because
+`workflow_steps.package_version_id` has no `ON DELETE` clause and would
+otherwise block the delete. `UNIQUE(key, version)` goes with the dropped
+column and is replaced by a unique index on the key alone.
+
+A second guarded block replaces `status` with `agent_enabled`, set from
+`status = 'published'` so a draft or archived row stays unselected instead of
+going live the moment the migration runs.
+
 ## Rules
 
 - All application SQL stays in this directory.
 - Persistence only: business decisions belong in `bl/`.
 - Add behavior to the module that owns its table; keep the façade thin.
-- Package, workflow, and content versions are append-only.
-- Publishing validates mappings and mandatory examples before changing state.
+- Tools, workflows, and content are one row per key and edited in place.
+  `create_*` refuses a key that already exists; `update_*` never rewrites the
+  key itself, since steps, routing, and `enabled_content` all resolve by it.
+- There is no publishing. `agent_enabled` is an ordinary column written by
+  the same create/update as every other field, and `enabled_workflows`,
+  `enabled_summary_skills`, and `enabled_content` are what the agent reads.
+  `validate_steps` on create and update is the only gate a save must clear.
+- `delete_*` takes a row id. A tool is refused while a workflow step points at
+  it, and the blocking workflows are named; a workflow and a Skill or prompt
+  have nothing pinning them, so they go. Deleting content is a reset for a
+  built-in — seeding recreates a missing key at the next startup, and
+  `enabled_content` falls back to the prompt under `bl/prompts/` meanwhile —
+  and permanent for anything an FDE created.
 - Secrets, raw request bodies, and full identifiers are never logged.

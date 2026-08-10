@@ -41,7 +41,6 @@ function Specialist({ specialist }: { specialist: SpecialistTrace }) {
             ? <AlertTriangle size={16} aria-hidden="true" />
             : <Bot size={16} aria-hidden="true" />}
         <strong>{specialist.name}</strong>
-        <small>v{specialist.version}</small>
       </header>
       <p>{specialist.task}</p>
       <Selections specialist={specialist} />

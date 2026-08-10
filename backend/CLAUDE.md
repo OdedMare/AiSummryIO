@@ -10,7 +10,8 @@ is documented in depth in
 ## Purpose
 
 The backend turns one opaque string identifier into a traceable Hebrew
-summary. An initial request runs all published `baseline`/`both` workflows.
+summary. An initial request runs every `agent_enabled` `baseline`/`both`
+workflow.
 Follow-ups reuse conversation evidence and run one relevant
 `detail`/`both` workflow or one FDE-approved standalone tool when needed.
 A follow-up is resolved against the conversation's prior turns first, so a
@@ -60,7 +61,7 @@ uvicorn app.main:app --reload
   and a workflow's `system_prompt` are edited live in Agent Studio and must not
   move into files. See [app/bl/prompts/README.md](app/bl/prompts/README.md).
 - `bl/workflow_engine_pkg/specialists.py` — bounded leader/worker
-  orchestration over published specialists. A leader delegates a focused task
+  orchestration over agent-enabled specialists. A leader delegates a focused task
   to at most two specialists; each worker plans only against the workflows and
   Skills assigned to it; the leader then reviews and may ask follow-up
   questions for up to `agent_max_rounds` rounds before synthesis. Active only
@@ -85,11 +86,10 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 
 ## Locked rules
 
-- The agent may select only published, version-pinned workflows or the latest
-  FDE-approved standalone tool version. It never invents package calls, HTTP,
-  SQL, or mappings.
-- Workflow planning creates a draft from catalog tool-version IDs or describes
-  a missing tool contract; it never publishes automatically.
+- The agent may select only `agent_enabled` workflows and tools. It never
+  invents package calls, HTTP, SQL, or mappings.
+- Workflow planning proposes from catalog tool IDs or describes a missing tool
+  contract; the proposal is loaded into the FDE's form and only they save it.
 - A workflow input may reference `workflow.id`, `workflow.boundaries`, a saved
   `workflow.value`, or an earlier step output. `workflow.boundaries` is the
   area drawn on the map,
@@ -147,6 +147,25 @@ LocatoAI. A file owns one class or one concern; split rather than append.
 - There is no authentication: FDE routes are open and the service must be
   deployed on a trusted network only. Anonymous conversation sessions still
   use an HttpOnly signed cookie.
-- FDE edits create drafts. Publishing is blocked by invalid mappings or
-  failing mandatory examples.
+- **Tools, workflows, and Skills are edited in place: one row per key, no
+  version history and no publishing step.** Creating uses an unused key;
+  editing updates the row the FDE opened, and a save takes effect
+  immediately — including on a route the agent is already selecting.
+- **`agent_enabled` is the only switch.** It replaced draft/published/archived
+  on workflows and content, and matches what tools already had: off means the
+  row exists and is editable but the agent will not select it. There is no
+  one-way transition and no separate publish validation — `validate_steps` on
+  every save is the whole structural gate, and a workflow's `examples` are
+  optional documentation rather than a requirement.
+- A disabled or deleted prompt falls back to the built-in text under
+  `bl/prompts/`, so turning one off is a way back to the shipped wording.
+- **A specialist is validated when it is enabled, not when it is saved.**
+  Publishing used to be that moment; enabling is now the point its config
+  starts being used, so `_validate_specialist` runs from create/update when
+  `agent_enabled` is true: every chosen workflow and Skill must itself be
+  enabled, and **a workflow may belong to only one enabled specialist**. A
+  disabled specialist skips the gate for the same reason a draft did — it
+  routes nothing, and half-built work has to stay savable.
+- Because a row is mutable, `summary_evidence` records which workflow ran but
+  no longer pins the exact steps it ran with.
 - Keep the design simple: add a module only when it owns a distinct boundary.

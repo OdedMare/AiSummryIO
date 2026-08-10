@@ -72,7 +72,7 @@ function SingleToolWorkflow({
           <li key={item.id}>
             <button type="button" role="menuitem" onClick={() => choose(item)}>
               <strong>{item.name}</strong>
-              <small dir="ltr">{item.package_id} · v{item.version}</small>
+              <small dir="ltr">{item.package_id}</small>
             </button>
           </li>)}
       </ul>}
@@ -122,7 +122,7 @@ function StepCard({
           <option value="">בחירת טול</option>
           {packages.map((item) =>
             <option key={item.id} value={item.id}>
-              {item.name} · v{item.version}
+              {item.name}
             </option>)}
           </select>
           <small className="field-hint">חבילת FLAPI שתורץ בשלב הזה.</small>

@@ -19,6 +19,10 @@ export function usePackageCatalog(
   onRefresh: () => Promise<void>,
 ) {
   const [form, setForm] = useState(emptyPackage);
+  /* Which catalog row this form is editing, or "" for a new tool. A tool is
+     one row, edited in place, so saving an edit updates that row instead of
+     appending a version beside it. */
+  const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -35,8 +39,10 @@ export function usePackageCatalog(
 
   const edit = (item: PackageVersion) => {
     setForm(packageForm(item));
+    setEditingId(item.id);
     setInspection(null);
     setMessage("");
+    setError("");
   };
 
   const applyDraft = (draft: ToolPlanDraft) => {
@@ -61,18 +67,29 @@ export function usePackageCatalog(
 
   const reset = () => {
     setForm(emptyPackage);
+    setEditingId("");
     setInspection(null);
   };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); setMessage(""); };
 
+  /** Update the tool being edited, or create a new one. */
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      await api.createPackage(packagePayload(form));
-      setMessage("נשמרה גרסת טול חדשה.");
-      reset();
+      const payload = packagePayload(form);
+      if (editingId) {
+        await api.updatePackage(editingId, payload);
+        setMessage("הטול עודכן.");
+      } else {
+        await api.createPackage(payload);
+        setMessage("נשמר טול חדש.");
+        reset();
+      }
       await onRefresh();
     } catch (reason) {
       setError(errorMessage(reason, "השמירה נכשלה"));
@@ -83,14 +100,14 @@ export function usePackageCatalog(
 
   const remove = async (item: PackageVersion) => {
     const confirmed = window.confirm(
-      `למחוק את הטול „${item.name}” על כל הגרסאות שלו? הפעולה אינה הפיכה.`,
+      `למחוק את הטול „${item.name}”? הפעולה אינה הפיכה.`,
     );
     if (!confirmed) return;
     setError("");
     setMessage("");
     try {
       await api.deletePackage(item.id);
-      if (form.package_key === item.package_key) reset();
+      if (editingId === item.id) reset();
       setMessage(`הטול „${item.name}” נמחק.`);
       await onRefresh();
     } catch (reason) {
@@ -159,6 +176,8 @@ export function usePackageCatalog(
     applyDraft,
     applyField,
     reset,
+    startNew,
+    editingId,
     save,
     remove,
     inspect,

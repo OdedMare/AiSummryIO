@@ -1,5 +1,6 @@
-import { ChevronDown, Play, Send, Trash2 } from "lucide-react";
+import { ChevronDown, Play, Trash2 } from "lucide-react";
 import type { WorkflowVersion } from "@/types";
+import { NewItemButton } from "../StudioCommon";
 import type { WorkflowEditorController } from "./useWorkflowEditor";
 
 export default function WorkflowLibrary({
@@ -11,7 +12,12 @@ export default function WorkflowLibrary({
 }) {
   return (
     <section className="workflow-library">
-      <header><h3>תהליכי עבודה</h3><span>{workflows.length} תהליכים</span></header>
+      <header><h3>תהליכי עבודה</h3>
+        <div className="studio-list-actions">
+          <span>{workflows.length} תהליכים</span>
+          <NewItemButton label="תהליך חדש" onClick={editor.startNew} />
+        </div>
+      </header>
       {workflows.map((item) =>
         <WorkflowCard key={item.id} item={item} editor={editor} />)}
       {editor.libraryError
@@ -35,20 +41,20 @@ function WorkflowCard({
   editor: WorkflowEditorController;
 }) {
   return (
-    <article className="workflow-card">
+    <article
+      className={`workflow-card${item.agent_enabled ? "" : " is-off"}`}>
       <button type="button" className="workflow-card-main"
         onClick={() => editor.edit(item)}>
-        <span className={`status-dot ${item.status}`} />
+        <span className={`status-dot ${item.agent_enabled ? "on" : "off"}`} />
         <span><strong>{item.name}</strong>
-          <small>{item.role} · v{item.version} · {item.steps.length} שלבים</small>
+          <small>
+            {item.role} · {item.agent_enabled ? "פעיל לסוכן" : "כבוי"}
+            {" · "}{item.steps.length} שלבים
+          </small>
         </span>
         <ChevronDown size={16} />
       </button>
       <div className="workflow-card-actions">
-        {item.status === "draft"
-          && <button type="button" onClick={() => void editor.publish(item.id)}>
-            <Send size={15} /> פרסום
-          </button>}
         <button type="button" onClick={() => void editor.dryRun(item.id)}>
           <Play size={15} /> בדיקה חיה
         </button>

@@ -20,6 +20,10 @@ export function useWorkflowEditor(
 ) {
   const [form, setForm] = useState(emptyWorkflow);
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
+  /* Which library row this form is editing, or "" for a new workflow. A
+     workflow is one row, edited in place, so saving an edit has to update
+     that row — posting again would be rejected as a duplicate key. */
+  const [editingId, setEditingId] = useState("");
   const [error, setError] = useState("");
   const [libraryError, setLibraryError] = useState("");
   const [message, setMessage] = useState("");
@@ -28,13 +32,17 @@ export function useWorkflowEditor(
   const [saving, setSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState("");
 
-  const update = (key: keyof typeof emptyWorkflow, value: string) =>
-    setForm((current) => ({ ...current, [key]: value }));
+  const update = <Key extends keyof typeof emptyWorkflow>(
+    key: Key, value: (typeof emptyWorkflow)[Key],
+  ) => setForm((current) => ({ ...current, [key]: value }));
 
   const edit = (item: WorkflowVersion) => {
     setForm(workflowForm(item));
+    setEditingId(item.id);
     setSteps(item.steps.map((step) => ({ ...step })));
     setDryResult("");
+    setError("");
+    setMessage("");
   };
 
   const addStep = () => setSteps((current) => {
@@ -72,16 +80,28 @@ export function useWorkflowEditor(
   const disconnectStep = (targetKey: string) =>
     connectStep(targetKey, "workflow.id", "");
 
+  /**
+   * Save the form: update the workflow being edited, or create a new one.
+   *
+   * There is no publishing step, so a save takes effect immediately —
+   * including on a route the agent is already selecting. `agent_enabled` is
+   * an ordinary field on the form and rides along with the save.
+   */
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      await api.createWorkflow(workflowPayload(form, steps));
-      setMessage("נשמרה טיוטת תהליך חדשה.");
-      setForm(emptyWorkflow);
-      setSteps([]);
+      const payload = workflowPayload(form, steps);
+      if (editingId) {
+        await api.updateWorkflow(editingId, payload);
+        setMessage("התהליך עודכן.");
+      } else {
+        await api.createWorkflow(payload);
+        setMessage("התהליך נשמר.");
+        reset();
+      }
       await onRefresh();
     } catch (reason) {
       setError(errorMessage(reason, "השמירה נכשלה"));
@@ -90,30 +110,25 @@ export function useWorkflowEditor(
     }
   };
 
-  const publish = async (id: string) => {
-    setLibraryError("");
-    try {
-      await api.publishWorkflow(id);
-      await onRefresh();
-    } catch (reason) {
-      setLibraryError(errorMessage(reason, "הפרסום נכשל"));
-    }
-  };
-
   const reset = () => {
     setForm(emptyWorkflow);
     setSteps([]);
+    setEditingId("");
+    setSelectedKey("");
   };
+  /* Leaving an edit for a blank form. `reset` alone is what `save` calls
+     after creating, where the success message has to survive. */
+  const startNew = () => { reset(); setError(""); setMessage(""); };
 
   const remove = async (item: WorkflowVersion) => {
     const confirmed = window.confirm(
-      `למחוק את התהליך „${item.name}” על כל הגרסאות שלו? הפעולה אינה הפיכה.`,
+      `למחוק את התהליך „${item.name}”? הפעולה אינה הפיכה.`,
     );
     if (!confirmed) return;
     setLibraryError("");
     try {
       await api.deleteWorkflow(item.id);
-      if (form.workflow_key === item.workflow_key) reset();
+      if (editingId === item.id) reset();
       await onRefresh();
     } catch (reason) {
       setLibraryError(errorMessage(reason, "המחיקה נכשלה"));
@@ -204,13 +219,14 @@ export function useWorkflowEditor(
     connectStep,
     disconnectStep,
     save,
-    publish,
     remove,
     dryRun,
     loadPlan,
     loadPlanSteps,
     createFromTool,
     reset,
+    startNew,
+    editingId,
   };
 }
 

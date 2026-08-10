@@ -29,10 +29,11 @@ export default function PackageCatalog({
   return (
     <div className="studio-split">
       <PackageList items={items} onEdit={catalog.edit}
+        onNew={catalog.startNew}
         onRemove={catalog.remove} />
       <form className="studio-form" onSubmit={catalog.save}>
         <PackageFormHeader form={catalog.form}
-          editing={!!catalog.form.package_key}
+          editing={!!catalog.editingId}
           inspection={catalog.inspection} onApply={catalog.applyDraft} />
         <PackageFields form={catalog.form} update={catalog.update}
           onDropField={(event, target) =>
@@ -59,12 +60,13 @@ export default function PackageCatalog({
           <CheckCircle2 size={16} /> {catalog.message}
         </p>}
         <div className="form-actions">
-          {catalog.form.package_key
+          {catalog.editingId
             && <button type="button" className="secondary-button"
               onClick={catalog.reset}>ביטול עריכה</button>}
           <button className="primary-button" type="submit"
             disabled={catalog.saving}>
-            <Save size={17} /> {catalog.saving ? "שומר…" : "שמירת גרסה"}
+            <Save size={17} /> {catalog.saving ? "שומר…"
+              : catalog.editingId ? "שמירת שינויים" : "שמירת טול"}
           </button>
         </div>
       </form>

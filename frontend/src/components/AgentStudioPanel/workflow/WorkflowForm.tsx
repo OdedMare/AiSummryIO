@@ -21,9 +21,7 @@ export default function WorkflowForm({
       <header className="studio-form-header">
         <span><Workflow size={19} /></span>
         <div>
-          <h3>{editor.form.workflow_key
-            ? "גרסה חדשה לתהליך"
-            : "תהליך חדש"}</h3>
+          <h3>{editor.editingId ? "עריכת תהליך" : "תהליך חדש"}</h3>
           <p>סדרת שלבים שמרכיבה סעיף אחד בסיכום.</p>
         </div>
         <WorkflowPlanChat editor={editor} />

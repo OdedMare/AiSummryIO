@@ -60,6 +60,9 @@ class WorkflowCreate(BaseModel):
     name: str
     description: str = ""
     role: Literal["baseline", "detail", "both"] = "detail"
+    # Whether the agent may select this route. There is no publishing step, so
+    # a saved workflow is live unless this is turned off.
+    agent_enabled: bool = True
     system_prompt: str = ""
     output_schema: Dict[str, Any] = Field(default_factory=dict)
     examples: List[Dict[str, Any]] = Field(default_factory=list)
@@ -140,6 +143,8 @@ class AgentContentCreate(BaseModel):
     content: str
     config: SpecialistConfig = Field(default_factory=SpecialistConfig)
     user_selectable: bool = False
+    # As on a workflow: saved means live, unless this is turned off.
+    agent_enabled: bool = True
 
 
 class SkillPreviewSection(BaseModel):
@@ -221,7 +226,7 @@ class SummaryCreate(BaseModel):
     """A summary request scoped by an identifier, an area, or both.
 
     Either ``root_id`` or ``boundaries`` must be present. A request carrying
-    only an area runs the published workflows whose steps read
+    only an area runs the agent-enabled workflows whose steps read
     ``workflow.boundaries``; steps needing ``workflow.id`` degrade to a
     warning rather than failing the run.
     """

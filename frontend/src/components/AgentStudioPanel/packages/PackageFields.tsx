@@ -11,26 +11,34 @@ import {
   type PackageForm,
   type UpdatePackage,
 } from "./packageModel";
+import { NewItemButton } from "../StudioCommon";
 
 export function PackageList({
   items,
   onEdit,
   onRemove,
+  onNew,
 }: {
   items: PackageVersion[];
   onEdit: (item: PackageVersion) => void;
   onRemove: (item: PackageVersion) => void;
+  onNew: () => void;
 }) {
   return (
     <section className="studio-list">
-      <header><h3>מקורות מידע</h3><span>{items.length} מקורות</span></header>
+      <header><h3>מקורות מידע</h3>
+        <div className="studio-list-actions">
+          <span>{items.length} מקורות</span>
+          <NewItemButton label="טול חדש" onClick={onNew} />
+        </div>
+      </header>
       {items.map((item) =>
         <article className="catalog-card" key={item.id}>
           <button type="button" className="catalog-card-main"
             onClick={() => onEdit(item)}>
             <span className="catalog-icon"><Wrench size={18} /></span>
             <span><strong>{item.name}</strong><small>
-              <bdi dir="ltr">{item.package_id} · v{item.version}</bdi>{" · "}
+              <bdi dir="ltr">{item.package_id}</bdi>{" · "}
               {item.agent_enabled ? "זמין לסוכן" : "ל-workflow בלבד"}
             </small></span>
             <ArrowLeft size={16} />

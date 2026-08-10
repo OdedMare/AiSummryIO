@@ -1,4 +1,4 @@
-"""Bounded leader/worker orchestration over published specialists."""
+"""Bounded leader/worker orchestration over agent-enabled specialists."""
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,12 +31,12 @@ _MAX_WORKFLOWS = 3
 
 
 def available(service) -> List[dict]:
-    """Published specialists when agent mode is enabled, otherwise none."""
+    """Enabled specialists when agent mode is on, otherwise none."""
     try:
         rounds = service._store.get().agent_max_rounds
     except AttributeError:
         return []
-    reader = getattr(service._repository, "published_specialists", None)
+    reader = getattr(service._repository, "enabled_specialists", None)
     return reader() if rounds > 0 and reader else []
 
 
@@ -141,7 +141,7 @@ def _orchestrate(
 
 
 def _prompt(service, key: str, fallback: str) -> str:
-    reader = getattr(service._repository, "published_content", None)
+    reader = getattr(service._repository, "enabled_content", None)
     return reader(key, fallback) if reader else fallback
 
 
@@ -220,10 +220,10 @@ def _plan_state(
     allowed_workflows = _texts(config.get("workflow_keys"))
     allowed_skills = _texts(config.get("skill_keys"))
     roles = ["detail", "both"] if is_follow_up else ["baseline", "both"]
-    workflows = service._repository.published_workflows_by_keys(
+    workflows = service._repository.enabled_workflows_by_keys(
         allowed_workflows, roles
     )
-    skill_options = service._repository.published_skill_options(allowed_skills)
+    skill_options = service._repository.enabled_skill_options(allowed_skills)
     cached = [
         item for item in prior_sections
         if item.get("workflow_key") in set(allowed_workflows)
@@ -256,14 +256,14 @@ def _plan_state(
         if is_follow_up and cached:
             use_cached = True
         else:
-            # Fail small: one safe published workflow is preferable to running
+            # Fail small: one safe enabled workflow is preferable to running
             # the entire catalog because planning returned no usable choice.
             workflow_keys = [workflows[0]["workflow_key"]] if workflows else []
     selected = {
         item["workflow_key"]: item for item in workflows
         if item["workflow_key"] in workflow_keys
     }
-    skills = service._repository.published_skills(skill_keys)
+    skills = service._repository.enabled_skills(skill_keys)
     prepared = [
         _worker_workflow(
             selected[key], agent, assignment["task"], skills, worker_prompt
@@ -287,7 +287,7 @@ def _plan_state(
 
 
 def _bounded_workflows(states) -> List[dict]:
-    """Run each workflow version once and share its section with its owners."""
+    """Run each workflow once and share its section with its owners."""
     unique = {}
     for state in states:
         agent_key = state["agent"]["content_key"]
@@ -564,7 +564,7 @@ def _tag_evidence(evidence, sections) -> List[dict]:
 
 def _selected_summary_skills(service, run) -> List[dict]:
     keys = run.get("skill_keys", [])
-    return service._repository.published_summary_skills(keys) if keys else []
+    return service._repository.enabled_summary_skills(keys) if keys else []
 
 
 def _worker_system(agent, skills, worker_prompt) -> str:
@@ -706,7 +706,6 @@ def _trace(states, phase, max_rounds, rounds_used) -> dict:
             {
                 "agent_id": state["agent"]["id"],
                 "agent_key": state["agent"]["content_key"],
-                "version": state["agent"]["version"],
                 "name": state["agent"]["name"],
                 "task": state["task"],
                 "status": state["status"],

@@ -131,7 +131,7 @@ def _shared_summary(
     service, question, sections, safe_sections,
     agent_context=None, leader_prompt="",
 ) -> dict:
-    prompt = service._repository.published_content(
+    prompt = service._repository.enabled_content(
         "final-summary", "סכם בעברית על סמך העובדות בלבד והחזר JSON."
     )
     if leader_prompt:

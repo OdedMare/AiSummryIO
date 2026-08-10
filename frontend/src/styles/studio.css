@@ -241,6 +241,35 @@
   font-size: 11px;
 }
 
+/* Groups the count with the "new" button so the heading keeps the start of
+   the row and both controls sit together at the end. */
+.studio-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.studio-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* 44px target, matching every other studio control. */
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-new:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 .studio-list > header span,
 .workflow-library > header span,
 .review-queue > header span {
@@ -699,13 +728,25 @@
   border-radius: 50%;
 }
 
-.status-dot.published {
+.status-dot.on {
   background: var(--success);
   box-shadow: 0 0 0 4px var(--success-soft);
 }
 
-.status-dot.draft {
-  background: var(--warning);
+.status-dot.off {
+  background: var(--text-muted);
+}
+
+/* A row the agent will not select. The card still opens and edits normally,
+   so this is a hint beside the text that says so — never the only signal. */
+.workflow-card.is-off,
+.content-card.is-off {
+  opacity: 0.72;
+}
+
+.workflow-card.is-off:hover,
+.content-card.is-off:hover {
+  opacity: 1;
 }
 
 .workflow-card-actions {
@@ -715,7 +756,7 @@
 }
 
 .workflow-card-actions button,
-.content-card > button:last-child {
+.content-card-actions button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1264,8 +1305,10 @@
   border: 0;
 }
 
-.content-card > button:last-child {
-  margin: 0 10px 9px;
+.content-card-actions {
+  display: flex;
+  gap: 5px;
+  padding: 0 10px 9px;
 }
 
 .specialist-card {

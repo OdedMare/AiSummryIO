@@ -201,6 +201,11 @@
   color: #fff;
 }
 
+.map-panel-send {
+  flex-shrink: 0;
+  width: 100%;
+}
+
 .map-picker-status {
   display: flex;
   align-items: center;

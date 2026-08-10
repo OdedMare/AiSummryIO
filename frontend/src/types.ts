@@ -42,7 +42,6 @@ export interface SpecialistAnswer {
 export interface SpecialistTrace {
   agent_id: string;
   agent_key: string;
-  version: number;
   name: string;
   task: string;
   status: "planned" | "running" | "completed" | "partial" | "failed";
@@ -154,7 +153,6 @@ export interface ConversationTurn {
 export interface PackageVersion {
   id: string;
   package_key: string;
-  version: number;
   name: string;
   description: string;
   package_id: string;
@@ -196,11 +194,11 @@ export interface WorkflowStep {
 export interface WorkflowVersion {
   id: string;
   workflow_key: string;
-  version: number;
   name: string;
   description: string;
   role: "baseline" | "detail" | "both";
-  status: "draft" | "published" | "archived";
+  /** Whether the agent may select this route. There is no publishing step. */
+  agent_enabled: boolean;
   system_prompt: string;
   output_schema: Record<string, unknown>;
   examples: Array<Record<string, unknown>>;
@@ -298,7 +296,6 @@ export interface WorkflowPlanChatTurn extends PlanChatTurn {
 export interface AgentContent {
   id: string;
   content_key: string;
-  version: number;
   kind: "skill" | "prompt" | "agent";
   name: string;
   description: string;
@@ -308,7 +305,7 @@ export interface AgentContent {
     skill_keys: string[];
   };
   user_selectable: boolean;
-  status: "draft" | "published" | "archived";
+  agent_enabled: boolean;
 }
 
 export interface Evidence {

@@ -10,6 +10,7 @@ export function workflowForm(item: WorkflowVersion) {
     name: item.name,
     description: item.description,
     role: item.role,
+    agent_enabled: item.agent_enabled,
     system_prompt: item.system_prompt,
     output_schema: JSON.stringify(item.output_schema, null, 2),
     examples: JSON.stringify(item.examples, null, 2),

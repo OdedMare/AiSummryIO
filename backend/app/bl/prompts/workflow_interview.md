@@ -29,7 +29,7 @@ name them to the FDE, and ask which one carries the identifier the next tool
 needs. Put the answer in `input_field` and list the step in `depends_on`.
 
 Do not guess this field. A mapping to a field that does not exist blocks
-publishing later, and it fails at the moment the FDE has forgotten the shape
+the save, and it fails at the moment the FDE has forgotten the shape
 of the data. Asking now costs one turn.
 
 `role` is `baseline` for a workflow that runs on every first request, `detail`

@@ -72,7 +72,7 @@ values are empty, how many rows came back: read them.
 is the schema as a JSON object. Send all three as JSON **text**.
 
 Fill all three from `inspection_result` on your very first turn. A tool saved
-without them cannot be published, and the FDE will not know why.
+without them is harder to wire, and the FDE will not know why.
 
 ## Writing `description` and `agent_instructions`
 

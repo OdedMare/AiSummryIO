@@ -283,8 +283,8 @@ TOOL_PLAN_CHAT_SCHEMA = {
                 "agent_instructions": {"type": "string"},
                 # The rest of the save form. The interview used to stop at the
                 # eight fields above, which left `example_input`/
-                # `example_output` empty — and an empty example is exactly what
-                # blocks publishing later, far from where it was decided.
+                # `example_output` empty — and the planner reads
+                # `example_output` to wire a later step's `input_field`.
                 "package_key": {"type": "string"},
                 "query_name": {"type": "string"},
                 "agent_enabled": {"type": "boolean"},

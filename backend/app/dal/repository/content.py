@@ -1,4 +1,12 @@
-"""Versioned Skills and prompt persistence."""
+"""Skills, prompt, and specialist persistence.
+
+One row per `content_key`, edited in place. There is no publishing step and no
+draft state: a saved Skill, prompt, or specialist is what the agent sees, and
+`agent_enabled` alone decides whether it may be used.
+
+A specialist (`kind='agent'`) owns a set of workflows, so enabling one is the
+moment its configuration has to hold together — see `_validate_specialist`.
+"""
 
 from typing import List
 
@@ -10,129 +18,175 @@ from app.dal.repository.base import new_id, slug
 
 class ContentRepository:
     def list_agent_content(self) -> List[dict]:
-        return self._all("""
-            SELECT DISTINCT ON (content_key) *
-            FROM agent_content
-            ORDER BY content_key, version DESC
-        """)
+        return self._all("SELECT * FROM agent_content ORDER BY name")
 
     def list_summary_skills(self) -> List[dict]:
         return self._all("""
             SELECT content_key, name, description
             FROM agent_content
-            WHERE kind='skill' AND status='published'
+            WHERE kind='skill' AND agent_enabled IS TRUE
               AND user_selectable IS TRUE
             ORDER BY name
         """)
 
-    def published_summary_skills(self, keys: List[str]) -> List[dict]:
+    def enabled_summary_skills(self, keys: List[str]) -> List[dict]:
         if not keys:
             return []
         rows = self._all("""
             SELECT content_key, name, description, content
             FROM agent_content
-            WHERE kind='skill' AND status='published'
+            WHERE kind='skill' AND agent_enabled IS TRUE
               AND user_selectable IS TRUE AND content_key = ANY(%s)
         """, (keys,))
         by_key = {row["content_key"]: row for row in rows}
         return [by_key[key] for key in keys if key in by_key]
 
-    def published_specialists(self) -> List[dict]:
+    def enabled_specialists(self) -> List[dict]:
+        """The specialists the leader may delegate to."""
         return self._all("""
-            SELECT id, content_key, version, name, description, content, config
+            SELECT id, content_key, name, description, content, config
             FROM agent_content
-            WHERE kind='agent' AND status='published'
+            WHERE kind='agent' AND agent_enabled IS TRUE
             ORDER BY name
         """)
 
-    def published_skill_options(self, keys: List[str]) -> List[dict]:
-        return self._published_skills(keys, include_content=False)
+    def enabled_skill_options(self, keys: List[str]) -> List[dict]:
+        return self._enabled_skills(keys, include_content=False)
 
-    def published_skills(self, keys: List[str]) -> List[dict]:
-        return self._published_skills(keys, include_content=True)
+    def enabled_skills(self, keys: List[str]) -> List[dict]:
+        return self._enabled_skills(keys, include_content=True)
 
-    def _published_skills(
+    def _enabled_skills(
         self, keys: List[str], include_content: bool
     ) -> List[dict]:
         if not keys:
             return []
         columns = (
-            "id, content_key, version, name, description, content"
+            "id, content_key, name, description, content"
             if include_content
-            else "id, content_key, version, name, description"
+            else "id, content_key, name, description"
         )
         rows = self._all("""
             SELECT %s
             FROM agent_content
-            WHERE kind='skill' AND status='published'
+            WHERE kind='skill' AND agent_enabled IS TRUE
               AND content_key = ANY(%%s)
         """ % columns, (keys,))
         by_key = {row["content_key"]: row for row in rows}
         return [by_key[key] for key in keys if key in by_key]
 
+    def get_agent_content(self, content_id: str) -> dict:
+        return self._one(
+            "SELECT * FROM agent_content WHERE id=%s", (content_id,)
+        )
+
     def create_agent_content(self, data: dict) -> dict:
         content_key = data.get("content_key") or slug(data["name"])
-        version = self._next_version(
-            "agent_content", "content_key", content_key
-        )
+        if self._key_taken("agent_content", "content_key", content_key):
+            raise ValueError(
+                "כבר קיים פריט במפתח %s. יש לערוך אותו או לבחור שם אחר."
+                % content_key
+            )
+        self._validate_enabled(dict(data, content_key=content_key))
         row_id = new_id()
         with connect(self._store) as connection:
             connection.execute(
-                _INSERT_CONTENT,
-                _content_values(row_id, content_key, version, data),
+                _INSERT_CONTENT, _content_values(row_id, content_key, data)
             )
             connection.commit()
-        return self._one("SELECT * FROM agent_content WHERE id=%s", (row_id,))
+        return self.get_agent_content(row_id)
 
-    def publish_agent_content(self, version_id: str) -> dict:
-        item = self._one(
-            "SELECT * FROM agent_content WHERE id=%s", (version_id,)
-        )
-        if item["kind"] == "agent":
-            self._validate_specialist(item)
+    def update_agent_content(self, content_id: str, data: dict) -> dict:
+        """Edit a Skill, prompt, or specialist in place.
+
+        `content_key` is the identity `enabled_content`, the Skill catalog, and
+        a specialist's own config look up by, so it is never rewritten from the
+        payload.
+        """
+        # `_one` raises NotFoundError (404) when the id is unknown.
+        current = self.get_agent_content(content_id)
+        self._validate_enabled(dict(data, content_key=current["content_key"]))
         with connect(self._store) as connection:
-            connection.execute(_ARCHIVE_CONTENT, (item["content_key"],))
-            connection.execute(_PUBLISH_CONTENT, (version_id,))
+            connection.execute(
+                _UPDATE_CONTENT, _content_update_values(content_id, data)
+            )
             connection.commit()
-        return self._one(
-            "SELECT * FROM agent_content WHERE id=%s", (version_id,)
+        return self.get_agent_content(content_id)
+
+    def delete_agent_content(self, content_id: str) -> dict:
+        """Remove a Skill, prompt, or specialist.
+
+        Nothing pins one by row id, so unlike a tool wired into a workflow
+        there is no reference that has to block the delete: a Skill is
+        selected by `content_key` at request time, and `enabled_content`
+        already falls back to the file-based prompt under `bl/prompts/` when
+        the key is missing. Deleting the `workflow-planner` prompt therefore
+        returns it to that default rather than breaking planning.
+
+        A built-in Skill or prompt comes back at the next startup, because
+        seeding keys on the row's absence — the same as the example tool and
+        workflow. Deleting one is a way to reset it, not to remove it.
+        """
+        # `_one` raises NotFoundError (404) when the id is unknown.
+        item = self._one(
+            "SELECT content_key, name FROM agent_content WHERE id=%s",
+            (content_id,),
         )
+        with connect(self._store) as connection:
+            connection.execute(
+                "DELETE FROM agent_content WHERE id=%s", (content_id,)
+            )
+            connection.commit()
+        return {"deleted": item["content_key"], "name": item["name"]}
+
+    def _validate_enabled(self, data: dict) -> None:
+        """Gate a specialist on the way in, when it is enabled.
+
+        Publishing used to be where this ran. With publishing gone, enabling
+        is the moment the configuration starts being used, so it is the moment
+        it has to hold together. A disabled specialist is skipped for the same
+        reason a draft was: it is not routing anything yet, and half-built
+        work must stay savable.
+        """
+        if data.get("kind") != "agent" or not data.get("agent_enabled", True):
+            return
+        self._validate_specialist(data)
 
     def _validate_specialist(self, item: dict) -> None:
         config = item.get("config") if isinstance(item.get("config"), dict) else {}
         workflows = _keys(config.get("workflow_keys"))
         skills = _keys(config.get("skill_keys"))
         if not workflows:
-            raise ValueError("נדרש לפחות Workflow מפורסם אחד לסוכן מומחה")
+            raise ValueError("נדרש לפחות Workflow פעיל אחד לסוכן מומחה")
         available = {
             row["workflow_key"] for row in self._all("""
                 SELECT workflow_key FROM summary_workflows
-                WHERE status='published' AND workflow_key = ANY(%s)
+                WHERE agent_enabled IS TRUE AND workflow_key = ANY(%s)
             """, (workflows,))
         }
         missing = [key for key in workflows if key not in available]
         if missing:
             raise ValueError(
-                "אי אפשר לפרסם סוכן עם Workflows שאינם מפורסמים: "
+                "אי אפשר להפעיל סוכן עם Workflows שאינם פעילים: "
                 + ", ".join(missing)
             )
         available_skills = {
             row["content_key"] for row in self._all("""
                 SELECT content_key FROM agent_content
-                WHERE kind='skill' AND status='published'
+                WHERE kind='skill' AND agent_enabled IS TRUE
                   AND content_key = ANY(%s)
             """, (skills,))
         } if skills else set()
         missing_skills = [key for key in skills if key not in available_skills]
         if missing_skills:
             raise ValueError(
-                "אי אפשר לפרסם סוכן עם Skills שאינם מפורסמים: "
+                "אי אפשר להפעיל סוכן עם Skills שאינם פעילים: "
                 + ", ".join(missing_skills)
             )
         overlaps = []
         for other in self._all("""
             SELECT content_key, name, config FROM agent_content
-            WHERE kind='agent' AND status='published' AND content_key<>%s
+            WHERE kind='agent' AND agent_enabled IS TRUE AND content_key<>%s
         """, (item["content_key"],)):
             shared = set(workflows).intersection(
                 _keys((other.get("config") or {}).get("workflow_keys"))
@@ -143,23 +197,27 @@ class ContentRepository:
                 ))
         if overlaps:
             raise ValueError(
-                "כל Workflow יכול להשתייך לסוכן מפורסם אחד בלבד. "
+                "כל Workflow יכול להשתייך לסוכן פעיל אחד בלבד. "
                 + "; ".join(overlaps)
             )
 
-    def published_content(self, key: str, fallback: str) -> str:
+    def enabled_content(self, key: str, fallback: str) -> str:
+        """The prompt text for `key`, or the caller's built-in default.
+
+        A disabled or deleted prompt therefore returns the version under
+        `bl/prompts/` rather than failing — turning one off is a way back to
+        the shipped wording.
+        """
         rows = self._all("""
             SELECT content FROM agent_content
-            WHERE content_key=%s AND status='published'
-            ORDER BY version DESC LIMIT 1
+            WHERE content_key=%s AND agent_enabled IS TRUE
         """, (key,))
         return rows[0]["content"] if rows else fallback
 
     def _seed_agent_content(self, items: List[dict]) -> None:
         for item in items:
             if not self._content_exists(item["content_key"]):
-                created = self.create_agent_content(item)
-                self.publish_agent_content(created["id"])
+                self.create_agent_content(item)
 
     def _content_exists(self, content_key: str) -> bool:
         return bool(self._all(
@@ -168,12 +226,21 @@ class ContentRepository:
         ))
 
 
-def _content_values(row_id, content_key, version, data):
+def _content_fields(data):
+    """Every editable column, in the order both statements below use."""
     return (
-        row_id, content_key, version, data["kind"], data["name"],
-        data.get("description", ""), data["content"],
-        Jsonb(data.get("config", {})), data.get("user_selectable", False),
+        data["kind"], data["name"], data.get("description", ""),
+        data["content"], Jsonb(data.get("config", {})),
+        data.get("user_selectable", False), data.get("agent_enabled", True),
     )
+
+
+def _content_values(row_id, content_key, data):
+    return (row_id, content_key) + _content_fields(data)
+
+
+def _content_update_values(content_id, data):
+    return _content_fields(data) + (content_id,)
 
 
 def _keys(value) -> List[str]:
@@ -187,17 +254,14 @@ def _keys(value) -> List[str]:
 
 _INSERT_CONTENT = """
     INSERT INTO agent_content (
-        id, content_key, version, kind, name, description,
-        content, config, user_selectable, status
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft')
+        id, content_key, kind, name, description,
+        content, config, user_selectable, agent_enabled
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
-_ARCHIVE_CONTENT = """
-    UPDATE agent_content SET status='archived'
-    WHERE content_key=%s AND status='published'
-"""
-
-_PUBLISH_CONTENT = """
-    UPDATE agent_content SET status='published', published_at=NOW()
+_UPDATE_CONTENT = """
+    UPDATE agent_content SET
+        kind=%s, name=%s, description=%s, content=%s, config=%s,
+        user_selectable=%s, agent_enabled=%s
     WHERE id=%s
 """

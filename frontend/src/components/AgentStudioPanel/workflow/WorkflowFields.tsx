@@ -32,6 +32,13 @@ export function WorkflowFields({
           </small>
         </label>
       </div>
+      <label className="agent-tool-toggle">
+        <input type="checkbox" checked={form.agent_enabled}
+          onChange={(event) => update("agent_enabled", event.target.checked)} />
+        <span>פעיל לסוכן
+          <small>כשכבוי, התהליך נשמר וניתן לעריכה אך הסוכן לא יבחר בו.</small>
+        </span>
+      </label>
       <label><span>מתי להשתמש בתהליך
         <WorkflowFieldAgent field="description" editor={editor} /></span>
         <textarea value={form.description}
@@ -97,12 +104,13 @@ export function WorkflowActions({
 }) {
   return (
     <div className="form-actions">
-      {editor.form.workflow_key
+      {editor.editingId
         && <button type="button" className="secondary-button"
-          onClick={editor.reset}>ביטול עריכה</button>}
+          onClick={editor.startNew}>ביטול עריכה</button>}
       <button className="primary-button" type="submit"
         disabled={editor.saving || !editor.steps.length}>
-        <Save size={17} /> {editor.saving ? "שומר…" : "שמירת טיוטה"}
+        <Save size={17} /> {editor.saving ? "שומר…"
+          : editor.editingId ? "שמירת שינויים" : "שמירה"}
       </button>
     </div>
   );

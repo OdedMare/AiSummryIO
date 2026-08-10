@@ -35,8 +35,9 @@ names, keys, and identifiers exactly as they are — never translate
 ## The mapping rule that fails most often
 A step reading another step's output must BOTH declare it in `depends_on`
 AND point at a field present in the example output. A mapping to a field
-that is not in the example will be rejected at publish time. Verify the
-field name against the package's `example_output` — never from memory.
+that is not in the example will be rejected when the workflow is saved.
+Verify the field name against the package's `example_output` — never from
+memory.
 
 ## input_mode
 `single` — the package takes one identifier; it is called once per
@@ -49,7 +50,8 @@ output contract ADDS fields on top of
 `summary`/`facts`/`warnings`/`suggested_questions` rather than replacing
 them.
 
-Produce a draft only. Never publish automatically.""",
+Produce a proposal only. It is loaded into the FDE's form for them to
+review and save; never present it as already in place.""",
     },
     {
         "content_key": "test-summary-workflow",
@@ -58,7 +60,8 @@ Produce a draft only. Never publish automatically.""",
         "description": "מריץ דוגמאות ובודק מיפויים, עובדות וראיות.",
         "content": """# Test a summary workflow
 
-Verify a draft before it is published, and report what would break.
+Verify a workflow before it is turned on for the agent, and report what
+would break.
 
 **Language:** report every finding in Hebrew, because the FDE reads Hebrew.
 Keep field names, step keys, and identifiers untranslated inside the text.
@@ -73,8 +76,9 @@ Keep field names, step keys, and identifiers untranslated inside the text.
 3. **Field existence.** Every `input_field` names a field that appears in
    the referenced step's example output. A missing field is blocking.
 4. **Examples.** Each package has both an example input and an example
-   output, or the workflow itself has an example. Publishing is blocked
-   otherwise.
+   output. These are not enforced, so a missing pair is a warning worth
+   raising rather than a failure — but the planner reads `example_output`,
+   so a package without one is harder to wire correctly.
 5. **Evidence support.** Each fact the summary is expected to state can be
    traced to a package output field. A fact with no possible source means
    the prompt is inviting the model to guess.
@@ -82,8 +86,8 @@ Keep field names, step keys, and identifiers untranslated inside the text.
    failure message is clear when no area was drawn.
 
 ## Severity — do not blur these
-- **Blocking**: coerced identifiers, invalid mappings, missing fields,
-  missing mandatory examples. These must stop publishing.
+- **Blocking**: coerced identifiers, invalid mappings, missing fields.
+  These must be fixed before the workflow is enabled for the agent.
 - **Warning**: thin coverage, a step likely to return zero rows, a vague
   step name. These are reported but do not block.
 
@@ -132,8 +136,9 @@ workflow as broken when one package failed.
 
 ## Output
 Name the single root cause, show the evidence that points to it, and
-propose a new DRAFT version with the specific change. Never modify the
-published version; it stays immutable.""",
+propose the specific change to make. Say plainly when the change would
+touch a workflow the agent is already selecting, so the FDE decides
+before it takes effect.""",
     },
     {
         "content_key": "summary-executive",
@@ -967,7 +972,7 @@ Return JSON with `summary`, `key_findings`, `risks`, `missing_data`, and
         "content_key": "follow-up-router",
         "kind": "prompt",
         "name": "ניתוב שאלת המשך",
-        "description": "בוחר תהליך detail שפורסם או משתמש בראיות קיימות.",
+        "description": "בוחר תהליך detail פעיל או משתמש בראיות קיימות.",
         "content": """Route a follow-up question.
 
 Choose a single `workflow_key` ONLY if the existing evidence cannot answer
@@ -986,7 +991,7 @@ written in Hebrew.""",
         "content": """Choose exactly ONE action for the follow-up question:
 
 - `use_cached` — the existing evidence already answers it.
-- `workflow` — a published workflow is needed.
+- `workflow` — one of the workflows in the supplied list is needed.
 - `tool` — one approved standalone tool is enough.
 - `clarify` — information is missing to decide.
 
@@ -1045,11 +1050,12 @@ Set `changed` to true only when the wording actually differs.""",
         "kind": "prompt",
         "name": "מתכנן תהליכים מטולים",
         "description": "מרכיב טיוטת workflow או מסביר איזה טול חסר.",
-        "content": """You plan a workflow draft for an FDE.
+        "content": """You plan a workflow for an FDE to review.
 
 Use only a `package_version_id` that exists in the supplied catalog. Chain
 steps according to the output fields shown in the examples, keep every
-identifier a string, and return a DRAFT only — never publish.
+identifier a string, and return a proposal only — it is the FDE who
+saves it.
 
 Each step uses `workflow.id`, `workflow.boundaries`, `workflow.value`, or an
 earlier `steps.<key>`. Use `input_value` only with `workflow.value`; otherwise

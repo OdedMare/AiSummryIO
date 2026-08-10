@@ -6,7 +6,7 @@ examples; users provide one identifier and receive a progressive full summary.
 
 ## What it does
 
-- The first request runs every published `baseline`/`both` workflow.
+- The first request runs every agent-enabled `baseline`/`both` workflow.
 - Follow-up questions reuse saved evidence and run a relevant `detail` workflow
   or one FDE-approved standalone tool only when more data is needed.
 - An FDE can describe a goal in plain language; the planner builds a reviewable
@@ -16,7 +16,7 @@ examples; users provide one identifier and receive a progressive full summary.
   `00123`; they are never converted to integers.
 - Successful sections remain visible when another package fails, and raw
   evidence is available separately from the Hebrew summary.
-- Users can add up to three published summary Skills to a run. The built-in
+- Users can add up to three enabled summary Skills to a run. The built-in
   Skills produce an executive brief, risk review, recommended actions, a
   timeline, cross-source contradictions, an entity map, an evidence-quality
   audit, a data profile, a distribution read, or an outlier scan. Each Skill
@@ -35,7 +35,7 @@ There are no GIS providers or map dependencies.
 
 ## Specialist agents (agent mode)
 
-Beyond running workflows directly, published **specialists** can be
+Beyond running workflows directly, agent-enabled **specialists** can be
 orchestrated as a bounded leader/worker team. A leader model picks the
 relevant specialists and gives each a focused task; each worker selects only
 the workflows and Skills assigned to it, and answers only from evidence that
@@ -356,8 +356,9 @@ version:
 4. Ask the planner for a draft or build one from tool steps, then map later
    inputs from earlier output fields.
 5. Run a live dry-run with a safe identifier.
-6. Publish the workflow. The server blocks workflows without valid mappings or
-   publishable examples.
+6. Save the workflow. It is live for the agent as soon as it is saved; the
+   server refuses invalid step mappings, and "פעיל לסוכן" is what holds a
+   workflow back while it is still being built.
 
 The agent is also reachable **per field**: every prose field on the tool and
 workflow forms carries its own small agent button, which opens the interview
@@ -370,7 +371,7 @@ available.
 
 The studio is preloaded with ten user-facing summary Skills and separate
 operator guidance for building, testing, and diagnosing workflows. A manager
-can publish more Skills and choose which ones appear on the summary screen.
+can add more Skills and choose which ones appear on the summary screen.
 
 Skill instructions are written in English — models follow English guidance more
 precisely — and each one directs the model to read the Hebrew sections and
