@@ -148,10 +148,50 @@ CREATE TABLE IF NOT EXISTS summary_feedback (
 -- Feedback moved from thumbs up/down (-1/1) to a 1-5 star rating, so the
 -- router (`bl/workflow_engine_pkg/routing.py`) has a graded quality signal
 -- per route instead of a binary one. `DROP ... IF EXISTS` then re-`ADD` is
--- idempotent on every startup: it tolerates the old constraint (first run
--- on an existing database), the new one already in place (every run after),
--- and a fresh database (nothing to drop) alike.
-ALTER TABLE summary_feedback DROP CONSTRAINT IF EXISTS summary_feedback_rating_check;
+-- idempotent on the constraint's own *definition*, but `ADD CONSTRAINT`
+-- also validates every row already in the table — and a database that was
+-- live under the old scale still has -1 rows sitting in it. Re-adding the
+-- constraint against those crashed startup outright, every restart, with
+-- no way for the app to ever come up and let anyone fix the data by hand.
+DO $$
+DECLARE
+    previous_def TEXT;
+BEGIN
+    SELECT pg_get_constraintdef(oid) INTO previous_def
+    FROM pg_constraint WHERE conname = 'summary_feedback_rating_check';
+
+    -- Drop it up front (if present) so the translation below — and the
+    -- generic clamp after it — can write values the constraint being
+    -- replaced would not itself have allowed, e.g. 5 while the old -1/1
+    -- check is still live.
+    ALTER TABLE summary_feedback DROP CONSTRAINT IF EXISTS summary_feedback_rating_check;
+
+    -- Positive evidence this was still the old thumbs up/down check — a
+    -- literal -1 is the one thing that appears in that definition and
+    -- never in `BETWEEN 1 AND 5`. Only then translate old rows onto the
+    -- new scale's meaning (down -> worst star, up -> best star), and only
+    -- once: after this first successful run the constraint reads
+    -- `BETWEEN 1 AND 5`, so a genuine 1-star rating collected afterward is
+    -- never mistaken for the old thumbs-up again. A bare clamp instead of
+    -- this translation would have turned every past thumbs-up into the new
+    -- scale's *worst* rating, wrongly filling `review_queue()`'s
+    -- `rating <= 2` list with what were actually positive runs.
+    IF previous_def LIKE '%-1%' THEN
+        UPDATE summary_feedback SET rating = CASE
+            WHEN rating = -1 THEN 1
+            WHEN rating = 1 THEN 5
+            ELSE rating
+        END;
+    END IF;
+END $$;
+
+-- Belt-and-braces regardless of the constraint's prior shape: no rating
+-- this app writes today is outside 1-5, so clamping anything still out of
+-- range is always safe and is what actually guarantees the ADD CONSTRAINT
+-- below cannot fail on this table again.
+UPDATE summary_feedback SET rating = LEAST(GREATEST(rating, 1), 5)
+WHERE rating NOT BETWEEN 1 AND 5;
+
 ALTER TABLE summary_feedback ADD CONSTRAINT summary_feedback_rating_check
     CHECK (rating BETWEEN 1 AND 5);
 
