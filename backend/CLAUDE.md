@@ -104,10 +104,10 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   from individual facts so a 300-record split does not read as the equal of one
   record. A section the model failed to produce is marked `degraded: true`
   rather than passed off as a thin result.
-- Summary synthesis receives whole `rows` plus `stats` computed in Python over
-  every row — frequency, ranges, and emptiness are arithmetic, so deriving them
-  in code is exact and cannot be hallucinated. The model states counts from
-  `stats`; it never counts for itself.
+- Summary synthesis maps over bounded, disjoint `rows` batches that together
+  contain every summary-eligible row, then reduces every batch analysis into
+  one section. `stats` is still computed in Python over the whole dataset —
+  frequency, ranges, and emptiness are exact and never counted by the model.
 - `_safe_section` deliberately withholds `evidence_ids` from the final-summary
   model, so the summary is traceable only at section granularity. Per-claim
   citations would require changing what that call receives — do not render them

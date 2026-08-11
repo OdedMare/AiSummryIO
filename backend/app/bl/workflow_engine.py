@@ -109,7 +109,7 @@ class SummaryService:
 
     @staticmethod
     def _chunk_facts(step_records: Dict[str, List[dict]]) -> List[dict]:
-        return execution.chunk_facts(step_records)
+        return execution.fact_chunks(step_records)
 
     @staticmethod
     def _merge_output_schema(output_schema) -> dict:

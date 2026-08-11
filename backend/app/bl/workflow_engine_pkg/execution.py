@@ -12,9 +12,8 @@ from app.dal.repository.validation import step_levels
 
 _log = trace("execution")
 
-# The model needs an honest view of the whole dataset, not every raw row. 100
-# evenly distributed rows preserve real value correlations while exact stats
-# below are still computed over every record, including a 6,000-row response.
+# Routing and specialist follow-ups use a bounded digest. Section synthesis
+# uses the same size as a batch and analyzes every batch before reducing them.
 _SUMMARY_ROW_LIMIT = 100
 
 
@@ -158,7 +157,7 @@ def execute_workflow(
     warnings, evidence_ids = _run_steps(
         service, run, workflow, context, save_evidence
     )
-    facts = chunk_facts(context["steps"], context["summary_fields"])
+    facts = fact_chunks(context["steps"], context["summary_fields"])
     _add_summary_instructions(facts, workflow["steps"])
     generated = service._section_summary(workflow, facts, warnings)
     return _section(workflow, generated, warnings, evidence_ids)
@@ -430,6 +429,42 @@ def chunk_facts(
         )
         for step_key, records in step_records.items()
     ]
+
+
+def fact_chunks(
+    step_records: Dict[str, List[dict]], field_policies=None
+) -> List[dict]:
+    """Split every summary-eligible row into bounded, lossless batches."""
+    field_policies = field_policies or {}
+    result = []
+    for step_key, records in step_records.items():
+        allowed_fields = field_policies.get(step_key)
+        available = {str(key) for row in records for key in row}
+        fields = sorted(
+            available if allowed_fields is None
+            else available.intersection(allowed_fields)
+        )
+        batches = [
+            records[index:index + _SUMMARY_ROW_LIMIT]
+            for index in range(0, len(records), _SUMMARY_ROW_LIMIT)
+        ] or [[]]
+        stats = _stats(records, fields)
+        samples = _samples(records, fields)
+        for index, batch in enumerate(batches):
+            result.append({
+                "step": step_key,
+                "chunk": index + 1,
+                "chunk_count": len(batches),
+                "row_count": len(records),
+                "chunk_row_count": len(batch),
+                "fields": fields,
+                "rows": _rows(batch, fields),
+                # Global arithmetic is needed once by the reducer, not in
+                # every map call over this step's disjoint row batches.
+                **({"stats": stats, "samples": samples} if index == 0 else {}),
+                "complete_rows": True,
+            })
+    return result
 
 
 def _fact_chunk(
