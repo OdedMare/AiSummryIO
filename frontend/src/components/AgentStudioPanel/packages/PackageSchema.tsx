@@ -118,9 +118,9 @@ export function PackageInspector({
   return (
     <section className="tool-inspector" aria-labelledby="tool-inspector-title">
       <header><div><h4 id="tool-inspector-title">Fetch 1 ID</h4>
-        <p>מריץ מזהה אחד, מציג preview מוגבל ומסיק את ה-output schema.</p>
+	        <p>מריץ מזהה אחד, כולל MULTIPOLYGON WKT, ומסיק output schema.</p>
       </div></header>
-      <label><span>מזהה בדיקה בטוח</span><input dir="ltr" value={inspectId}
+	      <label><span>מזהה / MULTIPOLYGON לבדיקה</span><input dir="ltr" value={inspectId}
         onChange={(event) => setInspectId(event.target.value)} /></label>
       <button type="button" className="secondary-button"
         onClick={() => void inspect()}

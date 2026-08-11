@@ -26,8 +26,8 @@ function IdentifierField({ app }: { app: AppShellController }) {
         <b aria-hidden="true">*</b>}</span>
       <input value={app.rootId}
         onChange={(event) => app.setRootId(event.target.value)}
-        placeholder="לדוגמה: HOME-ABC-001" dir="ltr" autoComplete="off"
-        maxLength={256} disabled={app.submitting} />
+        placeholder="לדוגמה: HOME-ABC-001 או MULTIPOLYGON (...)"
+        dir="ltr" autoComplete="off" disabled={app.submitting} />
     </label>
   );
 }

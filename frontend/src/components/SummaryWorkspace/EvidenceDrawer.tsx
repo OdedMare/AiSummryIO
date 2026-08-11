@@ -95,7 +95,7 @@ function EvidenceItem({ runId, item }: { runId: string; item: Evidence }) {
         {item.step_key} · {item.row_count} רשומות
       </summary>
       {error && <p role="alert">{error}</p>}
-      {page && <pre dir="ltr">{JSON.stringify(page.records, null, 2)}</pre>}
+      {page && <EvidenceTable records={page.records} />}
       {loading && <p className="loading-line">
         <LoaderCircle size={16} /> טוען ראיות…
       </p>}
@@ -105,4 +105,41 @@ function EvidenceItem({ runId, item }: { runId: string; item: Evidence }) {
         </button>}
     </details>
   );
+}
+
+/** Raw records as a table. A package may omit a field on some rows, so the
+    columns are the union across the page rather than the first record's keys —
+    otherwise a later row's value would have no column to land in. */
+function EvidenceTable({ records }: { records: Array<Record<string, unknown>> }) {
+  const columns = Array.from(
+    new Set(records.flatMap((record) => Object.keys(record))),
+  );
+  if (!columns.length) return <p className="evidence-empty">אין רשומות להצגה.</p>;
+  return (
+    <div className="evidence-table-scroll">
+      <table className="evidence-table" dir="ltr">
+        <thead>
+          <tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr>
+        </thead>
+        <tbody>
+          {records.map((record, index) => (
+            <tr key={index}>
+              {columns.map((column) => (
+                <td key={column}>{formatCell(record[column])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** A missing field and a present-but-empty one must not read alike, so an
+    absent value renders as an em dash rather than a blank cell. Objects and
+    arrays keep their JSON form — there is no flat rendering that stays exact. */
+function formatCell(value: unknown) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }

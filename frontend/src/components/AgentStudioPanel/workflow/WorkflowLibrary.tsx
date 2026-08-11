@@ -22,11 +22,12 @@ export default function WorkflowLibrary({
         <WorkflowCard key={item.id} item={item} editor={editor} />)}
       {editor.libraryError
         && <p className="form-error" role="alert">{editor.libraryError}</p>}
-      <label className="dry-run-field"><span>מזהה לבדיקה חיה</span>
-        <input dir="ltr" value={editor.dryRunId} placeholder="001234567"
+	      <label className="dry-run-field"><span>מזהה / MULTIPOLYGON לבדיקה חיה</span>
+	        <input dir="ltr" value={editor.dryRunId}
+	          placeholder="001234567 או MULTIPOLYGON (...)"
           onChange={(event) => editor.setDryRunId(event.target.value)} />
         <small className="field-hint">
-          המזהה יישלח לטולים בתהליך לצורך בדיקה בלבד.
+	          הערך יישלח לטולים כמחרוזת אחת ללא שינוי.
         </small>
       </label>
     </section>

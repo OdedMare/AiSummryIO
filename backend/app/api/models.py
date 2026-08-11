@@ -7,6 +7,23 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.common.runtime_settings.normalizers import MASKED_SECRET
 
 
+# FLAPI identifiers are opaque strings. A WKT MULTIPOLYGON can easily exceed
+# the old 256-character ID limit, so keep a request-size guard without treating
+# every identifier as a short database key.
+_IDENTIFIER_MAX_LENGTH = 1_000_000
+
+
+def _identifier(value: str, required: bool = True):
+    cleaned = value.strip()
+    if not cleaned:
+        if required:
+            raise ValueError("נדרש מזהה")
+        return None
+    if len(cleaned) > _IDENTIFIER_MAX_LENGTH:
+        raise ValueError("המזהה ארוך מדי")
+    return cleaned
+
+
 class PackageCreate(BaseModel):
     package_key: Optional[str] = None
     name: str
@@ -125,12 +142,7 @@ class PackageInspect(PackageCreate):
     @field_validator("root_id")
     @classmethod
     def inspection_id_required(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("נדרש מזהה בדיקה")
-        if len(cleaned) > 256:
-            raise ValueError("המזהה ארוך מדי")
-        return cleaned
+        return _identifier(value)
 
 
 class SpecialistConfig(BaseModel):
@@ -244,12 +256,7 @@ class SummaryCreate(BaseModel):
     def root_is_string(cls, value):
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        if len(cleaned) > 256:
-            raise ValueError("המזהה ארוך מדי")
-        return cleaned
+        return _identifier(value, required=False)
 
     @field_validator("skill_keys")
     @classmethod
@@ -281,12 +288,7 @@ class DryRunCreate(BaseModel):
     @field_validator("root_id")
     @classmethod
     def root_required(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("נדרש מזהה")
-        if len(cleaned) > 256:
-            raise ValueError("המזהה ארוך מדי")
-        return cleaned
+        return _identifier(value)
 
 
 class FollowUpCreate(BaseModel):
