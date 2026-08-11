@@ -34,6 +34,31 @@ ALTER TABLE summary_packages
 ALTER TABLE summary_packages
     ADD COLUMN IF NOT EXISTS input_kind TEXT NOT NULL DEFAULT 'both';
 
+-- ---------------------------------------------------------------------------
+-- Why this script commits after every independent block instead of once at
+-- the end.
+--
+-- The whole script text is sent to Postgres as a single simple-query
+-- message, and Postgres implicitly wraps multiple statements in one message
+-- into a single transaction unless the text itself commits along the way.
+-- Without these checkpoints, one guarded migration failing on a particular
+-- database's data (a legacy CHECK violation, an unexpected pre-existing
+-- shape) rolls back every other statement already run in this call —
+-- including unrelated `ADD COLUMN IF NOT EXISTS` statements that had nothing
+-- to do with the failure. That previously left `summary_workflows` (and
+-- `agent_content`) permanently missing `agent_enabled`: the backfill block
+-- sits later in the script than the old `summary_feedback` rating CHECK, so
+-- every startup re-failed at the earlier block before ever reaching and
+-- committing the later one, and the app kept serving with a table that had
+-- never actually been migrated.
+--
+-- Each COMMIT below closes out everything proven safe so far, so a failure
+-- in one guarded block only blocks that block (and whatever follows it) on
+-- this run, instead of undoing already-successful, unrelated schema work.
+-- ---------------------------------------------------------------------------
+
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS summary_workflows (
     id TEXT PRIMARY KEY,
     workflow_key TEXT NOT NULL,
@@ -46,6 +71,8 @@ CREATE TABLE IF NOT EXISTS summary_workflows (
     examples JSONB NOT NULL DEFAULT '[]',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+COMMIT;
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
     id TEXT PRIMARY KEY,
@@ -65,6 +92,8 @@ CREATE TABLE IF NOT EXISTS workflow_steps (
 ALTER TABLE workflow_steps
     ADD COLUMN IF NOT EXISTS input_value TEXT NOT NULL DEFAULT '';
 
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS agent_content (
     id TEXT PRIMARY KEY,
     content_key TEXT NOT NULL,
@@ -79,6 +108,8 @@ CREATE TABLE IF NOT EXISTS agent_content (
 
 ALTER TABLE agent_content
     ADD COLUMN IF NOT EXISTS user_selectable BOOLEAN NOT NULL DEFAULT FALSE;
+
+COMMIT;
 
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
@@ -102,6 +133,8 @@ ALTER TABLE conversations ALTER COLUMN root_id DROP NOT NULL;
 ALTER TABLE conversations
     ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
 
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS summary_runs (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -121,6 +154,8 @@ CREATE TABLE IF NOT EXISTS summary_runs (
 ALTER TABLE summary_runs
     ADD COLUMN IF NOT EXISTS skill_keys JSONB NOT NULL DEFAULT '[]';
 
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS summary_evidence (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES summary_runs(id) ON DELETE CASCADE,
@@ -129,6 +164,8 @@ CREATE TABLE IF NOT EXISTS summary_evidence (
     records JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+COMMIT;
 
 CREATE TABLE IF NOT EXISTS summary_feedback (
     id TEXT PRIMARY KEY,
@@ -171,6 +208,8 @@ BEGIN
     END IF;
 END $$;
 
+COMMIT;
+
 -- ---------------------------------------------------------------------------
 -- Collapse the former append-only version history to one row per key.
 --
@@ -184,6 +223,11 @@ END $$;
 -- database and is skipped from then on. `summary_evidence.workflow_id` has no
 -- foreign key and is deliberately left pointing at whatever ran — evidence is
 -- the audit trail of runs that really happened.
+--
+-- Each block also commits on its own: `summary_packages`, `summary_workflows`
+-- and `agent_content` are collapsed independently of one another, so an
+-- unexpected shape in one of them cannot roll back a collapse that already
+-- succeeded for the other two.
 -- ---------------------------------------------------------------------------
 
 DO $$
@@ -217,6 +261,8 @@ BEGIN
     END IF;
 END $$;
 
+COMMIT;
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -237,6 +283,8 @@ BEGIN
     END IF;
 END $$;
 
+COMMIT;
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -253,6 +301,8 @@ BEGIN
         ALTER TABLE agent_content DROP COLUMN version;
     END IF;
 END $$;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------------
 -- Replace draft/published/archived with the `agent_enabled` switch tools
@@ -273,6 +323,11 @@ ALTER TABLE summary_workflows
 ALTER TABLE agent_content
     ADD COLUMN IF NOT EXISTS agent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- Committed before the backfills below run: the column existing is what
+-- every read and write in the app depends on, so it must survive even if a
+-- backfill block fails outright on this particular database.
+COMMIT;
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -285,6 +340,8 @@ BEGIN
     END IF;
 END $$;
 
+COMMIT;
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -296,6 +353,8 @@ BEGIN
         ALTER TABLE agent_content DROP COLUMN IF EXISTS published_at;
     END IF;
 END $$;
+
+COMMIT;
 
 -- The key is the identity now. Declared as indexes rather than table
 -- constraints so one statement serves both a fresh database and a migrated

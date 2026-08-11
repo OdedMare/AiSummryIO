@@ -34,9 +34,7 @@ class RuntimeSettingsStore:
             database_host=env.database_host,
             database_port=env.database_port,
             database_name=env.database_name,
-            database_schema=_safe_schema(
-                env.database_schema or extract_url_schema(env.database_url)
-            ),
+            database_schema=_safe_schema(_startup_schema(env)),
             llm_model=env.llm_model,
             llm_diet_mode=env.llm_diet_mode,
             llm_timeout_seconds=env.llm_timeout_seconds,
@@ -125,6 +123,24 @@ def _safe_database_url(value: str) -> str:
         return normalize_database_url(value)
     except (TypeError, ValueError):
         return value
+
+
+def _startup_schema(env: Settings) -> str:
+    """The schema to boot with: an explicit env value, else the URL's
+    `?currentSchema=`, else the field's own default.
+
+    `database_schema` always carries a value — it has a non-empty class
+    default — so `env.database_schema or extract_url_schema(...)` could never
+    fall through to the URL: the default alone made the left side truthy and
+    a JDBC `currentSchema` was silently ignored at every boot, contradicting
+    what both `Settings.database_schema` and this store's own docs promise.
+    `model_fields_set` distinguishes a value the environment actually
+    supplied from the class default, which is the same explicit-wins-over-URL
+    precedence `_apply` already uses for a live `database_url` patch.
+    """
+    if "database_schema" in env.model_fields_set:
+        return env.database_schema
+    return extract_url_schema(env.database_url) or env.database_schema
 
 
 def _safe_schema(value: str) -> str:

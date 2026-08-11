@@ -16,7 +16,13 @@ override env defaults and take effect immediately, without a restart, because
    [config/CLAUDE.md](../config/CLAUDE.md).
 2. The constructor copies them into `RuntimeSettings`, running env values
    through the **same normalizers** as UI edits, so a `jdbc:` URL works
-   however it arrives.
+   however it arrives. `database_schema` needs `Settings.model_fields_set` for
+   this, not a truthiness check: the field carries a non-empty class default,
+   so an env value and an unset field are otherwise indistinguishable, and a
+   plain `env.database_schema or extract_url_schema(...)` would always take
+   the default and never see a JDBC `?currentSchema=`. An env var (or
+   `.env` entry) that actually sets `database_schema` still wins over the
+   URL, matching the explicit-field-wins rule `_apply` uses for a live patch.
 3. If `runtime-settings.json` exists, it is applied on top (non-strict: bad
    values are skipped rather than blocking startup).
 4. Startup fills one gap and persists if it fired: a random `cookie_secret`
