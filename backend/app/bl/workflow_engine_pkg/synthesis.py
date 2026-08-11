@@ -16,7 +16,7 @@ _REDUCE_BATCH_SIZE = 12
 # Appended to the workflow's own prompt rather than replacing it: an FDE writes
 # domain instructions, and these describe the data's shape for every workflow.
 _TABULAR_GUIDANCE = """
-מבנה הנתונים: `row_count` הוא מספר כל רשומות השלב. במנה יחיד המערך
+מבנה הנתונים: `row_count` הוא מספר כל רשומות השלב. במנה יחידה המערך
 `rows` כולל את כל הרשומות. בתוצאה גדולה כל מנה מנותחת בנפרד וכל
 ניתוחי המנות מאוחדים לפני החזרת התשובה. `stats` מחושב בקוד על כל הרשומות:
 `present`/`missing`, `distinct`, `counts`
@@ -49,7 +49,7 @@ _MAP_GUIDANCE = """
 
 _REDUCE_GUIDANCE = """
 
-`chunk_analyses` הם ניתוחים של מנות זרות ויחד הם מכסים את כל הרשומות.
+`chunk_analyses` הם ניתוחים של מנות נפרדות שאינן חופפות, ויחד הן מכסות את כל הרשומות.
 אחד את כולם: אל תשמיט ממצא ייחודי או חריג רק מפני שהוא הופיע במנה אחת.
 ספירות וטווחים קבע רק מ-`whole_dataset.stats`, שמחושב על כל הדאטה.
 """
