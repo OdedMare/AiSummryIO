@@ -199,6 +199,8 @@ export interface WorkflowVersion {
   role: "baseline" | "detail" | "both";
   /** Whether the agent may select this route. There is no publishing step. */
   agent_enabled: boolean;
+  /** Specialist owner; null keeps the workflow in direct/non-agent mode. */
+  agent_id: string | null;
   system_prompt: string;
   output_schema: Record<string, unknown>;
   examples: Array<Record<string, unknown>>;

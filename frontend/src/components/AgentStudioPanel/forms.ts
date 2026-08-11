@@ -8,7 +8,8 @@ export const emptyPackage = {
 
 export const emptyWorkflow = {
   workflow_key: "", name: "", description: "", role: "detail",
-  agent_enabled: true, system_prompt: "", output_schema: "", examples: "",
+  agent_enabled: true, agent_id: "", system_prompt: "", output_schema: "",
+  examples: "",
 };
 
 export const parseJson = <T,>(value: string, fallback: T): T =>

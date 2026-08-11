@@ -1,5 +1,5 @@
 import { CheckCircle2, Workflow } from "lucide-react";
-import type { PackageVersion } from "@/types";
+import type { AgentContent, PackageVersion } from "@/types";
 import { WorkflowPlanChat } from "./WorkflowAgents";
 import {
   AdvancedWorkflowFields,
@@ -11,9 +11,11 @@ import type { WorkflowEditorController } from "./useWorkflowEditor";
 
 export default function WorkflowForm({
   packages,
+  agents,
   editor,
 }: {
   packages: PackageVersion[];
+  agents: AgentContent[];
   editor: WorkflowEditorController;
 }) {
   return (
@@ -26,7 +28,7 @@ export default function WorkflowForm({
         </div>
         <WorkflowPlanChat editor={editor} />
       </header>
-      <WorkflowFields editor={editor} />
+      <WorkflowFields editor={editor} agents={agents} />
       <WorkflowSteps packages={packages} editor={editor} />
       <AdvancedWorkflowFields editor={editor} />
       {editor.error

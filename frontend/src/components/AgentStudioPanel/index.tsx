@@ -143,7 +143,9 @@ function StudioBody({ studio }: { studio: Studio }) {
   }
   if (studio.tab === "workflows") {
     return <WorkflowEditor packages={studio.packages}
-      workflows={studio.workflows} onRefresh={studio.refresh} />;
+      workflows={studio.workflows}
+      agents={studio.content.filter((item) => item.kind === "agent")}
+      onRefresh={studio.refresh} />;
   }
   if (studio.tab === "specialists") {
     return <SpecialistStudio

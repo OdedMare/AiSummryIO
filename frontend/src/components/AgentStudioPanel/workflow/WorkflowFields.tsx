@@ -1,11 +1,13 @@
 import { Save, Sparkles } from "lucide-react";
+import type { AgentContent } from "@/types";
 import type { WorkflowEditorController } from "./useWorkflowEditor";
 import { WorkflowFieldAgent } from "./WorkflowAgents";
 
 export function WorkflowFields({
-  editor,
+  editor, agents,
 }: {
   editor: WorkflowEditorController;
+  agents: AgentContent[];
 }) {
   const { form, update } = editor;
   return (
@@ -38,6 +40,21 @@ export function WorkflowFields({
         <span>פעיל לסוכן
           <small>כשכבוי, התהליך נשמר וניתן לעריכה אך הסוכן לא יבחר בו.</small>
         </span>
+      </label>
+      <label><span>סוכן אחראי</span>
+        <select value={form.agent_id}
+          required={form.agent_enabled && agents.length > 0}
+          onChange={(event) => update("agent_id", event.target.value)}>
+          <option value="">ללא שיוך</option>
+          {agents.map((agent) => <option key={agent.id} value={agent.id}>
+            {agent.name}{agent.agent_enabled ? "" : " (כבוי)"}
+          </option>)}
+        </select>
+        <small className="field-hint">
+          {agents.length
+            ? "בשמירה התהליך נוסף מיד לסוכן הזה. תהליך פעיל דורש בחירת סוכן."
+            : "עדיין אין מומחים לבחירה; אפשר ליצור מומחה באזור הסוכנים."}
+        </small>
       </label>
       <label><span>מתי להשתמש בתהליך
         <WorkflowFieldAgent field="description" editor={editor} /></span>

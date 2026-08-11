@@ -18,7 +18,9 @@ from app.dal.repository.base import new_id, slug
 
 class ContentRepository:
     def list_agent_content(self) -> List[dict]:
-        return self._all("SELECT * FROM agent_content ORDER BY name")
+        return self._with_workflow_keys(
+            self._all("SELECT * FROM agent_content ORDER BY name")
+        )
 
     def list_summary_skills(self) -> List[dict]:
         return self._all("""
@@ -43,12 +45,12 @@ class ContentRepository:
 
     def enabled_specialists(self) -> List[dict]:
         """The specialists the leader may delegate to."""
-        return self._all("""
-            SELECT id, content_key, name, description, content, config
+        return self._with_workflow_keys(self._all("""
+            SELECT id, content_key, kind, name, description, content, config
             FROM agent_content
             WHERE kind='agent' AND agent_enabled IS TRUE
             ORDER BY name
-        """)
+        """))
 
     def enabled_skill_options(self, keys: List[str]) -> List[dict]:
         return self._enabled_skills(keys, include_content=False)
@@ -76,9 +78,9 @@ class ContentRepository:
         return [by_key[key] for key in keys if key in by_key]
 
     def get_agent_content(self, content_id: str) -> dict:
-        return self._one(
+        return self._with_workflow_keys([self._one(
             "SELECT * FROM agent_content WHERE id=%s", (content_id,)
-        )
+        )])[0]
 
     def create_agent_content(self, data: dict) -> dict:
         content_key = data.get("content_key") or slug(data["name"])
@@ -87,12 +89,14 @@ class ContentRepository:
                 "כבר קיים פריט במפתח %s. יש לערוך אותו או לבחור שם אחר."
                 % content_key
             )
-        self._validate_enabled(dict(data, content_key=content_key))
         row_id = new_id()
+        item = dict(data, id=row_id, content_key=content_key)
+        self._validate_enabled(item)
         with connect(self._store) as connection:
             connection.execute(
                 _INSERT_CONTENT, _content_values(row_id, content_key, data)
             )
+            _set_agent_workflows(connection, row_id, item)
             connection.commit()
         return self.get_agent_content(row_id)
 
@@ -105,10 +109,17 @@ class ContentRepository:
         """
         # `_one` raises NotFoundError (404) when the id is unknown.
         current = self.get_agent_content(content_id)
-        self._validate_enabled(dict(data, content_key=current["content_key"]))
+        item = dict(
+            data, id=content_id, content_key=current["content_key"]
+        )
+        self._validate_enabled(item)
         with connect(self._store) as connection:
             connection.execute(
                 _UPDATE_CONTENT, _content_update_values(content_id, data)
+            )
+            _set_agent_workflows(
+                connection, content_id, item,
+                was_agent=current.get("kind") == "agent",
             )
             connection.commit()
         return self.get_agent_content(content_id)
@@ -148,9 +159,41 @@ class ContentRepository:
         reason a draft was: it is not routing anything yet, and half-built
         work must stay savable.
         """
-        if data.get("kind") != "agent" or not data.get("agent_enabled", True):
+        if data.get("kind") != "agent":
+            return
+        self._validate_workflow_ownership(data)
+        if not data.get("agent_enabled", True):
             return
         self._validate_specialist(data)
+
+    def _validate_workflow_ownership(self, item: dict) -> None:
+        """A workflow has one owner, regardless of either enabled switch."""
+        workflows = _keys((item.get("config") or {}).get("workflow_keys"))
+        if not workflows:
+            return
+        rows = self._all("""
+            SELECT workflow.workflow_key, workflow.agent_id,
+                   owner.name AS agent_name
+            FROM summary_workflows AS workflow
+            LEFT JOIN agent_content AS owner ON owner.id=workflow.agent_id
+            WHERE workflow.workflow_key = ANY(%s)
+        """, (workflows,))
+        by_key = {row["workflow_key"]: row for row in rows}
+        missing = [key for key in workflows if key not in by_key]
+        if missing:
+            raise ValueError(
+                "Workflows לא קיימים: " + ", ".join(missing)
+            )
+        conflicts = [
+            "%s: %s" % (row["agent_name"], key)
+            for key, row in by_key.items()
+            if row.get("agent_id") and row["agent_id"] != item.get("id")
+        ]
+        if conflicts:
+            raise ValueError(
+                "כל Workflow יכול להשתייך לסוכן אחד בלבד. "
+                + "; ".join(conflicts)
+            )
 
     def _validate_specialist(self, item: dict) -> None:
         config = item.get("config") if isinstance(item.get("config"), dict) else {}
@@ -183,23 +226,25 @@ class ContentRepository:
                 "אי אפשר להפעיל סוכן עם Skills שאינם פעילים: "
                 + ", ".join(missing_skills)
             )
-        overlaps = []
-        for other in self._all("""
-            SELECT content_key, name, config FROM agent_content
-            WHERE kind='agent' AND agent_enabled IS TRUE AND content_key<>%s
-        """, (item["content_key"],)):
-            shared = set(workflows).intersection(
-                _keys((other.get("config") or {}).get("workflow_keys"))
-            )
-            if shared:
-                overlaps.append("%s: %s" % (
-                    other["name"], ", ".join(sorted(shared))
-                ))
-        if overlaps:
-            raise ValueError(
-                "כל Workflow יכול להשתייך לסוכן פעיל אחד בלבד. "
-                + "; ".join(overlaps)
-            )
+
+    def _with_workflow_keys(self, rows: List[dict]) -> List[dict]:
+        """Expose the old API shape from the relational source of truth."""
+        agent_ids = [row["id"] for row in rows if row.get("kind") == "agent"]
+        if not agent_ids:
+            return rows
+        owned = self._all("""
+            SELECT agent_id, workflow_key FROM summary_workflows
+            WHERE agent_id = ANY(%s) ORDER BY name
+        """, (agent_ids,))
+        by_agent = {agent_id: [] for agent_id in agent_ids}
+        for workflow in owned:
+            by_agent[workflow["agent_id"]].append(workflow["workflow_key"])
+        for row in rows:
+            if row.get("kind") != "agent":
+                continue
+            row["config"] = dict(row.get("config") or {})
+            row["config"]["workflow_keys"] = by_agent[row["id"]]
+        return rows
 
     def enabled_content(self, key: str, fallback: str) -> str:
         """The prompt text for `key`, or the caller's built-in default.
@@ -228,9 +273,12 @@ class ContentRepository:
 
 def _content_fields(data):
     """Every editable column, in the order both statements below use."""
+    config = dict(data.get("config") or {})
+    if data.get("kind") == "agent":
+        config.pop("workflow_keys", None)
     return (
         data["kind"], data["name"], data.get("description", ""),
-        data["content"], Jsonb(data.get("config", {})),
+        data["content"], Jsonb(config),
         data.get("user_selectable", False), data.get("agent_enabled", True),
     )
 
@@ -250,6 +298,25 @@ def _keys(value) -> List[str]:
         item.strip() for item in value
         if isinstance(item, str) and item.strip()
     ))
+
+
+def _set_agent_workflows(
+    connection, content_id: str, item: dict, was_agent: bool = False
+) -> None:
+    if item.get("kind") != "agent" and not was_agent:
+        return
+    connection.execute(
+        "UPDATE summary_workflows SET agent_id=NULL WHERE agent_id=%s",
+        (content_id,),
+    )
+    if item.get("kind") != "agent":
+        return
+    keys = _keys((item.get("config") or {}).get("workflow_keys"))
+    if keys:
+        connection.execute("""
+            UPDATE summary_workflows SET agent_id=%s
+            WHERE workflow_key = ANY(%s)
+        """, (content_id, keys))
 
 
 _INSERT_CONTENT = """

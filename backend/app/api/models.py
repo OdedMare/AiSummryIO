@@ -63,6 +63,9 @@ class WorkflowCreate(BaseModel):
     # Whether the agent may select this route. There is no publishing step, so
     # a saved workflow is live unless this is turned off.
     agent_enabled: bool = True
+    # The specialist that owns this workflow. The database foreign key is the
+    # source of truth; specialist config only exposes the derived key list.
+    agent_id: Optional[str] = None
     system_prompt: str = ""
     output_schema: Dict[str, Any] = Field(default_factory=dict)
     examples: List[Dict[str, Any]] = Field(default_factory=list)

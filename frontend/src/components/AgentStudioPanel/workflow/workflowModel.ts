@@ -11,6 +11,7 @@ export function workflowForm(item: WorkflowVersion) {
     description: item.description,
     role: item.role,
     agent_enabled: item.agent_enabled,
+    agent_id: item.agent_id ?? "",
     system_prompt: item.system_prompt,
     output_schema: JSON.stringify(item.output_schema, null, 2),
     examples: JSON.stringify(item.examples, null, 2),
@@ -69,6 +70,7 @@ export function workflowPayload(
   return {
     ...form,
     workflow_key: form.workflow_key || undefined,
+    agent_id: form.agent_id || null,
     output_schema: parseJson<Record<string, unknown>>(form.output_schema, {}),
     examples: parseJson<Array<Record<string, unknown>>>(form.examples, []),
     // The backend resolves a source only from steps already visited.

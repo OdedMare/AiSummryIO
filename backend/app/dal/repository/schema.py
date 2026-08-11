@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS summary_workflows (
     description TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL CHECK (role IN ('baseline','detail','both')),
     agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    agent_id TEXT,
     system_prompt TEXT NOT NULL DEFAULT '',
     output_schema JSONB NOT NULL DEFAULT '{}',
     examples JSONB NOT NULL DEFAULT '[]',
@@ -117,6 +118,14 @@ ALTER TABLE agent_content
 ALTER TABLE agent_content DROP CONSTRAINT IF EXISTS agent_content_kind_check;
 ALTER TABLE agent_content ADD CONSTRAINT agent_content_kind_check
     CHECK (kind IN ('skill','prompt','agent'));
+
+-- A workflow has one real owner in the relational schema. Specialist configs
+-- used to carry workflow keys inside JSON, which made saving a workflow unable
+-- to assign it atomically and allowed the two records to drift apart. The
+-- foreign key is added after `agent_content` exists below, and the legacy JSON
+-- assignments are backfilled after the old version rows have been collapsed.
+ALTER TABLE summary_workflows
+    ADD COLUMN IF NOT EXISTS agent_id TEXT;
 
 COMMIT;
 
@@ -261,7 +270,8 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'summary_packages' AND column_name = 'version'
+        WHERE table_schema = current_schema()
+          AND table_name = 'summary_packages' AND column_name = 'version'
     ) THEN
         -- Steps pin a tool row, so they are moved to the surviving one before
         -- the others go: `package_version_id` has no ON DELETE clause and
@@ -294,7 +304,8 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'summary_workflows' AND column_name = 'version'
+        WHERE table_schema = current_schema()
+          AND table_name = 'summary_workflows' AND column_name = 'version'
     ) THEN
         -- The published row wins over a newer draft: it is the one that was
         -- actually answering requests, so keeping the draft would silently
@@ -316,7 +327,8 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'agent_content' AND column_name = 'version'
+        WHERE table_schema = current_schema()
+          AND table_name = 'agent_content' AND column_name = 'version'
     ) THEN
         DELETE FROM agent_content AS c
         WHERE c.id <> (
@@ -359,7 +371,8 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'summary_workflows' AND column_name = 'status'
+        WHERE table_schema = current_schema()
+          AND table_name = 'summary_workflows' AND column_name = 'status'
     ) THEN
         UPDATE summary_workflows SET agent_enabled = (status = 'published');
         ALTER TABLE summary_workflows DROP COLUMN status;
@@ -373,11 +386,58 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'agent_content' AND column_name = 'status'
+        WHERE table_schema = current_schema()
+          AND table_name = 'agent_content' AND column_name = 'status'
     ) THEN
         UPDATE agent_content SET agent_enabled = (status = 'published');
         ALTER TABLE agent_content DROP COLUMN status;
         ALTER TABLE agent_content DROP COLUMN IF EXISTS published_at;
+    END IF;
+END $$;
+
+COMMIT;
+
+-- Move the old JSON ownership into the workflow row, preferring an enabled
+-- specialist if legacy data somehow named the same workflow more than once.
+-- Once backfilled, remove the duplicate JSON field: API responses reconstruct
+-- `config.workflow_keys` from this column for backward compatibility.
+UPDATE summary_workflows AS workflow
+SET agent_id = (
+    SELECT content.id
+    FROM agent_content AS content
+    WHERE content.kind = 'agent'
+      AND jsonb_typeof(content.config) = 'object'
+      AND COALESCE(content.config->'workflow_keys', '[]'::jsonb)
+          ? workflow.workflow_key
+    ORDER BY content.agent_enabled DESC, content.created_at, content.id
+    LIMIT 1
+)
+WHERE workflow.agent_id IS NULL
+  AND EXISTS (
+      SELECT 1
+      FROM agent_content AS content
+      WHERE content.kind = 'agent'
+        AND jsonb_typeof(content.config) = 'object'
+        AND COALESCE(content.config->'workflow_keys', '[]'::jsonb)
+            ? workflow.workflow_key
+  );
+
+UPDATE agent_content
+SET config = config - 'workflow_keys'
+WHERE kind = 'agent' AND jsonb_typeof(config) = 'object'
+  AND config ? 'workflow_keys';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'summary_workflows'::regclass
+          AND conname = 'summary_workflows_agent_id_fkey'
+    ) THEN
+        ALTER TABLE summary_workflows
+            ADD CONSTRAINT summary_workflows_agent_id_fkey
+            FOREIGN KEY (agent_id) REFERENCES agent_content(id)
+            ON DELETE SET NULL;
     END IF;
 END $$;
 
@@ -392,6 +452,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS summary_workflows_key_idx
     ON summary_workflows(workflow_key);
 CREATE UNIQUE INDEX IF NOT EXISTS agent_content_key_idx
     ON agent_content(content_key);
+CREATE INDEX IF NOT EXISTS summary_workflows_agent_idx
+    ON summary_workflows(agent_id);
 
 CREATE INDEX IF NOT EXISTS conversations_session_idx
     ON conversations(session_id, updated_at DESC);
