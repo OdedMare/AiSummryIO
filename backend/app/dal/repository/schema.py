@@ -134,10 +134,42 @@ CREATE TABLE IF NOT EXISTS summary_feedback (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES summary_runs(id) ON DELETE CASCADE,
     session_id TEXT NOT NULL,
-    rating INTEGER NOT NULL CHECK (rating IN (-1,1)),
+    rating INTEGER NOT NULL,
     comment TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ---------------------------------------------------------------------------
+-- Add the rating CHECK constraint out-of-band instead of inline on the
+-- CREATE TABLE above.
+--
+-- `CREATE TABLE IF NOT EXISTS` only applies to a table that does not exist
+-- yet: on a database where `summary_feedback` was already created (an
+-- earlier deployment, or a row written directly), the whole statement is
+-- skipped and an inline CHECK there would never retroactively apply. Doing
+-- it here, guarded on `pg_constraint`, means startup can also bring an
+-- existing table up to the current rule.
+--
+-- The constraint would fail outright on a table that already carries a
+-- legacy rating outside {-1,1} (a wider scale used before this table's
+-- current contract, or a hand-written row), which is exactly the startup
+-- crash this guards against. Clamping first — positive keeps the "up" vote,
+-- everything else becomes "down" — makes adding the constraint safe on any
+-- pre-existing data instead of taking the app down on every restart.
+-- ---------------------------------------------------------------------------
+
+UPDATE summary_feedback SET rating = CASE WHEN rating > 0 THEN 1 ELSE -1 END
+WHERE rating NOT IN (-1, 1);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'summary_feedback_rating_check'
+    ) THEN
+        ALTER TABLE summary_feedback
+            ADD CONSTRAINT summary_feedback_rating_check CHECK (rating IN (-1,1));
+    END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Collapse the former append-only version history to one row per key.
