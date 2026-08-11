@@ -207,7 +207,9 @@ DECLARE
     previous_def TEXT;
 BEGIN
     SELECT pg_get_constraintdef(oid) INTO previous_def
-    FROM pg_constraint WHERE conname = 'summary_feedback_rating_check';
+    FROM pg_constraint
+    WHERE conrelid = 'summary_feedback'::regclass
+      AND conname = 'summary_feedback_rating_check';
 
     -- Drop it up front (if present) so the translation below — and the
     -- generic clamp after it — can write values the constraint being
