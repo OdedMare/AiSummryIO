@@ -140,10 +140,20 @@ CREATE TABLE IF NOT EXISTS summary_feedback (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES summary_runs(id) ON DELETE CASCADE,
     session_id TEXT NOT NULL,
-    rating INTEGER NOT NULL CHECK (rating IN (-1,1)),
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
     comment TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Feedback moved from thumbs up/down (-1/1) to a 1-5 star rating, so the
+-- router (`bl/workflow_engine_pkg/routing.py`) has a graded quality signal
+-- per route instead of a binary one. `DROP ... IF EXISTS` then re-`ADD` is
+-- idempotent on every startup: it tolerates the old constraint (first run
+-- on an existing database), the new one already in place (every run after),
+-- and a fresh database (nothing to drop) alike.
+ALTER TABLE summary_feedback DROP CONSTRAINT IF EXISTS summary_feedback_rating_check;
+ALTER TABLE summary_feedback ADD CONSTRAINT summary_feedback_rating_check
+    CHECK (rating BETWEEN 1 AND 5);
 
 -- ---------------------------------------------------------------------------
 -- Collapse the former append-only version history to one row per key.

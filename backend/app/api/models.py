@@ -306,7 +306,7 @@ class FollowUpCreate(BaseModel):
 
 class FeedbackCreate(BaseModel):
     run_id: str
-    rating: Literal[-1, 1]
+    rating: Literal[1, 2, 3, 4, 5]
     comment: str = ""
 
 

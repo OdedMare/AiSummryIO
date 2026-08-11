@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus, Star } from "lucide-react";
 
 /**
  * "Start a blank one" for a studio list.
@@ -44,10 +44,18 @@ export function ReviewQueue({
 }
 
 function ReviewItem({ item }: { item: Record<string, unknown> }) {
+  const rating = Number(item.rating);
   return (
     <article>
       <span className="review-icon"><AlertTriangle size={18} /></span>
       <div><strong>{String(item.comment || "סיכום דורש שיפור")}</strong>
+        {Number.isFinite(rating) && rating > 0 &&
+          <span className="review-rating" aria-label={"דירוג " + rating + " מתוך 5"}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Star key={value} size={13}
+                fill={value <= rating ? "currentColor" : "none"} />
+            ))}
+          </span>}
         <small dir="ltr">run {String(item.run_id)} · {String(item.run_status)}
         </small>
       </div>

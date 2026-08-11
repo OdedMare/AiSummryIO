@@ -99,7 +99,10 @@ ID/evidence, and reuse the conversation's stored boundaries.
   per workflow. Only the first turn keeps its `RunHeader`.
 - Evidence is one drawer for the whole thread (`EvidenceView`, held by the
   workspace and keyed by run id), so opening a turn's sources closes another's
-  instead of leaving drawers stacked down the page. Feedback stays per turn.
+  instead of leaving drawers stacked down the page. Feedback stays per turn:
+  a 1-5 star `radiogroup` (`TurnFooter` in `Turn.tsx`), not thumbs up/down —
+  the backend averages it per route and feeds it to the follow-up router as a
+  tie-breaking signal, so a graded rating carries more than a binary one did.
 - The thread auto-scrolls on the turn count and the last turn's status only.
   Scrolling on every 1.5s poll would fight a user reading an earlier answer.
 - **Progress reads as the agent talking, not as a job queue.** `AgentStatus`

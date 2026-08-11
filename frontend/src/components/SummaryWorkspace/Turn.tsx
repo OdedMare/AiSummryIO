@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useState } from "react";
-import { Database, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Database, Star } from "lucide-react";
 import { api } from "@/services/api";
 import type { SummaryRun, SummarySection } from "@/types";
 import AgentStatus from "./AgentStatus";
@@ -88,25 +88,39 @@ function TurnFooter({
 }) {
   /* Feedback is per answer, so it lives with the turn it rates rather than
      once at the bottom of the thread. */
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
-  const sendFeedback = (value: "up" | "down", rating: 1 | -1) => {
-    setFeedback(value); void api.feedback(run.id, rating);
+  const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const sendRating = (value: 1 | 2 | 3 | 4 | 5) => {
+    setRating(value); void api.feedback(run.id, value);
   };
+  /* Hovering/focusing a star previews it and every star before it, the way a
+     star widget is expected to read; it falls back to the sent rating once
+     the pointer leaves. */
+  const shown = hovered ?? rating ?? 0;
   return (
     <footer className="result-footer">
       <button type="button" className="secondary-button" onClick={toggleAll}>
         <Database size={17} />
         {evidenceOpen ? "הסתרת ראיות" : "הצגת ראיות"}
       </button>
-      <div className="feedback-actions" aria-label="משוב על הסיכום">
-        <button type="button" className={feedback === "up" ? "active" : ""}
-          onClick={() => sendFeedback("up", 1)} aria-label="הסיכום עזר לי">
-          <ThumbsUp size={17} />
-        </button>
-        <button type="button" className={feedback === "down" ? "active" : ""}
-          onClick={() => sendFeedback("down", -1)} aria-label="הסיכום דורש שיפור">
-          <ThumbsDown size={17} />
-        </button>
+      <div className="feedback-actions" role="radiogroup" aria-label="דירוג הסיכום, מכוכב אחד עד חמישה">
+        {([1, 2, 3, 4, 5] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={rating === value}
+            aria-label={"דירוג " + value + " מתוך 5 כוכבים"}
+            className={value <= shown ? "active" : ""}
+            onClick={() => sendRating(value)}
+            onMouseEnter={() => setHovered(value)}
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(value)}
+            onBlur={() => setHovered(null)}
+          >
+            <Star size={17} fill={value <= shown ? "currentColor" : "none"} />
+          </button>
+        ))}
       </div>
     </footer>
   );
