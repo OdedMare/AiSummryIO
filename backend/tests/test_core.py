@@ -37,7 +37,7 @@ from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
 from app.bl.workflow_engine_pkg import history, specialists
-from app.bl.workflow_engine_pkg.execution import chunk_facts
+from app.bl.workflow_engine_pkg.execution import chunk_facts, fact_chunks
 from app.bl.workflow_engine_pkg.schemas import (
     FINAL_SCHEMA, LEADER_DELEGATION_SCHEMA, LEADER_REVIEW_SCHEMA,
     WORKER_ANSWER_SCHEMA, WORKER_PLAN_SCHEMA,
@@ -2429,6 +2429,59 @@ def test_six_thousand_rows_become_one_bounded_exact_digest():
         "ממתין": 2000, "סגור": 2000, "פתוח": 2000,
     }
     assert len(json.dumps(facts, ensure_ascii=False).encode("utf-8")) < 100_000
+
+
+def test_section_summary_maps_every_row_and_bounds_each_reduce_call():
+    records = [{"id": "ID-%04d" % index} for index in range(1301)]
+    facts = fact_chunks({"cases": records})
+
+    assert len(facts) == 14
+    assert [row["id"] for fact in facts for row in fact["rows"]] == [
+        row["id"] for row in records
+    ]
+    assert all(len(fact["rows"]) <= 100 for fact in facts)
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            return type("Settings", (), {"max_parallel_workflows": 4})()
+
+    class FakeLlm:
+        def __init__(self):
+            self.payloads = []
+
+        def complete_json(self, _system, user, _schema):
+            payload = json.loads(user)
+            self.payloads.append(payload)
+            if "fact_chunk" in payload:
+                rows = payload["fact_chunk"]["rows"]
+                marker = "%s–%s" % (rows[0]["id"], rows[-1]["id"])
+            else:
+                marker = "reduced"
+            return {
+                "summary": marker,
+                "coverage": marker,
+                "facts": [marker],
+                "patterns": [],
+                "outliers": [],
+                "warnings": [],
+                "suggested_questions": [],
+            }
+
+    llm = FakeLlm()
+    service = SummaryService(None, None, llm, FakeStore())
+    result = service._section_summary(
+        {"name": "תיקים", "system_prompt": "", "output_schema": {}},
+        facts,
+        [],
+    )
+
+    map_payloads = [item for item in llm.payloads if "fact_chunk" in item]
+    reduce_payloads = [item for item in llm.payloads if "chunk_analyses" in item]
+    assert len(map_payloads) == 14
+    assert max(len(item["chunk_analyses"]) for item in reduce_payloads) <= 12
+    assert reduce_payloads[-1]["whole_dataset"][0]["row_count"] == 1301
+    assert result["summary"] == "reduced"
 
 
 def test_specialists_share_duplicate_workflows_and_cap_total_breadth():
