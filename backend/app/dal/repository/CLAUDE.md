@@ -49,6 +49,18 @@ A second guarded block replaces `status` with `agent_enabled`, set from
 `status = 'published'` so a draft or archived row stays unselected instead of
 going live the moment the migration runs.
 
+## `summary_feedback.rating`'s CHECK constraint
+
+The `rating IN (-1,1)` rule is added out-of-band (an `UPDATE` clamp followed
+by a `pg_constraint`-guarded `ALTER TABLE ADD CONSTRAINT`), not inline on
+`CREATE TABLE IF NOT EXISTS summary_feedback`. Inline only applies the first
+time the table is created — `IF NOT EXISTS` skips the whole statement,
+constraint included, on a database that already has the table. Any row
+outside `{-1,1}` (a wider scale from before this contract, or a hand-written
+row) would otherwise make `ADD CONSTRAINT` fail every time the app starts.
+Clamping first (`> 0` keeps the "up" vote, everything else becomes "down")
+makes the constraint safe to (re)apply unconditionally.
+
 ## Rules
 
 - All application SQL stays in this directory.
