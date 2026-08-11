@@ -37,7 +37,9 @@ class WorkflowRepository:
             )
         row_id = new_id()
         validate_steps(data.get("steps", []))
-        self._validate_agent(data.get("agent_id"))
+        self._validate_agent(
+            data.get("agent_id"), data.get("agent_enabled", True)
+        )
         with connect(self._store) as connection:
             connection.execute(
                 _INSERT_WORKFLOW, _workflow_values(row_id, workflow_key, data)
@@ -62,7 +64,9 @@ class WorkflowRepository:
         self.get_workflow(workflow_id)
         steps = data.get("steps", [])
         validate_steps(steps)
-        self._validate_agent(data.get("agent_id"))
+        self._validate_agent(
+            data.get("agent_id"), data.get("agent_enabled", True)
+        )
         with connect(self._store) as connection:
             connection.execute(
                 _UPDATE_WORKFLOW, _workflow_update_values(workflow_id, data)
@@ -118,9 +122,15 @@ class WorkflowRepository:
         by_key = {row["workflow_key"]: row for row in self._with_steps(rows)}
         return [by_key[key] for key in keys if key in by_key]
 
-    def _validate_agent(self, agent_id) -> None:
+    def _validate_agent(self, agent_id, agent_enabled: bool) -> None:
         """Refuse an assignment to a missing row or to non-agent content."""
         if not agent_id:
+            if agent_enabled and self._all("""
+                SELECT id FROM agent_content WHERE kind='agent' LIMIT 1
+            """):
+                raise ValueError(
+                    "כדי להפעיל Workflow יש לבחור סוכן אחראי"
+                )
             return
         if not self._all("""
             SELECT id FROM agent_content
@@ -199,4 +209,3 @@ _INSERT_STEP = """
         depends_on, input_source, input_field, input_value, summary_prompt
     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
-

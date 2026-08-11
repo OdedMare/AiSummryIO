@@ -41,7 +41,8 @@ export function WorkflowFields({
           <small>כשכבוי, התהליך נשמר וניתן לעריכה אך הסוכן לא יבחר בו.</small>
         </span>
       </label>
-      <label><span>סוכן אחראי</span>
+      <label><span>סוכן אחראי
+        {form.agent_enabled && agents.length > 0 ? " *" : ""}</span>
         <select value={form.agent_id}
           required={form.agent_enabled && agents.length > 0}
           onChange={(event) => update("agent_id", event.target.value)}>

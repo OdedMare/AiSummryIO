@@ -30,6 +30,8 @@ from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
 from app.dal.repository import Repository
+from app.dal.repository.content import _set_agent_workflows
+from app.dal.repository.schema import SCHEMA
 from app.dal.repository.conversations import conversation_title
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
@@ -2984,8 +2986,9 @@ class _EditableWorkflows(Repository):
     it.
     """
 
-    def __init__(self, agent_enabled=True, steps=None):
+    def __init__(self, agent_enabled=True, steps=None, has_agents=False):
         self._store = None
+        self._has_agents = has_agents
         self._row = {
             "id": "wf", "workflow_key": "ownership", "name": "Ownership",
             "agent_enabled": agent_enabled, "steps": steps or [],
@@ -2997,6 +3000,11 @@ class _EditableWorkflows(Repository):
 
     def get_package(self, package_version_id):
         return {"name": "tool", "example_input": [], "example_output": []}
+
+    def _all(self, query, params=()):
+        if "FROM agent_content" in query and self._has_agents:
+            return [{"id": params[0] if params else "agent-1"}]
+        return []
 
 
 class _FakeConnection:
@@ -3042,6 +3050,56 @@ def test_saving_a_workflow_carries_the_agent_switch(monkeypatch):
     update = next(s for s in repository.statements if s.startswith("UPDATE"))
     assert "agent_enabled=%s" in update
     assert "status" not in update, "publishing state no longer exists"
+
+
+def test_an_active_workflow_is_saved_with_the_chosen_agent(monkeypatch):
+    repository = _EditableWorkflows(
+        steps=[_STEP], has_agents=True,
+    )
+    _capture_sql(monkeypatch, repository)
+
+    repository.update_workflow("wf", {
+        "name": "Ownership", "agent_enabled": True,
+        "agent_id": "agent-1", "steps": [_STEP],
+    })
+
+    update = next(s for s in repository.statements if s.startswith("UPDATE"))
+    assert "agent_id=%s" in update
+
+
+def test_an_active_workflow_requires_an_agent_when_agents_exist(monkeypatch):
+    repository = _EditableWorkflows(
+        steps=[_STEP], has_agents=True,
+    )
+    _capture_sql(monkeypatch, repository)
+
+    with pytest.raises(ValueError, match="סוכן אחראי"):
+        repository.update_workflow("wf", {
+            "name": "Ownership", "agent_enabled": True, "steps": [_STEP],
+        })
+
+    assert not repository.statements
+
+
+def test_schema_owns_workflow_assignment_in_the_real_table():
+    assert "agent_id TEXT" in SCHEMA
+    assert "FOREIGN KEY (agent_id) REFERENCES agent_content(id)" in SCHEMA
+    assert "table_schema = current_schema()" in SCHEMA
+
+
+def test_specialist_save_writes_the_workflow_owner_column():
+    statements = []
+    connection = _FakeConnection(statements)
+
+    _set_agent_workflows(connection, "agent-1", {
+        "kind": "agent",
+        "config": {"workflow_keys": ["ownership"]},
+    })
+
+    assert statements == [
+        "UPDATE summary_workflows SET agent_id=NULL WHERE agent_id=%s",
+        "UPDATE summary_workflows SET agent_id=%s WHERE workflow_key = ANY(%s)",
+    ]
 
 
 def test_a_workflow_the_agent_uses_can_be_saved_without_examples(monkeypatch):
