@@ -76,6 +76,17 @@ A second guarded block replaces `status` with `agent_enabled`, set from
 `status = 'published'` so a draft or archived row stays unselected instead of
 going live the moment the migration runs.
 
+`schema.py` is sent to Postgres as one script, and a `COMMIT;` sits after
+every independent block. Without those, the whole script runs as a single
+implicit transaction, so one guarded block failing on a particular database's
+data rolls back every other statement already run in that call — including
+unrelated `ADD COLUMN IF NOT EXISTS` statements. That once left
+`summary_workflows` permanently missing `agent_enabled`: the backfill sits
+later in the file than the `summary_feedback` rating migration above, so a
+startup that failed there re-failed at the same earlier block on every
+restart, before ever reaching and committing the later one. Add a new guarded
+migration after its own `COMMIT;` so a failure there stays contained to it.
+
 ## Rules
 
 - All application SQL stays in this directory.
