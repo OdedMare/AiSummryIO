@@ -22,7 +22,8 @@ export default function Composer({ app }: { app: AppShellController }) {
 function IdentifierField({ app }: { app: AppShellController }) {
   return (
     <label className="id-field">
-      <span>המזהה שתרצו לסכם <b aria-hidden="true">*</b></span>
+      <span>המזהה שתרצו לסכם {!app.geometry.length &&
+        <b aria-hidden="true">*</b>}</span>
       <input value={app.rootId}
         onChange={(event) => app.setRootId(event.target.value)}
         placeholder="לדוגמה: HOME-ABC-001" dir="ltr" autoComplete="off"
@@ -205,7 +206,8 @@ function ActiveSkills({ app }: { app: AppShellController }) {
 function SubmitButton({ app }: { app: AppShellController }) {
   const active = isActive(app.run);
   const disabled = app.submitting || active ||
-    (!app.conversation && !app.rootId.trim() && !app.message.trim()) ||
+    (!app.conversation && !app.rootId.trim() && !app.message.trim() &&
+      !app.geometry.length) ||
     (!!app.conversation && !app.message.trim());
   const label = active ? "מכינים את הסיכום…" :
     app.conversation ? "שליחת שאלה" : "סכמו עכשיו";

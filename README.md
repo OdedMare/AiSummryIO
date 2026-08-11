@@ -156,7 +156,7 @@ any code or dependency change.
 ```bash
 docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
   -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
-  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
+  -e AISUMMRY_DATABASE_SCHEMA=sumorai \
   -v "$PWD/runtime-settings.json:/srv/backend/runtime-settings.json" \
   aisummryio-backend:latest
 ```
@@ -226,7 +226,7 @@ Charts for both services live under [deploy/helm/](deploy/helm/):
 ```bash
 helm install aisummry-backend deploy/helm/backend \
   --set database.url='postgresql://user:pass@host:5432/db' \
-  --set database.schema=mosaic_magen
+  --set database.schema=sumorai
 
 helm install aisummry-frontend deploy/helm/frontend \
   --set backendUrl=http://aisummry-backend:8000
@@ -300,7 +300,7 @@ VPN clients cause, pin the address the same way:
 docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
   --add-host rnd619-nv-prd01:<ip-address> \
   -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
-  -e AISUMMRY_DATABASE_SCHEMA=mosaic_magen \
+  -e AISUMMRY_DATABASE_SCHEMA=sumorai \
   aisummryio-backend:latest
 ```
 
@@ -329,7 +329,7 @@ Settings screen. For the shared database:
 
 ```bash
 AISUMMRY_DATABASE_URL=postgresql://spear:spear@rnd619-nv-prd01:5432/spear
-AISUMMRY_DATABASE_SCHEMA=mosaic_magen
+AISUMMRY_DATABASE_SCHEMA=sumorai
 ```
 
 Settings saved in the UI are written to `backend/runtime-settings.json` and

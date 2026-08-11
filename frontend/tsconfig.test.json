@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "target": "ES2020"
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/components/AppShell/commands.ts",
+    "src/services/api.ts",
+    "src/types/geo.ts",
+    "src/types.ts"
+  ]
+}

@@ -56,6 +56,11 @@ class RuntimeSettingsStore:
         )
         if self._path.exists():
             self._apply(json.loads(self._path.read_text("utf-8")), False)
+        # A saved value overrides the environment default, so migrate the old
+        # project schema or upgraded installs would keep reading stale tables.
+        if self._settings.database_schema == "mosaic_magen":
+            self._settings.database_schema = "sumorai"
+            self._persist()
         if not self._settings.cookie_secret:
             self._settings.cookie_secret = os.urandom(32).hex()
             self._persist()

@@ -34,12 +34,11 @@ export default function MapPanel({ app }: { app: AppShellController }) {
  * `app.ask`, the same path `submit` and the suggested-question chips use, so
  * it still passes identifier detection and the busy guard — this is a
  * shortcut into that path, not a second one. `MapPanel` only renders before a
- * conversation exists, so the disabled check mirrors the composer's
- * new-conversation branch, plus at least one drawn part.
+ * conversation exists. The drawn area is valid scope by itself, so only an
+ * empty selection or an in-flight request disables this shortcut.
  */
 function SendAreaButton({ app }: { app: AppShellController }) {
-  const disabled = app.submitting || isActive(app.run) || !app.geometry.length
-    || (!app.rootId.trim() && !app.message.trim());
+  const disabled = app.submitting || isActive(app.run) || !app.geometry.length;
   return (
     <button type="button" className="primary-button map-panel-send"
       disabled={disabled} onClick={() => app.ask(app.message)}>

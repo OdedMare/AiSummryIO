@@ -107,7 +107,12 @@ export function useAppShell() {
     setNotice("");
     try {
       const parsed = parseCommands(text, skills);
-      const detected = detectIdentifier(rootId, parsed.text, conversation);
+      const detected = detectIdentifier(
+        rootId,
+        parsed.text,
+        conversation,
+        !!geometry.length,
+      );
       if (detected) {
         setRootId(detected);
         setNotice(identifierNotice(detected));

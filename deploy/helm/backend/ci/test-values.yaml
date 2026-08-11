@@ -2,7 +2,7 @@
 # placeholder so `helm template` exercises the real Secret and env wiring.
 database:
   url: postgresql://ci:ci@postgres.ci.svc.cluster.local:5432/summaries
-  schema: mosaic_magen
+  schema: sumorai
 
 llm:
   apiKey: ci-placeholder-key

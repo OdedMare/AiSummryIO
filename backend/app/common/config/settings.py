@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     database_name: str = "spear"
     """Optional explicit database name. Overrides the database in the URL."""
 
-    database_schema: str = "mosaic_magen"
+    database_schema: str = "sumorai"
     """PostgreSQL schema owning every table. Empty means the server default
     (normally `public`). Also settable as `?currentSchema=` in the URL."""
 

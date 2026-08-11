@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js",
     "start": "next start",
     "lint": "eslint"
   },

@@ -66,11 +66,15 @@ export function detectIdentifier(
   rootId: string,
   message: string,
   conversation: Conversation | null,
+  hasBoundaries = false,
 ) {
   if (conversation || rootId.trim()) return null;
   const match = message.match(
     /(?:^|\s)(?:id|מזהה)\s*[:#=-]?\s*([A-Za-z0-9][A-Za-z0-9._/-]{0,255})(?:\s|$)/i,
   );
+  // A map area is itself valid request scope. Still extract an explicitly
+  // written identifier so requests can intentionally carry both.
+  if (!match && hasBoundaries) return null;
   if (!match) throw new Error("יש להזין מזהה בשדה או לכתוב „מזהה: …”");
   return match[1];
 }

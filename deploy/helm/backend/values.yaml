@@ -43,7 +43,7 @@ database:
   url: ""
   existingSecret: ""
   existingSecretKey: database-url
-  schema: mosaic_magen
+  schema: sumorai
 
 # ---------------------------------------------------------------------------
 # LLM — an OpenAI-compatible endpoint (Ollama by default).

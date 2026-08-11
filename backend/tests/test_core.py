@@ -255,22 +255,30 @@ def test_a_saved_input_value_is_valid_and_reaches_the_package_unchanged():
 def test_map_boundaries_reach_the_package_as_multipolygon_wkt():
     """The drawn area travels to flunks as one opaque WKT string."""
     step = {"input_source": "workflow.boundaries"}
+    request = SummaryCreate(boundaries={
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[
+                [34.75, 32.05], [34.80, 32.05],
+                [34.80, 32.10], [34.75, 32.05],
+            ]],
+            [[
+                [35.10, 31.90], [35.20, 31.90],
+                [35.20, 32.00], [35.10, 31.90],
+            ]],
+        ],
+    })
     context = {
         "workflow": {
-            "id": "ROOT-1",
-            "boundaries": {
-                "type": "MultiPolygon",
-                "coordinates": [[[
-                    [34.75, 32.05], [34.80, 32.05],
-                    [34.80, 32.10], [34.75, 32.05],
-                ]]],
-            },
+            "id": request.root_id,
+            "boundaries": request.boundaries.model_dump(),
         },
         "steps": {},
     }
 
     assert SummaryService._identifiers(step, context) == [
-        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)))"
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)), "
+        "((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))"
     ]
 
 
@@ -1543,6 +1551,16 @@ def test_schema_name_must_be_a_plain_identifier():
     for bad in ("evil; DROP TABLE x", "a-b", "1abc", 'x"y'):
         with pytest.raises(ValueError):
             normalize_database_schema(bad)
+
+
+def test_legacy_schema_setting_is_migrated_to_sumorai(tmp_path):
+    path = tmp_path / "runtime-settings.json"
+    path.write_text(json.dumps({"database_schema": "mosaic_magen"}))
+
+    store = RuntimeSettingsStore(Settings(runtime_settings_file=str(path)))
+
+    assert store.get().database_schema == "sumorai"
+    assert json.loads(path.read_text())["database_schema"] == "sumorai"
 
 
 def test_jdbc_url_from_the_environment_is_normalized_at_boot(tmp_path):

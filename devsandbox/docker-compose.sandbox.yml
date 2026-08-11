@@ -43,7 +43,7 @@ services:
       dockerfile: devsandbox/backend.sandbox.Dockerfile
     environment:
       AISUMMRY_DATABASE_URL: postgresql://summaries:summaries@db:5432/summaries
-      AISUMMRY_DATABASE_SCHEMA: mosaic_magen
+      AISUMMRY_DATABASE_SCHEMA: sumorai
       # The explicit per-field overrides in the default Settings point at the
       # real internal server; blank them so the URL above is what is used.
       AISUMMRY_DATABASE_USER: ""
