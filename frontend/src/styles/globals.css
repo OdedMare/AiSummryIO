@@ -3304,6 +3304,13 @@ select:focus {
   font-size: 10px;
 }
 
+.review-rating {
+  display: flex;
+  gap: 1px;
+  margin-top: 3px;
+  color: var(--warning);
+}
+
 .studio-global-error {
   margin: 12px 16px 0;
 }

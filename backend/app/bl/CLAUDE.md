@@ -71,6 +71,22 @@ Two rules hold this together:
 repository without `conversation_history` degrades to no history rather than
 crashing a follow-up.
 
+### Feedback ratings in routing (`workflow_engine_pkg/routing.py`)
+
+A follow-up's router payload (`_router_payload`) also carries each
+`available_workflows`/`available_tools` entry's `avg_rating` (1-5) and
+`rating_count`, read once per call from `Repository.route_ratings()` through
+`getattr` — the same degrade-safe pattern `history.recent_turns` uses, so a
+fake or older repository without the method routes with no rating signal
+instead of crashing. A route with no feedback yet carries neither field
+rather than a neutral score, so the FDE-owned `tool-aware-router` prompt can
+tell "unrated" apart from "rated poorly." The prompt is told to use rating
+only as a tie-breaker between routes that would answer the question equally
+well, never to override the one route that actually fits, and to distrust a
+`rating_count` under about 3. `full_summary` runs every `agent_enabled`
+baseline workflow unconditionally, so this signal only ever changes a
+follow-up's routing choice, not which baseline workflows run.
+
 ### The execution path
 
 `_execute` → `_execute_workflow` (per workflow, in a thread pool bounded by

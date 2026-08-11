@@ -129,7 +129,7 @@ export const api = {
     }),
   run: (id: string) => request<SummaryRun>(`/api/runs/${id}`),
   evidence: (id: string) => request<Evidence[]>(`/api/runs/${id}/evidence`),
-  feedback: (runId: string, rating: -1 | 1, comment = "") =>
+  feedback: (runId: string, rating: 1 | 2 | 3 | 4 | 5, comment = "") =>
     request<{ id: string }>("/api/feedback", {
       method: "POST",
       body: JSON.stringify({ run_id: runId, rating, comment }),

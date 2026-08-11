@@ -15,7 +15,7 @@ modules. It opens a connection per operation through
 | `content.py` | Skills and prompts |
 | `conversations.py` | Conversations, retention, and thread history |
 | `runs.py` | Runs, progress, and evidence |
-| `feedback.py` | Feedback and review queue |
+| `feedback.py` | Feedback, the review queue, and per-route rating aggregates |
 | `validation.py` | Pure workflow-step validation |
 | `schema.py` | DDL used at startup |
 | `seed_content.py` | Built-in Skills and prompts |
@@ -32,6 +32,19 @@ Only `completed`/`partial` runs are returned: a queued or failed run has no
 answer, and offering it as context would invite the model to treat a question
 that was never answered as if it had been. The newest turns are selected and
 then reversed, so a long thread keeps its most recent context.
+
+## Feedback ratings
+
+`summary_feedback.rating` is a 1-5 star rating (`CHECK (rating BETWEEN 1 AND
+5)`), rating a whole run's answer rather than one workflow in isolation.
+`route_ratings()` turns that into an average per **route** — a real
+workflow's row id, or `"tool:" + package_version_id"` for a standalone tool —
+keyed exactly as `summary_evidence.workflow_id` already is, so the caller
+never has to join back to `summary_workflows`/`summary_packages`. A run
+answered by several workflows counts its rating toward each of them, which is
+why `routing.py` treats a route's `rating_count` as a confidence signal, not
+just its `avg_rating`. `review_queue()` still lists a run for an FDE to look
+at on a poor rating (`rating <= 2`) or any left comment.
 
 ## Collapsing the old version history and publish state
 

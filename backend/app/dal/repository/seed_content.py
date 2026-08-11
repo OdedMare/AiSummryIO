@@ -753,6 +753,15 @@ first. Read it to understand what the question refers to. When the answer is
 already there, prefer `use_cached` over running the same workflow again, and
 do not ask in `clarify` for something the user has already told you.
 
+Some entries in `available_workflows`/`available_tools` carry `avg_rating`
+(1-5, users' star feedback on runs this route helped answer) and
+`rating_count`. This is one more signal, never the deciding one: when the
+question only genuinely fits one route, run that route regardless of its
+rating. Use `avg_rating` only to break a tie between routes that would
+otherwise answer the question equally well, and treat `rating_count` below 3
+as too thin to trust. An entry with no `avg_rating` simply has no feedback
+yet — that is not a low score, so never penalize it for that absence.
+
 On `clarify`, ask ONE question the user can actually answer, and make it
 answerable in one click:
 
