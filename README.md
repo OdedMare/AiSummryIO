@@ -356,9 +356,11 @@ version:
 4. Ask the planner for a draft or build one from tool steps, then map later
    inputs from earlier output fields.
 5. Run a live dry-run with a safe identifier.
-6. Save the workflow. It is live for the agent as soon as it is saved; the
+6. Choose the responsible specialist and save the workflow. It is assigned to
+   that specialist in the same save and is live as soon as it is saved; the
    server refuses invalid step mappings, and "פעיל לסוכן" is what holds a
-   workflow back while it is still being built.
+   workflow back while it is still being built. Once specialists exist, an
+   active workflow cannot be saved without choosing one.
 
 The agent is also reachable **per field**: every prose field on the tool and
 workflow forms carries its own small agent button, which opens the interview

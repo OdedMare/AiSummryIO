@@ -163,9 +163,12 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   Publishing used to be that moment; enabling is now the point its config
   starts being used, so `_validate_specialist` runs from create/update when
   `agent_enabled` is true: every chosen workflow and Skill must itself be
-  enabled, and **a workflow may belong to only one enabled specialist**. A
-  disabled specialist skips the gate for the same reason a draft did — it
-  routes nothing, and half-built work has to stay savable.
+  enabled. **`summary_workflows.agent_id` is the single source of truth for
+  ownership**, and a workflow may belong to only one specialist. The API
+  derives `config.workflow_keys` from that column so older callers keep their
+  shape without reintroducing JSON state that can drift. A disabled specialist
+  skips the enabled-dependency gate for the same reason a draft did — it routes
+  nothing, and half-built work has to stay savable.
 - Because a row is mutable, `summary_evidence` records which workflow ran but
   no longer pins the exact steps it ran with.
 - Keep the design simple: add a module only when it owns a distinct boundary.

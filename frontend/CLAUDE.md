@@ -191,6 +191,11 @@ ID/evidence, and reuse the conversation's stored boundaries.
   "פעיל לסוכן" is the switch. The form says plainly that the ownership and
   enabled-dependency checks only apply while the switch is on, since that is
   what makes an unfinished specialist savable.
+- The workflow form owns the primary assignment path: **סוכן אחראי** writes
+  `summary_workflows.agent_id` on the same save that creates, edits, or enables
+  the workflow. Once any specialists exist, an enabled workflow requires that
+  choice. The specialist form reads and writes the same relationship through
+  its derived `config.workflow_keys`; it is not a second source of truth.
 - All four tabs delete. A Skill or prompt has nothing pinning it, so the
   confirm warns about the one surprise instead: a **built-in comes back on
   the next restart**, because seeding recreates a missing key — deleting one

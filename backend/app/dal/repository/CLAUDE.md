@@ -99,6 +99,11 @@ migration after its own `COMMIT;` so a failure there stays contained to it.
   the same create/update as every other field, and `enabled_workflows`,
   `enabled_summary_skills`, and `enabled_content` are what the agent reads.
   `validate_steps` on create and update is the only gate a save must clear.
+- A workflow's specialist owner is `summary_workflows.agent_id`, a foreign key
+  to the owning `agent_content` row. `config.workflow_keys` is an API projection
+  built from that column, never stored. Saving from either editor updates the
+  same owner field; enabling a workflow requires an owner once specialists
+  exist.
 - `delete_*` takes a row id. A tool is refused while a workflow step points at
   it, and the blocking workflows are named; a workflow and a Skill or prompt
   have nothing pinning them, so they go. Deleting content is a reset for a
