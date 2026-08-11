@@ -46,6 +46,20 @@ why `routing.py` treats a route's `rating_count` as a confidence signal, not
 just its `avg_rating`. `review_queue()` still lists a run for an FDE to look
 at on a poor rating (`rating <= 2`) or any left comment.
 
+`schema.py` migrates the constraint itself, not just the column: it was
+`CHECK (rating IN (-1,1))` (thumbs up/down) before the 1-5 scale. `ADD
+CONSTRAINT` validates every existing row, so re-adding it unconditionally
+against a database still carrying old -1 rows failed startup outright, on
+every restart. The migration now drops the old constraint, and — only when
+`pg_get_constraintdef` shows positive evidence it *was* the old one (a
+literal `-1`, which never appears in `BETWEEN 1 AND 5`) — translates old
+rows onto the new scale's meaning (thumbs-down to the worst star, thumbs-up
+to the best) before re-adding it. That evidence check is what keeps this
+one-time: once the constraint reads `BETWEEN 1 AND 5`, a genuine 1-star
+rating collected afterward is never mistaken for the old thumbs-up again. A
+final unconditional clamp is belt-and-braces for anything still out of
+range regardless of the constraint's prior shape.
+
 ## Collapsing the old version history and publish state
 
 `schema.py` carries a one-time migration, guarded on the `version` column so
