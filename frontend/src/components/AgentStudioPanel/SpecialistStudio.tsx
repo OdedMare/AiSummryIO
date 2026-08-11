@@ -193,7 +193,7 @@ function SpecialistFormView({
           onChange={(event) => update({ agent_enabled: event.target.checked })} />
         <span>פעיל לסוכן
           <small>כשכבוי, המומחה נשמר וניתן לעריכה אך המנהל לא יאציל לו —
-            והבדיקות למטה אינן חלות, כך שאפשר לשמור עבודה שלא הושלמה.</small>
+            ובדיקת התלויות הפעילות אינה חלה, כך שאפשר לשמור עבודה שלא הושלמה.</small>
         </span>
       </label>
       <label><span>הנחיות המומחה *</span>
@@ -225,7 +225,7 @@ function SpecialistFormView({
         onChange={(skill_keys) => update({ skill_keys })} />
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="specialist-form-note">
-        כל Workflow יכול להיות בבעלות מומחה פעיל אחד בלבד. שמירה של מומחה
+        כל Workflow יכול להיות בבעלות מומחה אחד בלבד. שמירה של מומחה
         פעיל בודקת שה־Workflows וה־Skills שבחרת פעילים גם הם.
       </div>
       <div className="form-actions">

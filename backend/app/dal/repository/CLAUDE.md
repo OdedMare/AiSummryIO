@@ -98,7 +98,8 @@ migration after its own `COMMIT;` so a failure there stays contained to it.
 - There is no publishing. `agent_enabled` is an ordinary column written by
   the same create/update as every other field, and `enabled_workflows`,
   `enabled_summary_skills`, and `enabled_content` are what the agent reads.
-  `validate_steps` on create and update is the only gate a save must clear.
+  `validate_steps` on create and update is the structural gate; owner selection
+  is validated separately against real specialist rows.
 - A workflow's specialist owner is `summary_workflows.agent_id`, a foreign key
   to the owning `agent_content` row. `config.workflow_keys` is an API projection
   built from that column, never stored. Saving from either editor updates the

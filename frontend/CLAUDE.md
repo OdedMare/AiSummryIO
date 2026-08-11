@@ -188,9 +188,9 @@ ID/evidence, and reuse the conversation's stored boundaries.
   the success message still has to be visible.
 - `SpecialistStudio` follows the same shape as the other editors: `editingId`
   chooses update over create, a specialist is deleted from its card, and
-  "פעיל לסוכן" is the switch. The form says plainly that the ownership and
-  enabled-dependency checks only apply while the switch is on, since that is
-  what makes an unfinished specialist savable.
+  "פעיל לסוכן" is the switch. Workflow ownership is always exclusive; the
+  enabled-dependency checks apply only while the switch is on, which is what
+  makes an unfinished specialist savable.
 - The workflow form owns the primary assignment path: **סוכן אחראי** writes
   `summary_workflows.agent_id` on the same save that creates, edits, or enables
   the workflow. Once any specialists exist, an enabled workflow requires that
