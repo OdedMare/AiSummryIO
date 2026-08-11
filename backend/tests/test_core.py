@@ -43,8 +43,14 @@ from app.bl.workflow_engine_pkg.schemas import (
     WORKER_ANSWER_SCHEMA, WORKER_PLAN_SCHEMA,
 )
 from app.api.models import (
-    ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
-    WorkflowStep,
+    DryRunCreate, ModelsProbeRequest, PackageInspect, SkillPreview,
+    SkillPreviewSection, SummaryCreate, WorkflowStep,
+)
+
+
+_MULTIPOLYGON_IDENTIFIER = "MULTIPOLYGON (((%s)))" % ", ".join(
+    ["34.%07d 32.%07d" % (index, index) for index in range(40)]
+    + ["34.0000000 32.0000000"]
 )
 
 
@@ -162,6 +168,108 @@ def test_flapi_provider_retries_once_and_adds_query_provenance(monkeypatch):
 
     assert attempts == [1, 2]
     assert records == [{"name": "בית", "_package_query": "home-summary"}]
+
+
+def test_multipolygon_identifier_runs_unchanged_in_inspect_dry_run_and_live():
+    """All three entry points must reach ``runner.run()`` with one WKT value."""
+    assert len(_MULTIPOLYGON_IDENTIFIER) > 256
+
+    package = {
+        "package_key": "geo-facts",
+        "name": "מידע גיאוגרפי",
+        "package_id": "PKG-GEO",
+        "input_cube_name": "area",
+        "input_cube_parameter": "identifier",
+        "input_mode": "single",
+        "output_cube_name": "facts",
+    }
+    workflow = {
+        "id": "workflow-geo",
+        "workflow_key": "geo",
+        "name": "מידע גיאוגרפי",
+        "system_prompt": "",
+        "output_schema": {},
+        "steps": [{
+            "key": "geo",
+            "name": "מידע גיאוגרפי",
+            "package_version_id": "package-geo",
+            "input_source": "workflow.id",
+            "depends_on": [],
+        }],
+    }
+
+    class Settings:
+        flapi_username = "fde"
+        flapi_token = "token"
+        package_timeout_seconds = 5
+        max_parallel_workflows = 1
+        agent_max_rounds = 0
+
+    class Store:
+        @staticmethod
+        def get():
+            return Settings()
+
+    configured, executed = [], []
+
+    class Runner:
+        def __init__(self, values):
+            self.values = values
+
+        def run(self):
+            executed.append(self.values)
+            return pd.DataFrame([{"matched": True}])
+
+    def factory(_settings, config):
+        values = list(config.main_input_cube.values)
+        configured.append(values)
+        return Runner(values)
+
+    class FakeRepository:
+        @staticmethod
+        def get_workflow(_workflow_id):
+            return workflow
+
+        @staticmethod
+        def get_package(_package_id):
+            return package
+
+        @staticmethod
+        def enabled_workflows(_roles):
+            return [workflow]
+
+        @staticmethod
+        def save_evidence(*_args):
+            return "evidence-1"
+
+        @staticmethod
+        def enabled_content(_key, fallback):
+            return fallback
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(*_args):
+            raise AgentError("model unavailable")
+
+    provider = FlapiProvider(Store(), runner_factory=factory)
+    service = SummaryService(FakeRepository(), provider, FakeLlm(), Store())
+
+    # These HTTP contracts used to reject realistic WKT at 256 characters.
+    inspect_payload = PackageInspect(**dict(package, root_id=_MULTIPOLYGON_IDENTIFIER))
+    dry_payload = DryRunCreate(root_id=_MULTIPOLYGON_IDENTIFIER)
+    live_payload = SummaryCreate(root_id=_MULTIPOLYGON_IDENTIFIER)
+
+    service.inspect_tool(package, inspect_payload.root_id)
+    service.dry_run("workflow-geo", dry_payload.root_id)
+    service.full_summary(
+        {"id": "run-live", "question": "", "skill_keys": []},
+        {"root_id": live_payload.root_id, "boundaries": None},
+        lambda *_args: None,
+    )
+
+    expected = [[_MULTIPOLYGON_IDENTIFIER]] * 3
+    assert configured == expected
+    assert executed == expected
 
 
 def test_flapi_outbound_diagnostic_is_comparable_without_leaking_secrets(

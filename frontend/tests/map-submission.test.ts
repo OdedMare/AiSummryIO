@@ -58,3 +58,34 @@ test("map submission sends every drawn part as one MultiPolygon", async (t) => {
     },
   });
 });
+
+
+test("multipolygon identifiers are sent unchanged in live, inspect, and dry run", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (path, options) => {
+    requests.push({
+      path: String(path),
+      body: JSON.parse(String(options?.body)),
+    });
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const identifier = "MULTIPOLYGON (((" + Array.from(
+    { length: 40 },
+    (_, index) => `34.${String(index).padStart(7, "0")} 32.${String(index).padStart(7, "0")}`,
+  ).concat("34.0000000 32.0000000").join(", ") + ")))";
+
+  await api.start(identifier, "", []);
+  await api.inspectPackage({ root_id: identifier });
+  await api.dryRun("workflow-geo", identifier);
+
+  assert.ok(identifier.length > 256);
+  assert.equal(requests[0].body.root_id, identifier);
+  assert.equal(requests[1].body.root_id, identifier);
+  assert.equal(requests[2].body.root_id, identifier);
+  assert.equal(requests[2].path, "/api/workflows/workflow-geo/dry-run");
+});
