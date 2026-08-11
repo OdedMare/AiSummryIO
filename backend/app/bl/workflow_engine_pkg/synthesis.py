@@ -10,19 +10,22 @@ from app.bl.workflow_engine_pkg.schemas import (
 )
 
 
-# How to read the payload `chunk_facts` produces. Appended to the workflow's
-# own prompt rather than replacing it: an FDE writes domain instructions, and
-# these describe the data's shape, which is the same for every workflow.
+# A reducer never receives more than this many prior analyses in one call.
+_REDUCE_BATCH_SIZE = 12
+
+# Appended to the workflow's own prompt rather than replacing it: an FDE writes
+# domain instructions, and these describe the data's shape for every workflow.
 _TABULAR_GUIDANCE = """
-מבנה הנתונים: כל פריט ב-facts הוא digest של שלב שלם. `row_count` הוא מספר
-כל הרשומות שנאספו, `sampled_row_count` הוא מספר השורות המייצגות שב-`rows`,
-ו-`stats` מחושב בקוד על כל הרשומות: `present`/`missing`, `distinct`, `counts`
+מבנה הנתונים: `row_count` הוא מספר כל רשומות השלב. במנה יחיד המערך
+`rows` כולל את כל הרשומות. בתוצאה גדולה כל מנה מנותחת בנפרד וכל
+ניתוחי המנות מאוחדים לפני החזרת התשובה. `stats` מחושב בקוד על כל הרשומות:
+`present`/`missing`, `distinct`, `counts`
 (שכיחות, לשדות עם עד 15 ערכים), ו-`min`/`max`/`mean` לשדות מספריים.
 
 כללי קריאה:
 1. פתח בהיקף — כמה שורות ובאילו שלבים. `coverage` יכיל זאת במפורש.
 2. העדף התפלגות על דוגמה. "263 מתוך 412 פתוחים" הוא ממצא; שורה בודדת אינה.
-3. השתמש במספרים מ-`stats` כפי שהם. אל תספור את `rows` בעצמך — זו דגימה.
+3. השתמש במספרים מ-`stats` כפי שהם. אל תספור את `rows` בעצמך.
    אל תחשב אחוז ללא מכנה.
 4. `missing` גבוה בשדה הוא ממצא על כיסוי — ציין אותו.
 5. חריגים חשובים מהטיפוסי: תאריך עתידי, סגירה לפני פתיחה, כפילות, ערך קיצוני.
@@ -37,22 +40,131 @@ _TABULAR_GUIDANCE = """
 להסיק סיבתיות; להתייחס ל-`row_count` כמספר ישויות ייחודיות.
 """
 
+_MAP_GUIDANCE = """
+
+הקלט הנוכחי הוא מנה אחת מתוך תוצאה גדולה. `rows` מכיל את כל השורות
+במנה זו ואינו דגימה. נתח כל שורה והחזר ממצאים, דפוסים וחריגים תמציתיים.
+אל תכליל מספירות המנה לכל הדאטה; האיחוד ייעשה בשלב הבא.
+"""
+
+_REDUCE_GUIDANCE = """
+
+`chunk_analyses` הם ניתוחים של מנות זרות ויחד הם מכסים את כל הרשומות.
+אחד את כולם: אל תשמיט ממצא ייחודי או חריג רק מפני שהוא הופיע במנה אחת.
+ספירות וטווחים קבע רק מ-`whole_dataset.stats`, שמחושב על כל הדאטה.
+"""
+
 
 def section_summary(service, workflow, facts, warnings) -> dict:
-    system = (workflow.get("system_prompt") or (
+    base_system = workflow.get("system_prompt") or (
         "סכם בעברית את עובדות תהליך העבודה. אל תוסיף מידע שלא קיים."
-    )) + _TABULAR_GUIDANCE
-    payload = {
-        "workflow": workflow["name"], "facts": facts, "warnings": warnings,
-    }
-    if workflow.get("_agent_task"):
-        payload["delegated_task"] = workflow["_agent_task"]
-    user = json.dumps(payload, ensure_ascii=False)
+    )
     schema = merge_output_schema(workflow.get("output_schema"))
     try:
-        return _section_result(service._llm.complete_json(system, user, schema))
+        if len(facts) > 1 and all(
+            item.get("complete_rows") for item in facts
+        ):
+            analyses = _map_fact_chunks(service, workflow, facts, base_system)
+            while len(analyses) > _REDUCE_BATCH_SIZE:
+                analyses = _reduce_round(
+                    service, workflow, facts, analyses, base_system
+                )
+            return _reduce_section(
+                service, workflow, facts, analyses, warnings,
+                base_system, schema,
+            )
+        payload = _payload(workflow, facts=facts, warnings=warnings)
+        return _section_result(service._llm.complete_json(
+            base_system + _TABULAR_GUIDANCE,
+            json.dumps(payload, ensure_ascii=False), schema,
+        ))
     except AgentError:
         return _section_fallback(workflow, facts)
+
+
+def _map_fact_chunks(service, workflow, facts, base_system) -> List[dict]:
+    results = [None] * len(facts)
+    with ThreadPoolExecutor(
+        max_workers=_section_workers(service, len(facts))
+    ) as pool:
+        futures = {
+            pool.submit(
+                _map_fact_chunk, service, workflow, fact, base_system
+            ): index
+            for index, fact in enumerate(facts)
+        }
+        for future in as_completed(futures):
+            results[futures[future]] = future.result()
+    return results
+
+
+def _map_fact_chunk(service, workflow, fact, base_system) -> dict:
+    result = service._llm.complete_json(
+        base_system + _MAP_GUIDANCE,
+        json.dumps(_payload(workflow, fact_chunk=fact), ensure_ascii=False),
+        SECTION_SCHEMA,
+    )
+    return _section_result(result)
+
+
+def _reduce_round(service, workflow, facts, analyses, base_system) -> List[dict]:
+    reduced = []
+    for index in range(0, len(analyses), _REDUCE_BATCH_SIZE):
+        group = analyses[index:index + _REDUCE_BATCH_SIZE]
+        reduced.append(
+            group[0] if len(group) == 1 else _reduce_section(
+                service, workflow, facts, group, [],
+                base_system, SECTION_SCHEMA,
+            )
+        )
+    return reduced
+
+
+def _reduce_section(
+    service, workflow, facts, analyses, warnings, base_system, schema
+) -> dict:
+    payload = _payload(
+        workflow,
+        whole_dataset=_dataset_facts(facts),
+        chunk_analyses=analyses,
+        warnings=warnings,
+    )
+    result = service._llm.complete_json(
+        base_system + _TABULAR_GUIDANCE + _REDUCE_GUIDANCE,
+        json.dumps(payload, ensure_ascii=False), schema,
+    )
+    return _section_result(result)
+
+
+def _payload(workflow, **values) -> dict:
+    payload = {"workflow": workflow["name"], **values}
+    if workflow.get("_agent_task"):
+        payload["delegated_task"] = workflow["_agent_task"]
+    return payload
+
+
+def _dataset_facts(facts: List[dict]) -> List[dict]:
+    datasets, seen = [], set()
+    for fact in facts:
+        step = fact.get("step")
+        if step in seen:
+            continue
+        seen.add(step)
+        datasets.append({
+            key: fact[key] for key in (
+                "step", "row_count", "fields", "stats", "samples",
+                "summary_instruction",
+            ) if key in fact
+        })
+    return datasets
+
+
+def _section_workers(service, count: int) -> int:
+    try:
+        limit = service._store.get().max_parallel_workflows
+    except AttributeError:
+        limit = 1
+    return max(1, min(limit, count))
 
 
 def _section_result(result: dict) -> dict:
@@ -76,12 +188,13 @@ def _section_fallback(workflow: dict, facts: List[dict]) -> dict:
     Without the flag a reader cannot tell a thin section from a fallback, and
     reads "no information" where the truth is "the model did not answer".
     """
-    count = sum(item["row_count"] for item in facts)
+    datasets = _dataset_facts(facts)
+    count = sum(item["row_count"] for item in datasets)
     return {
         "summary": "נאספו %d רשומות בתהליך %s." % (count, workflow["name"]),
-        "coverage": "%d רשומות ב-%d שלבים" % (count, len(facts)),
+        "coverage": "%d רשומות ב-%d שלבים" % (count, len(datasets)),
         "facts": ["%s: %d רשומות" % (item["step"], item["row_count"])
-                  for item in facts],
+                  for item in datasets],
         "patterns": [],
         "outliers": [],
         "warnings": ["הסיכום הופק ללא מודל השפה; מוצגות ספירות בלבד."],
