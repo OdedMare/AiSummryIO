@@ -133,7 +133,8 @@ def select_detail(
     payload = _router_payload(question, workflows, tools, evidence, turns, ratings)
     prompt = service._repository.enabled_content(
         "tool-aware-router",
-        "בחר ראיות קיימות, workflow, טול עצמאי או clarification.",
+        "Choose existing evidence, a Workflow, an approved standalone tool, "
+        "or clarification. Write any user-facing text in Hebrew.",
     )
     try:
         selected = service._llm.complete_json(
@@ -301,7 +302,7 @@ def _clarify(message="לאיזה נושא תרצו להעמיק?", options=None)
 def tool_workflow(tool: dict) -> dict:
     instructions = (
         tool.get("agent_instructions") or tool.get("description")
-        or "סכם בעברית רק את עובדות הטול."
+        or "Summarize only the tool's facts. Write the result in Hebrew."
     )
     return {
         "id": "tool:" + tool["id"],

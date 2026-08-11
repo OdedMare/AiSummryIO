@@ -17,7 +17,9 @@ def plan_workflow(service, prompt: str) -> dict:
         return _empty_catalog_plan()
     system = service._repository.enabled_content(
         "workflow-planner",
-        "הרכב טיוטת workflow רק מהטולים שסופקו; ציין מה חסר.",
+        "Build a Workflow draft using only the supplied tools and state what "
+        "is missing. Write FDE-facing text in Hebrew. Write proposed model "
+        "prompts in English and require them to produce Hebrew output.",
     )
     payload = json.dumps(
         {"fde_prompt": prompt, "available_tools": tool_catalog(tools)},

@@ -70,6 +70,20 @@ class SummaryService:
             self, messages, draft, focus_field
         )
 
+    def plan_skill_chat(
+        self, messages: List[dict], draft: Dict, focus_field: str = "",
+    ) -> dict:
+        return conversational_planning.plan_skill_chat(
+            self, messages, draft, focus_field
+        )
+
+    def plan_specialist_chat(
+        self, messages: List[dict], draft: Dict, focus_field: str = "",
+    ) -> dict:
+        return conversational_planning.plan_specialist_chat(
+            self, messages, draft, focus_field
+        )
+
     def preview_skill(
         self, name: str, content: str, question: str, sections: List[dict]
     ) -> dict:

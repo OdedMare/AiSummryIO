@@ -262,6 +262,11 @@ ID/evidence, and reuse the conversation's stored boundaries.
   the connection: it is seeded into every turn as fact, and the interview
   proposes only `name`, `description`, `agent_instructions`, `output_schema`,
   and the two examples, which the FDE then edits before saving.
+- The Skill and specialist forms expose the same full interview drawer. The
+  Skill interview writes a complete model instruction; the specialist
+  interview receives the real Workflow/Skill catalogs and may return only
+  assignable keys. Confirmation fills the current unsaved form and closes the
+  drawer — the FDE still reviews and saves it.
 - The interview drawer is portalled to `document.body`, but a portal still
   propagates events through the React tree — it must stop `submit` and `Enter`
   at its own boundary, or sending a message saves the editor's form.

@@ -316,6 +316,59 @@ WORKFLOW_PLAN_CHAT_SCHEMA = {
     "additionalProperties": False,
 }
 
+SKILL_PLAN_CHAT_SCHEMA = {
+    "type": "object",
+    "properties": dict(
+        _PLAN_CHAT_BASE_PROPERTIES,
+        draft={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "content": {"type": "string"},
+                "user_selectable": {"type": "boolean"},
+                "agent_enabled": {"type": "boolean"},
+            },
+            "required": [
+                "name", "description", "content",
+                "user_selectable", "agent_enabled",
+            ],
+            "additionalProperties": False,
+        },
+    ),
+    "required": _PLAN_CHAT_BASE_REQUIRED + ["draft"],
+    "additionalProperties": False,
+}
+
+SPECIALIST_PLAN_CHAT_SCHEMA = {
+    "type": "object",
+    "properties": dict(
+        _PLAN_CHAT_BASE_PROPERTIES,
+        draft={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "content": {"type": "string"},
+                "agent_enabled": {"type": "boolean"},
+                "workflow_keys": {
+                    "type": "array", "items": {"type": "string"},
+                },
+                "skill_keys": {
+                    "type": "array", "items": {"type": "string"},
+                },
+            },
+            "required": [
+                "name", "description", "content", "agent_enabled",
+                "workflow_keys", "skill_keys",
+            ],
+            "additionalProperties": False,
+        },
+    ),
+    "required": _PLAN_CHAT_BASE_REQUIRED + ["draft"],
+    "additionalProperties": False,
+}
+
 TOOL_METADATA_SCHEMA = {
     "type": "object",
     "properties": {

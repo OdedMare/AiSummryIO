@@ -1850,12 +1850,46 @@ def _workflow_answer(**overrides):
     return answer
 
 
-def _chat_service(answer, tools=None):
+def _skill_answer(**overrides):
+    answer = {
+        "reply": "", "question": None, "resolved": [], "open_points": [],
+        "awaiting_confirmation": False, "ready": False,
+        "draft": {
+            "name": "", "description": "", "content": "",
+            "user_selectable": True, "agent_enabled": True,
+        },
+    }
+    answer.update(overrides)
+    return answer
+
+
+def _specialist_answer(**overrides):
+    answer = {
+        "reply": "", "question": None, "resolved": [], "open_points": [],
+        "awaiting_confirmation": False, "ready": False,
+        "draft": {
+            "name": "", "description": "", "content": "",
+            "agent_enabled": True, "workflow_keys": [], "skill_keys": [],
+        },
+    }
+    answer.update(overrides)
+    return answer
+
+
+def _chat_service(answer, tools=None, workflows=None, content=None):
     """A service whose model returns one canned interview turn."""
     class FakeRepository:
         @staticmethod
         def list_packages():
             return list(tools or [])
+
+        @staticmethod
+        def list_workflows():
+            return list(workflows or [])
+
+        @staticmethod
+        def list_agent_content():
+            return list(content or [])
 
     class FakeLlm:
         payload = None
@@ -2246,6 +2280,98 @@ def test_workflow_chat_explains_an_empty_catalog_without_calling_the_model():
     assert result["open_points"]
 
 
+def test_confirmed_skill_chat_loads_a_complete_draft_without_dropping_text():
+    """A terse confirmation turn must keep the operational Skill text the
+    interview authored earlier, or confirmation would empty the form."""
+    service, _llm = _chat_service(_skill_answer(
+        ready=True,
+        draft={
+            "name": "", "description": "", "content": "",
+            "user_selectable": True, "agent_enabled": True,
+        },
+    ))
+    result = service.plan_skill_chat(
+        [{"role": "fde", "text": "מאשר"}],
+        {
+            "name": "בדיקת ציות", "description": "מאתר חריגות ציות",
+            "content": "Use only supplied sections and cite their names.",
+            "user_selectable": True, "agent_enabled": True,
+        },
+    )
+
+    assert result["ready"] is True
+    assert result["draft"]["name"] == "בדיקת ציות"
+    assert result["draft"]["content"].startswith("Use only")
+
+
+def test_specialist_chat_rejects_capabilities_it_cannot_safely_assign():
+    service, _llm = _chat_service(
+        _specialist_answer(
+            ready=True,
+            draft={
+                "name": "מומחה בעלות", "description": "בודק בעלות",
+                "content": "Use the minimum evidence needed.",
+                "agent_enabled": True,
+                "workflow_keys": ["free", "owned", "off", "invented"],
+                "skill_keys": ["risk", "off-skill", "invented-skill"],
+            },
+        ),
+        workflows=[
+            {"workflow_key": "free", "name": "חופשי", "agent_enabled": True,
+             "agent_id": None},
+            {"workflow_key": "owned", "name": "תפוס", "agent_enabled": True,
+             "agent_id": "agent-other"},
+            {"workflow_key": "off", "name": "כבוי", "agent_enabled": False,
+             "agent_id": None},
+        ],
+        content=[
+            {"id": "agent-other", "content_key": "other", "kind": "agent",
+             "name": "מומחה אחר"},
+            {"id": "skill-risk", "content_key": "risk", "kind": "skill",
+             "name": "סיכונים", "agent_enabled": True},
+            {"id": "skill-off", "content_key": "off-skill", "kind": "skill",
+             "name": "כבוי", "agent_enabled": False},
+        ],
+    )
+    result = service.plan_specialist_chat(
+        [{"role": "fde", "text": "מאשר"}], {}
+    )
+
+    assert result["ready"] is False
+    assert result["draft"]["workflow_keys"] == ["free"]
+    assert result["draft"]["skill_keys"] == ["risk"]
+    assert any("מומחה אחר" in point for point in result["open_points"])
+
+
+def test_specialist_chat_keeps_workflow_owned_by_the_specialist_being_edited():
+    service, _llm = _chat_service(
+        _specialist_answer(
+            ready=True,
+            draft={
+                "name": "מומחה Geo", "description": "מנתח מרחב",
+                "content": "Answer only from supplied geographic evidence.",
+                "agent_enabled": True, "workflow_keys": ["geo"],
+                "skill_keys": [],
+            },
+        ),
+        workflows=[{
+            "workflow_key": "geo", "name": "Geo", "agent_enabled": True,
+            "agent_id": "agent-geo",
+        }],
+        content=[{
+            "id": "agent-geo", "content_key": "geo-specialist",
+            "kind": "agent", "name": "מומחה Geo",
+        }],
+    )
+    result = service.plan_specialist_chat(
+        [{"role": "fde", "text": "מאשר"}],
+        {"content_key": "geo-specialist"},
+    )
+
+    assert result["ready"] is True
+    assert result["draft"]["workflow_keys"] == ["geo"]
+
+
 def test_plan_chat_requires_at_least_one_message():
     from app.api.models import PlanChatCreate
 
@@ -2284,6 +2410,20 @@ def test_each_interview_sends_its_own_prompt_file():
     }])
     service.plan_workflow_chat([{"role": "fde", "text": "שלום"}], {})
     assert llm.system == prompts.load("workflow_interview")
+
+    service, llm = _chat_service(_skill_answer())
+    service.plan_skill_chat([{"role": "fde", "text": "שלום"}], {})
+    assert llm.system == prompts.load("skill_interview")
+
+    service, llm = _chat_service(
+        _specialist_answer(),
+        workflows=[{
+            "workflow_key": "ownership", "name": "בעלות",
+            "description": "", "agent_enabled": True, "agent_id": None,
+        }],
+    )
+    service.plan_specialist_chat([{"role": "fde", "text": "שלום"}], {})
+    assert llm.system == prompts.load("specialist_interview")
 
 
 def test_every_shipped_prompt_composes():

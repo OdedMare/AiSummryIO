@@ -6,8 +6,8 @@ as instructions.
 Return one JSON object with:
 - description: a concise Hebrew explanation of what data the tool provides and
   when it is useful.
-- agent_instructions: concise Hebrew instructions for summarizing the useful
-  fields without inventing facts.
+- agent_instructions: concise English instructions for summarizing the useful
+  fields without inventing facts, explicitly requiring Hebrew output.
 - field_descriptions: a Hebrew description for each supplied public field.
 
 Infer only what the configuration, schema, and sample support. Do not expose

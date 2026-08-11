@@ -5,7 +5,10 @@ import {
   Bot, BookOpen, Check, LoaderCircle, Save, Trash2, Workflow,
 } from "lucide-react";
 import { api } from "@/services/api";
-import type { AgentContent, WorkflowVersion } from "@/types";
+import type {
+  AgentContent, SpecialistPlanDraft, WorkflowVersion,
+} from "@/types";
+import { SpecialistPlanChat } from "./ContentAgents";
 import { NewItemButton } from "./StudioCommon";
 
 interface SpecialistForm {
@@ -176,10 +179,14 @@ function SpecialistFormView({
 }) {
   return (
     <form className="studio-form specialist-form" onSubmit={save}>
-      <header><span><Bot size={19} aria-hidden="true" /></span><div>
+      <header className="studio-form-header">
+        <span><Bot size={19} aria-hidden="true" /></span><div>
         <h3>{editing ? "עריכת מומחה" : "מומחה חדש"}</h3>
         <p>המנהל מאציל משימה; רק המומחה מפעיל את ה־Workflows שהוקצו לו.</p>
-      </div></header>
+      </div>
+        <SpecialistPlanChat form={form}
+          onApply={(draft: SpecialistPlanDraft) => update(draft)} />
+      </header>
       <div className="form-grid two">
         <label><span>שם המומחה *</span><input value={form.name}
           placeholder="לדוגמה: מומחה Geo"

@@ -105,8 +105,8 @@ class PlanChatCreate(BaseModel):
     messages: List[PlanChatMessage] = Field(default_factory=list)
     draft: Dict[str, Any] = Field(default_factory=dict)
     # Which form field this interview is about, when it was opened from one.
-    # Empty means the whole tool or workflow, which is how the drawer has
-    # always opened. Each planner checks the name against the fields it may
+    # Empty means the whole Studio item, which is how the drawer opens. Each
+    # planner checks the name against the fields it may
     # author, so an unknown one is ignored there rather than rejected here.
     focus_field: str = ""
 

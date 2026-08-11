@@ -36,6 +36,8 @@ a model, or a flunks wheel.
 | `plan_workflow` | FDE asks for a workflow | Proposes one from catalog tools; only the FDE saves it |
 | `plan_tool_chat` | FDE discusses a tool | One conversational turn; opens on a sample the FDE already ran and proposes only the summary-facing fields |
 | `plan_workflow_chat` | FDE discusses a workflow | One conversational turn; draft passes the same validation gate |
+| `plan_skill_chat` | FDE discusses a Skill | Authors a complete evidence-bound Skill and fills the form only after confirmation |
+| `plan_specialist_chat` | FDE discusses a specialist | Selects only real, assignable Workflows/Skills and fills the form after confirmation |
 | `inspect_tool` | FDE previews a package | One identifier, bounded preview, inferred schema, no persistence |
 | `dry_run` | FDE tests a workflow | Executes with `save_evidence=False` |
 | `preview_skill` | FDE tests Skill wording | Runs one Skill against sample sections; no packages, no persistence |

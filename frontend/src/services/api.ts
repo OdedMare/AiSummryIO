@@ -2,8 +2,9 @@ import type {
   AgentContent, Conversation, ConversationTurn, Evidence, EvidencePage,
   PackageInspection,
   PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
-  SummarySkill, ToolPlanChatTurn, ToolPlanDraft, WorkflowPlan,
-  WorkflowPlanChatTurn, WorkflowVersion,
+  SkillPlanChatTurn, SkillPlanDraft, SpecialistPlanChatTurn,
+  SpecialistPlanDraft, SummarySkill, ToolPlanChatTurn, ToolPlanDraft,
+  WorkflowPlan, WorkflowPlanChatTurn, WorkflowVersion,
 } from "@/types";
 import type { GeoJSONMultiPolygon } from "@/types/geo";
 
@@ -241,5 +242,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  planSkillChat: (
+    messages: PlanChatMessage[], draft: Partial<SkillPlanDraft>,
+    focusField = "",
+  ) => request<SkillPlanChatTurn>("/api/agent-content/plan-skill-chat", {
+    method: "POST",
+    body: JSON.stringify({ messages, draft, focus_field: focusField }),
+  }),
+  planSpecialistChat: (
+    messages: PlanChatMessage[],
+    draft: Partial<SpecialistPlanDraft> & { content_key?: string },
+    focusField = "",
+  ) => request<SpecialistPlanChatTurn>(
+    "/api/agent-content/plan-specialist-chat",
+    {
+      method: "POST",
+      body: JSON.stringify({ messages, draft, focus_field: focusField }),
+    },
+  ),
   reviewQueue: () => request<Array<Record<string, unknown>>>("/api/review-queue"),
 };

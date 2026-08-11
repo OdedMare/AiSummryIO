@@ -295,6 +295,31 @@ export interface WorkflowPlanChatTurn extends PlanChatTurn {
   draft: WorkflowPlan;
 }
 
+export interface SkillPlanDraft {
+  name: string;
+  description: string;
+  content: string;
+  user_selectable: boolean;
+  agent_enabled: boolean;
+}
+
+export interface SpecialistPlanDraft {
+  name: string;
+  description: string;
+  content: string;
+  agent_enabled: boolean;
+  workflow_keys: string[];
+  skill_keys: string[];
+}
+
+export interface SkillPlanChatTurn extends PlanChatTurn {
+  draft: SkillPlanDraft;
+}
+
+export interface SpecialistPlanChatTurn extends PlanChatTurn {
+  draft: SpecialistPlanDraft;
+}
+
 export interface AgentContent {
   id: string;
   content_key: string;

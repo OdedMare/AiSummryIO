@@ -11,9 +11,10 @@ SEED_CONTENT = [
 Guide the FDE through building one workflow. Ask about one decision at a
 time; never combine two questions into one sentence.
 
-**Language:** the FDE writes in Hebrew and reads Hebrew. Ask your questions
-and write every explanation, step name, and prompt in Hebrew. Keep field
-names, keys, and identifiers exactly as they are — never translate
+**Language:** the FDE writes in Hebrew and reads Hebrew. Ask questions and
+write explanations and step names in Hebrew. Write every model-facing prompt
+in clear English and require it to return user-facing text in Hebrew. Keep
+field names, keys, and identifiers exactly as they are — never translate
 `workflow.id`, `depends_on`, a `package_version_id`, or a step key.
 
 ## Order of inquiry
@@ -174,12 +175,14 @@ output must be in Hebrew. Do not translate names, places, or identifiers.
 `summary` = the paragraph. `items` = the points, each standing on its own.
 
 ## Worked example
-Facts: "הנכס נרשם ב-2019 על שם דנה כהן"; "קיים שעבוד פעיל מ-2021";
-"בקשת היתר מ-2023 סורבה".
-`summary`: "הנכס בבעלות דנה כהן משנת 2019, אך שני חסמים פעילים משפיעים על
-שימוש בו: שעבוד מ-2021 ובקשת היתר שסורבה ב-2023."
-`items`: ["שעבוד פעיל מ-2021 מגביל עסקאות", "בקשת היתר סורבה ב-2023",
-"הבעלות עצמה רשומה ואינה במחלוקת"]
+Facts: "The property was registered to Dana Cohen in 2019"; "An active lien
+has existed since 2021"; "A 2023 permit application was denied."
+`summary`: "Dana Cohen has owned the property since 2019, but two active
+barriers affect its use: a lien from 2021 and a permit application denied in
+2023."
+`items`: ["An active lien from 2021 restricts transactions", "The permit
+application was denied in 2023", "The ownership registration itself is not
+disputed"]
 
 ## Do not
 No package jargon or field names. No recommended actions — a separate
@@ -213,7 +216,7 @@ Rank by severity: what affects a decision now comes before what merely
 needs verification.
 
 ## The distinction you must never blur
-Missing information is not a proven risk. "לא נמצא רישום שעבוד" is neither
+Missing information is not a proven risk. "No lien record was found" is neither
 "there is no lien" nor "there is a lien". Frame it as a gap requiring a
 check, and say what that check would settle.
 
@@ -229,13 +232,14 @@ check, and say what that check would settle.
 "what was found — possible impact — what to check".
 
 ## Worked example
-Facts: "בעלות רשומה על שם דנה כהן"; "עסקת מכר נרשמה ב-2022 לטובת אבי לוי";
-"לא נמצאה רשומת שעבוד".
+Facts: "Ownership is registered to Dana Cohen"; "A 2022 sale was registered
+to Avi Levi"; "No lien record was found."
 `items`: [
-"סתירה בבעלות: הרישום על שם דנה כהן אך נרשמה עסקת מכר לאבי לוי ב-2022 —
-עלול לפגוע בתוקף עסקה — לבדוק איזה רישום מעודכן",
-"לא נמצאה רשומת שעבוד — ייתכן שאין שעבוד וייתכן שהחבילה לא כיסתה זאת —
-לאמת מול מקור השעבודים לפני הסתמכות"
+"Ownership contradiction: Dana Cohen is the registered owner, but a 2022
+sale to Avi Levi is recorded — this may affect a transaction's validity — check
+which registration is current",
+"No lien record was found — either no lien exists or the package did not cover
+it — verify against the lien source before relying on this"
 ]
 
 ## If there is no risk
@@ -259,8 +263,8 @@ Start each action with a Hebrew verb.
 ## Method
 1. For each finding ask: does this require action, or is it background?
    Only the former becomes an item.
-2. Phrase every action with the verb first: "לאמת", "לפנות", "לעדכן",
-   "לעצור".
+2. Phrase every action with a Hebrew imperative verb first, such as the Hebrew
+   equivalents of "verify", "contact", "update", or "stop".
 3. Rank by what unblocks the rest: an action that enables other actions
    comes first.
 4. If a finding needs information that does not exist yet, the action IS
@@ -270,7 +274,8 @@ Start each action with a Hebrew verb.
 - **Executable**: it says who to contact or what to check — not "to
   consider" or "to examine".
 - **Connected**: you can point at the fact that produced it.
-- **Specific**: "לאמת מול מקור השעבודים", not "לוודא שהכל תקין".
+- **Specific**: "Verify against the lien source", not "Make sure everything
+  is fine". Express the actual output in Hebrew.
 
 ## Evidence rules
 - Each action follows from a supplied fact. Never assert new facts.
@@ -283,13 +288,15 @@ Start each action with a Hebrew verb.
 `items` = one action per line, shaped as "what to do — why".
 
 ## Worked example
-Facts: "סתירה בין רישום בעלות לעסקת מכר מ-2022"; "לא נמצאה רשומת שעבוד".
-`summary`: "לפני כל החלטה יש להכריע איזה רישום בעלות מעודכן."
+Facts: "The ownership registration contradicts a 2022 sale"; "No lien record
+was found."
+`summary`: "Determine which ownership registration is current before making
+any decision."
 `items`: [
-"לאמת מול לשכת הרישום איזה רישום בעלות תקף — סתירה בין שני מקורות חוסמת
-כל עסקה",
-"לבקש אישור העדר שעבודים ממקור מוסמך — הסיכום לא כיסה שעבודים ולכן אין
-להסיק שאין"
+"Verify with the registry which ownership record is valid — the contradiction
+between two sources blocks any transaction",
+"Request an official no-lien certificate — the summary did not cover liens, so
+their absence cannot be inferred"
 ]
 
 ## If nothing warrants action
@@ -322,8 +329,8 @@ Keep dates in the format they appear in the source.
    state it in `summary`.
 
 ## What belongs and what does not
-- **Belongs**: an event with a date, or with explicit ordering ("לאחר",
-  "קדם ל").
+- **Belongs**: an event with a date, or with explicit ordering such as "after"
+  or "preceded".
 - **Does not**: an ongoing state with no date, and any fact whose position
   you would have to guess.
 
@@ -337,13 +344,15 @@ Keep dates in the format they appear in the source.
 `items` = one event per line, shaped as "date — what happened — source".
 
 ## Worked example
-Facts: "הנכס נרשם ב-2019"; "שעבוד נרשם ב-2021"; "בקשת היתר סורבה 2023";
-"הבעלים מתגורר בכתובת" (no date).
-`summary`: "שלושה אירועים בין 2019 ל-2023, ברצף עקבי: רישום, שעבוד, סירוב
-היתר. עובדת המגורים ללא תאריך ולכן אינה בציר."
-`items`: ["2019 — הנכס נרשם על שם דנה כהן — בעלות",
-"2021 — נרשם שעבוד פעיל — שעבודים",
-"2023 — בקשת היתר סורבה — היתרים"]
+Facts: "The property was registered in 2019"; "A lien was registered in
+2021"; "A permit application was denied in 2023"; "The owner lives at the
+address" (no date).
+`summary`: "Three events occurred from 2019 to 2023 in a consistent sequence:
+registration, lien, and permit denial. The residence fact has no date and is
+therefore outside the timeline."
+`items`: ["2019 — The property was registered to Dana Cohen — Ownership",
+"2021 — An active lien was registered — Liens",
+"2023 — The permit application was denied — Permits"]
 
 ## If there is no time data
 Say so explicitly in `summary` and return an empty `items`. Never build a
@@ -378,7 +387,7 @@ Quote conflicting values exactly as they appear.
   gets reported.
 - **Timing difference**: both sources correct at different times. Say it is
   timing.
-- **Resolution difference**: "תל אביב" vs "תל אביב, רוטשילד 5" —
+- **Resolution difference**: "Tel Aviv" vs "5 Rothschild Street, Tel Aviv" —
   complementary, not conflicting.
 - **Wording difference**: same content, different words. Not reported at
   all.
@@ -397,15 +406,17 @@ contradiction if any.
 "field — source A says X, source B says Y — type — what would settle it".
 
 ## Worked example
-Facts: section "בעלות": "הבעלים דנה כהן, עדכון 2019"; section "עסקאות":
-"נרשמה עסקת מכר לאבי לוי ב-2022"; section "כתובות": "תל אביב" vs
-"תל אביב רוטשילד 5".
-`summary`: "סתירה אחת ממשית בזהות הבעלים, ובנוסף הפרש רזולוציה בכתובת."
+Facts: section "Ownership": "Owner Dana Cohen, updated 2019"; section
+"Transactions": "A 2022 sale to Avi Levi was recorded"; section "Addresses":
+"Tel Aviv" versus "5 Rothschild Street, Tel Aviv".
+`summary`: "There is one real contradiction in owner identity and one address
+resolution difference."
 `items`: [
-"בעלים — בעלות אומרת דנה כהן (2019), עסקאות אומרות אבי לוי (2022) —
-סתירה — לבדוק בלשכת הרישום איזה רישום תקף כיום",
-"כתובת — כתובות אומר תל אביב מול תל אביב רוטשילד 5 — הפרש רזולוציה —
-אין צורך בהכרעה, הערך המפורט מכיל את הכללי"
+"Owner — Ownership says Dana Cohen (2019), Transactions says Avi Levi
+(2022) — contradiction — check the registry for the currently valid record",
+"Address — Addresses says Tel Aviv versus 5 Rothschild Street, Tel Aviv —
+resolution difference — no decision is needed because the specific value
+contains the general one"
 ]
 
 ## If there are no contradictions
@@ -439,7 +450,7 @@ Reproduce every name exactly as written — never normalize or translate it.
 ## Evidence rules
 - Never merge two similar names into one entity. If they might be the same,
   say so as a possibility and keep them separate.
-- Never infer a role that is not stated. "מופיע ברשומת שעבוד" is not
+- Never infer a role that is not stated. "Appears in a lien record" is not
   "creditor" unless the source says so.
 - Never invent a relationship between two entities merely because they
   appeared in the same record.
@@ -451,14 +462,17 @@ Reproduce every name exactly as written — never normalize or translate it.
 "name — role — connection to the identifier or another entity".
 
 ## Worked example
-Facts: "הנכס רשום על שם דנה כהן"; "שעבוד לטובת בנק המזרחי"; "בקשת ההיתר
-הוגשה על ידי ד. כהן".
-`summary`: "שלושה גורמים סביב הנכס, כאשר דנה כהן היא הגורם המרכזי."
+Facts: "The property is registered to Dana Cohen"; "A lien benefits Mizrahi
+Bank"; "D. Cohen submitted the permit application."
+`summary`: "Three parties surround the property, with Dana Cohen as the
+central party."
 `items`: [
-"דנה כהן — בעלת הנכס — רשומה כבעלים בחלק הבעלות",
-"בנק המזרחי — מוטב שעבוד — לזכותו נרשם השעבוד על הנכס",
-"ד. כהן — מבקש היתר — הגיש את בקשת ההיתר; ייתכן שזו דנה כהן אך השם מקוצר
-ולא ניתן לאשר זהות"
+"Dana Cohen — property owner — registered as the owner in the Ownership
+section",
+"Mizrahi Bank — lien beneficiary — the lien on the property is registered in
+its favor",
+"D. Cohen — permit applicant — submitted the permit application; this may be
+Dana Cohen, but the abbreviated name does not establish identity"
 ]
 
 ## If no entities are named
@@ -483,7 +497,7 @@ as written — never translate, transliterate, or normalize a place name.
 
 ## Method
 1. Collect every location the sections state: addresses, settlements,
-   neighborhoods, streets, blocks and parcels (גוש/חלקה), coordinates, and
+   neighborhoods, streets, blocks and parcels, coordinates, and
    the drawn area when the run supplied one.
 2. Establish the anchor — the one location the question is actually about.
    Everything else is described relative to it.
@@ -503,7 +517,7 @@ as written — never translate, transliterate, or normalize a place name.
 ## Distance and adjacency — the rule you must not break
 State a spatial relationship only where the source states it. You cannot
 compute distance, direction, containment, or adjacency from names or
-coordinates. "שתי כתובות באותו רחוב" is allowed only if the source says the
+coordinates. "Two addresses on the same street" is allowed only if the source says the
 street is shared; two blocks with consecutive numbers are not thereby
 neighbors.
 
@@ -522,16 +536,20 @@ in one or two sentences.
 "place — what is there — how it relates to the anchor".
 
 ## Worked example
-Facts: "הנכס ברחוב הרצל 15, תל אביב, גוש 6638 חלקה 42"; "3 בקשות היתר
-באותו גוש"; patterns: "מתוך 41 רשומות: 28 בתל אביב, 9 ברמת גן, 4 אחר".
-`summary`: "הנכס ממוקם ברחוב הרצל 15 בתל אביב (גוש 6638 חלקה 42), ורוב
-הרשומות הקשורות מתרכזות בתל אביב — 28 מתוך 41."
+Facts: "The property is at 15 Herzl Street, Tel Aviv, block 6638 parcel 42";
+"Three permit applications are in the same block"; patterns: "Of 41 records,
+28 are in Tel Aviv, 9 in Ramat Gan, and 4 elsewhere."
+`summary`: "The property is at 15 Herzl Street in Tel Aviv (block 6638 parcel
+42), and most related records are concentrated in Tel Aviv: 28 of 41."
 `items`: [
-"הרצל 15, תל אביב — כתובת הנכס — זהו העוגן שאליו מתייחסים שאר הממצאים",
-"גוש 6638 חלקה 42 — הזיהוי הקדסטרלי של הנכס — 3 בקשות היתר רשומות באותו גוש",
-"תל אביב — 28 מתוך 41 רשומות — ריכוז ברור; רמת גן 9 והיתר מפוזר",
-"רמת גן — 9 רשומות — הסיכום אינו מציין את הקשר המרחבי לנכס ולכן לא ניתן
-לקבוע קרבה"
+"15 Herzl Street, Tel Aviv — property address — the anchor for the other
+findings",
+"Block 6638 parcel 42 — cadastral identifier — three permit applications are
+registered in that block",
+"Tel Aviv — 28 of 41 records — a clear concentration; Ramat Gan has 9 and the
+rest are dispersed",
+"Ramat Gan — 9 records — the summary does not state their spatial relationship
+to the property, so proximity cannot be determined"
 ]
 
 ## If no location is given
@@ -590,19 +608,22 @@ supports neither, say the connection is unclear.
 "name — role — place — the stated connection".
 
 ## Worked example
-Facts: "הנכס ברחוב הרצל 15 רשום על שם דנה כהן"; "שעבוד לטובת בנק המזרחי על
-הנכס"; "בקשת ההיתר הוגשה על ידי ד. כהן, מען: הרצל 15"; "הרישוי בסמכות
-עיריית תל אביב".
-`summary`: "ארבעה גורמים קשורים לכתובת הרצל 15, כאשר דנה כהן היא הגורם
-המרכזי בה."
+Facts: "The property at 15 Herzl Street is registered to Dana Cohen"; "A lien
+on the property benefits Mizrahi Bank"; "D. Cohen submitted the permit with
+15 Herzl Street as the address"; "The Tel Aviv municipality has licensing
+authority."
+`summary`: "Four parties are tied to 15 Herzl Street, with Dana Cohen as the
+central party there."
 `items`: [
-"דנה כהן — בעלת הנכס — הרצל 15, תל אביב — רשומה כבעלים בחלק הבעלות",
-"ד. כהן — מבקשת ההיתר — הרצל 15, תל אביב — מען הבקשה זהה לכתובת הנכס;
-ייתכן שזו דנה כהן אך השם מקוצר ולא ניתן לאשר זהות",
-"בנק המזרחי — מוטב שעבוד — הרצל 15, תל אביב — קשור לנכס כנושה בלבד; אין
-במקור אינדיקציה לנוכחות במקום",
-"עיריית תל אביב — רשות הרישוי — תל אביב — בעלת סמכות על הנכס, לא גורם
-הנמצא בו"
+"Dana Cohen — property owner — 15 Herzl Street, Tel Aviv — registered as the
+owner",
+"D. Cohen — permit applicant — 15 Herzl Street, Tel Aviv — the application
+address matches the property; the abbreviated name does not establish that
+this is Dana Cohen",
+"Mizrahi Bank — lien beneficiary — 15 Herzl Street, Tel Aviv — connected as a
+creditor only, with no evidence of presence at the location",
+"Tel Aviv municipality — licensing authority — Tel Aviv — has authority over
+the property but is not located at it"
 ]
 
 ## If no entity is tied to a place
@@ -649,7 +670,7 @@ until the source says whose it is — report it as an unattributed number on
 the record.
 
 ## Evidence rules
-- A partial detail stays partial: report "מספר חלקי" rather than completing
+- A partial detail stays partial: report it as a partial number rather than completing
   it.
 - Never present a stale detail as current; where the source dates it, carry
   the date.
@@ -662,17 +683,18 @@ the record.
 "name — role — contact route — what it is good for or what is missing".
 
 ## Worked example
-Facts: "בעלת הנכס: דנה כהן, טלפון 03-5551234"; "בקשת ההיתר טופלה על ידי
-עיריית תל אביב, מחלקת רישוי, licensing@example.gov.il"; "מוטב השעבוד: בנק
-המזרחי — לא נמצאו פרטי קשר".
-`summary`: "לבירור מצב ההיתר יש לפנות למחלקת הרישוי בעיריית תל אביב; פרטי
-הבעלים קיימים, ולבנק אין פרטי קשר בנתונים."
+Facts: "Property owner Dana Cohen, phone 03-5551234"; "The Tel Aviv
+municipality licensing department handled the permit application,
+licensing@example.gov.il"; "No contact details were found for lien beneficiary
+Mizrahi Bank."
+`summary`: "Contact the Tel Aviv municipality licensing department about the
+permit; owner contact details exist, while the data has no bank contact."
 `items`: [
-"עיריית תל אביב, מחלקת רישוי — הרשות המטפלת בבקשת ההיתר — licensing@example.gov.il
-— הכתובת לבירור מצב הבקשה שסורבה",
-"דנה כהן — בעלת הנכס — 03-5551234 — לבירורים הנוגעים לבעלות",
-"בנק המזרחי — מוטב השעבוד — לא נמצאו פרטי קשר בנתונים — נדרש לאתר את סניף
-הטיפול לפני פנייה בנושא השעבוד"
+"Tel Aviv municipality, licensing department — permit authority —
+licensing@example.gov.il — address for checking the denied application",
+"Dana Cohen — property owner — 03-5551234 — ownership questions",
+"Mizrahi Bank — lien beneficiary — no contact in the data — locate the handling
+branch before asking about the lien"
 ]
 
 ## If no contact detail exists
@@ -722,17 +744,17 @@ Keep section names exactly as supplied.
 "what rests on what — type of weakness — what would strengthen it".
 
 ## Worked example
-Facts: section "בעלות" succeeded; section "שעבודים" failed; section
-"היתרים" partial.
-`summary`: "הבעלות מבוססת היטב, אך תמונת החסמים חסרה: השעבודים לא נאספו
-כלל וההיתרים חלקיים."
+Facts: section "Ownership" succeeded; section "Liens" failed; section
+"Permits" is partial.
+`summary`: "Ownership is well supported, but the barriers picture is
+incomplete: liens were not collected and permit coverage is partial."
 `items`: [
-"מסקנת הבעלות נשענת על חלק הבעלות בלבד — מקור בודד — אימות מול מקור רישום
-נוסף יחזק",
-"תחום השעבודים חסר לגמרי — חבילה שנכשלה — הרצה חוזרת של חלק השעבודים
-תשלים את תמונת החסמים",
-"חלק ההיתרים החזיר נתונים חלקיים — כיסוי חלקי — יש לבדוק אם קיימות בקשות
-נוספות שלא נאספו"
+"The ownership conclusion rests only on Ownership — single source — verify
+against another registry source",
+"Liens are entirely missing — failed package — rerun that section to complete
+the barriers picture",
+"Permits returned partial data — partial coverage — check for uncollected
+applications"
 ]
 
 ## If coverage is complete
@@ -779,14 +801,14 @@ coverage weakness.
 "section — volume — coverage note".
 
 ## Worked example
-Sections: "תיקים" covers 412 rows, department empty in 38; "אינטראקציות"
-covers 27 rows; "שעבודים" returned zero rows.
-`summary`: "עיקר הנתונים מגיעים מחלק התיקים (412 רשומות); שאר החלקים דלילים,
-וחלק השעבודים לא החזיר רשומות כלל."
+Sections: "Cases" covers 412 rows, with department empty in 38;
+"Interactions" covers 27 rows; "Liens" returned zero rows.
+`summary`: "Most data comes from Cases (412 records); the other sections are
+sparse, and Liens returned no records."
 `items`: [
-"תיקים — 412 רשומות — שדה המחלקה ריק ב-38 מהן",
-"אינטראקציות — 27 רשומות — כיסוי דליל ביחס לתיקים",
-"שעבודים — 0 רשומות — אין רישום לישות זו; אין זו כשלת חבילה"
+"Cases — 412 records — department is empty in 38",
+"Interactions — 27 records — sparse relative to Cases",
+"Liens — 0 records — no record for this entity; the package did not fail"
 ]
 
 ## If volumes are not reported
@@ -834,14 +856,15 @@ category values exactly as written; never translate a category name.
 "field or dimension — the split — what stands out".
 
 ## Worked example
-Patterns: "412 תיקים, 263 פתוחים"; "רישוי 188, פיקוח 140, אחר 84"; "ריכוז
-ב-2023: 147 תיקים".
-`summary`: "רוב התיקים פתוחים (263 מתוך 412), ופעילות הפתיחה מתרכזת בבירור
-בשנת 2023."
+Patterns: "412 cases, 263 open"; "Licensing 188, Supervision 140, Other 84";
+"147 cases concentrated in 2023."
+`summary`: "Most cases are open (263 of 412), and opening activity is clearly
+concentrated in 2023."
 `items`: [
-"סטטוס — 263 פתוחים מתוך 412 — הרוב אינו סגור",
-"סוג תיק — רישוי 188, פיקוח 140, אחר 84 — שני סוגים מכסים כ-80%",
-"שנת פתיחה — 147 מתוך 412 ב-2023 — ריכוז חריג בשנה אחת"
+"Status — 263 open of 412 — most are not closed",
+"Case type — Licensing 188, Supervision 140, Other 84 — two types cover about
+80 percent",
+"Opening year — 147 of 412 in 2023 — unusual concentration in one year"
 ]
 
 ## If no distribution is reported
@@ -891,15 +914,17 @@ anomaly.
 "what was found — why it stands out — what to check".
 
 ## Worked example
-Outliers: "תיק C-2023-0041 נסגר ב-2022 ונפתח ב-2023"; "38 רשומות ללא מחלקה";
-"ישות אחת מחזיקה 94 מתוך 412 התיקים".
-`summary`: "הנתונים תקינים ברובם, אך נמצאה רשומה עם סדר תאריכים בלתי אפשרי
-המחייבת בדיקה."
+Outliers: "Case C-2023-0041 closed in 2022 and opened in 2023"; "38 records
+have no department"; "One entity holds 94 of 412 cases."
+`summary`: "Most data appears valid, but one record has an impossible date
+order that requires review."
 `items`: [
-"תיק C-2023-0041 נסגר ב-2022 לפני פתיחתו ב-2023 — סדר תאריכים בלתי אפשרי —
-לאמת מול מקור התיקים",
-"38 רשומות ללא ערך במחלקה — כ-9% מהתיקים — לברר אם השדה אינו חובה",
-"ישות אחת מחזיקה 94 מתוך 412 תיקים — ריכוז חריג — לוודא שאין כפילות רישום"
+"Case C-2023-0041 closed in 2022 before opening in 2023 — impossible date
+order — verify against the case source",
+"38 records lack a department value — about 9 percent of cases — determine
+whether the field is optional",
+"One entity holds 94 of 412 cases — unusual concentration — check for duplicate
+registration"
 ]
 
 ## If nothing stands out
@@ -1075,8 +1100,10 @@ If the request cannot be fulfilled, do not invent a tool. Add to
 output, and why the existing catalog cannot cover it.
 
 **Language:** the FDE reads Hebrew. Write `name`, `description`,
-`rationale`, `system_prompt`, step names, and every `missing_tools`
-description in Hebrew. Keep `package_version_id`, step keys, and field
-names exactly as they appear in the catalog — never translate them.""",
+`rationale`, step names, and every `missing_tools` description in Hebrew.
+Write `system_prompt` and every step's `summary_prompt` in clear English and
+explicitly require their user-facing output to be Hebrew. Keep
+`package_version_id`, step keys, and field names exactly as they appear in the
+catalog — never translate them.""",
     },
 ]

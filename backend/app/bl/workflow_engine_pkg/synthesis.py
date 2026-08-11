@@ -16,48 +16,58 @@ _REDUCE_BATCH_SIZE = 12
 # Appended to the workflow's own prompt rather than replacing it: an FDE writes
 # domain instructions, and these describe the data's shape for every workflow.
 _TABULAR_GUIDANCE = """
-מבנה הנתונים: `row_count` הוא מספר כל רשומות השלב. במנה יחידה המערך
-`rows` כולל את כל הרשומות. בתוצאה גדולה כל מנה מנותחת בנפרד וכל
-ניתוחי המנות מאוחדים לפני החזרת התשובה. `stats` מחושב בקוד על כל הרשומות:
+Data shape: `row_count` is the total number of records for the step. In a
+single batch, `rows` contains every record. For a large result, each batch is
+analyzed separately and all batch analyses are merged before the answer is
+returned. `stats` is computed in code across all records:
 `present`/`missing`, `distinct`, `counts`
-(שכיחות, לשדות עם עד 15 ערכים), ו-`min`/`max`/`mean` לשדות מספריים.
+(frequencies for fields with up to 15 values), and `min`/`max`/`mean` for
+numeric fields.
 
-כללי קריאה:
-1. פתח בהיקף — כמה שורות ובאילו שלבים. `coverage` יכיל זאת במפורש.
-2. העדף התפלגות על דוגמה. "263 מתוך 412 פתוחים" הוא ממצא; שורה בודדת אינה.
-3. השתמש במספרים מ-`stats` כפי שהם. אל תספור את `rows` בעצמך.
-   אל תחשב אחוז ללא מכנה.
-4. `missing` גבוה בשדה הוא ממצא על כיסוי — ציין אותו.
-5. חריגים חשובים מהטיפוסי: תאריך עתידי, סגירה לפני פתיחה, כפילות, ערך קיצוני.
+Reading rules:
+1. Open with scope: how many rows and which steps. State this explicitly in
+   `coverage`.
+2. Prefer a distribution over an example. "263 of 412 are open" is a
+   finding; a single row is not.
+3. Use the numbers in `stats` exactly as given. Do not count `rows` yourself.
+   Do not calculate a percentage without a denominator.
+4. A high `missing` value for a field is a coverage finding; state it.
+5. Outliers matter more than typical values: a future date, a close before an
+   open, a duplicate, or an extreme value.
 
-חלוקת הפלט:
-- `facts` — ממצאים קונקרטיים על שורות או ישויות.
-- `patterns` — התפלגויות, טווחי זמן וריכוזים.
-- `outliers` — רשומות חריגות בלבד. ריק אם אין.
-- `coverage` — כמה נאסף ומה נכלל, במשפט אחד.
+Output allocation:
+- `facts`: concrete findings about rows or entities.
+- `patterns`: distributions, time ranges, and concentrations.
+- `outliers`: exceptional records only; empty when there are none.
+- `coverage`: what was collected and included, in one sentence.
 
-אסור: למנות שורות אחת-אחת; להציג שם שדה כממצא; לקבוע ספירה שאינה ב-`stats`;
-להסיק סיבתיות; להתייחס ל-`row_count` כמספר ישויות ייחודיות.
+Do not enumerate rows one by one, present a field name as a finding, state a
+count absent from `stats`, infer causality, or treat `row_count` as a count of
+unique entities. Write every user-facing output string in Hebrew.
 """
 
 _MAP_GUIDANCE = """
 
-הקלט הנוכחי הוא מנה אחת מתוך תוצאה גדולה. `rows` מכיל את כל השורות
-במנה זו ואינו דגימה. נתח כל שורה והחזר ממצאים, דפוסים וחריגים תמציתיים.
-אל תכליל מספירות המנה לכל הדאטה; האיחוד ייעשה בשלב הבא.
+The current input is one batch from a large result. `rows` contains every row
+in this batch and is not a sample. Analyze every row and return concise facts,
+patterns, and outliers in Hebrew. Do not extrapolate batch counts to the whole
+dataset; merging happens in the next stage.
 """
 
 _REDUCE_GUIDANCE = """
 
-`chunk_analyses` הם ניתוחים של מנות נפרדות שאינן חופפות, ויחד הן מכסות את כל הרשומות.
-אחד את כולם: אל תשמיט ממצא ייחודי או חריג רק מפני שהוא הופיע במנה אחת.
-ספירות וטווחים קבע רק מ-`whole_dataset.stats`, שמחושב על כל הדאטה.
+`chunk_analyses` contains analyses of separate, non-overlapping batches that
+together cover every record. Merge them all. Do not omit a unique finding or
+outlier because it appeared in only one batch. Take counts and ranges only
+from `whole_dataset.stats`, which is computed across the full dataset. Return
+all user-facing text in Hebrew.
 """
 
 
 def section_summary(service, workflow, facts, warnings) -> dict:
     base_system = workflow.get("system_prompt") or (
-        "סכם בעברית את עובדות תהליך העבודה. אל תוסיף מידע שלא קיים."
+        "Summarize the workflow facts in Hebrew. Do not add information "
+        "that is not present."
     )
     schema = merge_output_schema(workflow.get("output_schema"))
     try:
@@ -245,20 +255,26 @@ def _shared_summary(
     agent_context=None, leader_prompt="",
 ) -> dict:
     prompt = service._repository.enabled_content(
-        "final-summary", "סכם בעברית על סמך העובדות בלבד והחזר JSON."
+        "final-summary",
+        "Summarize only from the supplied facts, write every user-facing "
+        "string in Hebrew, and return JSON.",
     )
     if leader_prompt:
         prompt = leader_prompt + "\n\n" + prompt
     prompt += (
-        "\nהחזר skill_results כמערך ריק. כל Skill מופעל בקריאה נפרדת."
-        "\n`headline` הוא משפט אחד שעונה על השאלה — מי שקורא רק אותו קיבל"
-        " את התשובה. אל תפתח בתיאור התהליך או במה שחופש."
-        "\n`coverage` מסכם במשפט אחד על כמה נתונים הסיכום נשען, על סמך"
-        " שדות ה-coverage של החלקים. אל תרמוז לכיסוי מלא כשחלק נכשל."
-        "\n`key_findings` מדורג לפי השפעה על החלטה, לא לפי סדר החלקים."
-        " מזג ממצאים חופפים; אל תחזור על ממצא."
-        "\nהשתמש ב-patterns וב-outliers של החלקים: התפלגות רחבה שייכת"
-        " ל-key_findings רק אם היא משנה מסקנה, וחריג שייך ל-risks."
+        "\nReturn `skill_results` as an empty array. Each Skill runs in a "
+        "separate call."
+        "\n`headline` is one sentence that answers the question; a reader "
+        "who sees only it still gets the answer. Do not open by describing "
+        "the process or what was searched."
+        "\n`coverage` summarizes in one sentence how much data supports the "
+        "answer, using the sections' `coverage` fields. Do not imply full "
+        "coverage when a section failed."
+        "\nRank `key_findings` by impact on a decision, not section order. "
+        "Merge overlapping findings and do not repeat a finding."
+        "\nUse the sections' `patterns` and `outliers`: include a broad "
+        "distribution in `key_findings` only when it changes the conclusion, "
+        "and put an outlier in `risks`. Write all output text in Hebrew."
     )
     data = {"question": question, "sections": safe_sections}
     if agent_context:
@@ -399,10 +415,12 @@ def run_skill(service, skill, payload, source_names) -> dict:
 def _skill_prompt(content: str) -> str:
     return (
         content
-        + "\n\nהשתמש רק בעובדות שבחלקי הסיכום שסופקו. אל תוסיף מידע חדש."
-        "\nהחזר JSON עם summary, items ו-sources. sources יכיל רק שמות"
-        " של חלקי סיכום שסופקו. אם אין בסיס בעובדות, אמור זאת ב-summary"
-        " והחזר items ריק."
+        + "\n\nUse only facts from the supplied summary sections. Do not add "
+        "new information."
+        "\nReturn JSON with `summary`, `items`, and `sources`. `sources` may "
+        "contain only names of supplied summary sections. If the facts do "
+        "not support an answer, say so in `summary` and return an empty "
+        "`items`. Write all output text in Hebrew."
     )
 
 

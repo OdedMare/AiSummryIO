@@ -15,12 +15,15 @@ from app.common.errors import AgentError, AppError
 
 
 _LEADER_FALLBACK = (
-    "אתה מנהל מומחים. בחר רק סוכנים שסופקו, חלק משימה ממוקדת לכל סוכן, "
-    "ואל תפעיל Workflows בעצמך. שאל שאלת העמקה רק כשחסר מידע מהותי."
+    "You lead a team of specialists. Select only supplied agents, assign one "
+    "focused task to each, and never run Workflows yourself. Ask a deeper "
+    "question only when material information is missing. Write every "
+    "user-facing string in Hebrew."
 )
 _WORKER_FALLBACK = (
-    "אתה עובד מומחה. בחר רק Workflows ו-Skills שהוקצו לך, השתמש במינימום "
-    "הדרוש, וענה רק מראיות ששייכות לך."
+    "You are a specialist worker. Choose only Workflows and Skills assigned "
+    "to you, use the minimum needed, and answer only from evidence you own. "
+    "Write every user-facing string in Hebrew."
 )
 
 # Agentic means selective, not unlimited. These caps keep one question from
@@ -163,8 +166,9 @@ def _delegations(
     if turns:
         payload["history"] = turns
     system = leader_prompt + (
-        "\n\nבקריאה זו בחר את המומחים הרלוונטיים לשאלה. החזר assignments "
-        "בלבד, עם agent_key קיים ומשימה ממוקדת בעברית לכל מומחה."
+        "\n\nFor this call, select the specialists relevant to the question. "
+        "Return only `assignments`, each with an existing `agent_key` and "
+        "one focused task written in Hebrew."
     )
     try:
         result = service._llm.complete_json(
@@ -236,8 +240,9 @@ def _plan_state(
         "cached_sections": [_report_section(item) for item in cached],
     }
     system = _worker_system(agent, [], worker_prompt) + (
-        "\n\nבקריאה זו תכנן את עבודתך בלבד. בחר את המינימום הדרוש מתוך "
-        "המפתחות שסופקו. use_cached=true רק אם החלקים הקיימים מספיקים."
+        "\n\nFor this call, plan your work only. Choose the minimum needed "
+        "from the supplied keys. Set `use_cached=true` only when the existing "
+        "sections are sufficient."
     )
     try:
         plan = service._llm.complete_json(
@@ -382,9 +387,11 @@ def _attach_sections(states, sections) -> None:
 def _review(service, question, states, leader_prompt, limit) -> dict:
     payload = {"question": question, "specialist_reports": _reports(states)}
     system = leader_prompt + (
-        "\n\nבקריאה זו בדוק אם הדוחות מספיקים. done=true כשאין שאלת העמקה "
-        "שיכולה לשפר מהותית את התשובה. אחרת החזר לכל היותר שאלה אחת לכל "
-        "מומחה רלוונטי, ורק agent_key שסופק."
+        "\n\nFor this call, decide whether the reports are sufficient. Set "
+        "`done=true` when no deeper question could materially improve the "
+        "answer. Otherwise return at most one question for each relevant "
+        "specialist, using only a supplied `agent_key`. Write questions in "
+        "Hebrew."
     )
     try:
         result = service._llm.complete_json(
@@ -443,8 +450,9 @@ def _answer(
         "evidence": _evidence_payload(service, items),
     }
     system = _worker_system(state["agent"], state["skills"], worker_prompt) + (
-        "\n\nבקריאה זו ענה לשאלת המנהל מתוך הראיות המצורפות בלבד. כל "
-        "ממצא עובדתי חייב לפחות evidence_id תקין אחד."
+        "\n\nFor this call, answer the leader's question only from the "
+        "attached evidence. Every factual finding must cite at least one "
+        "valid `evidence_id`. Write the answer in Hebrew."
     )
     try:
         result = service._llm.complete_json(

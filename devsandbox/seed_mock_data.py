@@ -37,7 +37,8 @@ PACKAGES = [
         "query_name": "identity_lookup",
         "agent_enabled": True,
         "agent_instructions": (
-            "השתמש בכלי זה כדי לאמת מיהי הישות לפני כל בדיקה אחרת."
+            "Use this tool to verify the entity's identity before any other "
+            "check. Write the result in Hebrew."
         ),
         "output_schema": {
             "type": "object",
@@ -75,7 +76,10 @@ PACKAGES = [
         "output_cube_name": "cases_by_entity",
         "query_name": "case_history",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על תיקים, תלונות וטיפול.",
+        "agent_instructions": (
+            "Use this tool for questions about cases, complaints, and their "
+            "handling. Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -114,7 +118,10 @@ PACKAGES = [
         "output_cube_name": "interactions_by_entity",
         "query_name": "service_interactions",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על קשר מול המוקד.",
+        "agent_instructions": (
+            "Use this tool for questions about service-center interactions. "
+            "Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -149,7 +156,10 @@ PACKAGES = [
         "output_cube_name": "payments_by_entity",
         "query_name": "billing_history",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על חובות, תשלומים וגבייה.",
+        "agent_instructions": (
+            "Use this tool for questions about debts, payments, and "
+            "collection. Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -186,7 +196,10 @@ PACKAGES = [
         "output_cube_name": "permits_by_entity",
         "query_name": "permit_registry",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על רישוי, היתרים ותוקף.",
+        "agent_instructions": (
+            "Use this tool for questions about licenses, permits, and "
+            "validity. Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -223,7 +236,10 @@ PACKAGES = [
         "output_cube_name": "inspections_by_entity",
         "query_name": "inspection_findings",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על ביקורות וליקויים.",
+        "agent_instructions": (
+            "Use this tool for questions about inspections and defects. "
+            "Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -260,7 +276,10 @@ PACKAGES = [
         "output_cube_name": "relations_by_entity",
         "query_name": "entity_relations",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על גורמים קשורים.",
+        "agent_instructions": (
+            "Use this tool for questions about related parties. Write the "
+            "result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -294,7 +313,8 @@ PACKAGES = [
         "query_name": "area_scan",
         "agent_enabled": True,
         "agent_instructions": (
-            "השתמש בכלי זה רק כאשר המשתמש סימן אזור על המפה."
+            "Use this tool only when the user selected an area on the map. "
+            "Write the result in Hebrew."
         ),
         "output_schema": {
             "type": "object",
@@ -330,24 +350,33 @@ WORKFLOWS = [
         "description": "זהות, רישוי וקשרים — הבסיס לכל סיכום.",
         "role": "baseline",
         "system_prompt": (
-            "סכם את פרופיל הישות בעברית. ציין את השם, הסטטוס והכתובת, "
-            "ואת מצב הרישוי. בסס כל קביעה על הראיות בלבד."
+            "Summarize the entity profile: name, status, address, and license "
+            "state. Base every claim only on evidence. Write the result in "
+            "Hebrew."
         ),
         "steps": [
             {
                 "key": "identity", "name": "פרטי ישות",
                 "package": "identity",
-                "summary_prompt": "מיהי הישות ומה הסטטוס שלה?",
+                "summary_prompt": (
+                    "Identify the entity and its status. Answer in Hebrew."
+                ),
             },
             {
                 "key": "permits", "name": "רישיונות והיתרים",
                 "package": "permits", "depends_on": ["identity"],
-                "summary_prompt": "אילו רישיונות קיימים ומה תוקפם?",
+                "summary_prompt": (
+                    "State which licenses exist and whether they are valid. "
+                    "Answer in Hebrew."
+                ),
             },
             {
                 "key": "relations", "name": "ישויות מקושרות",
                 "package": "relations", "depends_on": ["identity"],
-                "summary_prompt": "אילו גורמים קשורים לישות?",
+                "summary_prompt": (
+                    "State which parties are related to the entity. Answer "
+                    "in Hebrew."
+                ),
             },
         ],
     },
@@ -357,24 +386,33 @@ WORKFLOWS = [
         "description": "תיקים, ביקורות וחובות — תמונת הסיכון.",
         "role": "baseline",
         "system_prompt": (
-            "סכם בעברית את הסיכונים העולים מהתיקים, מהביקורות ומהחובות. "
-            "הדגש ליקויים פתוחים ותשלומים שלא שולמו."
+            "Summarize risks from cases, inspections, and debts. Emphasize "
+            "open defects and unpaid amounts. Write the result in Hebrew."
         ),
         "steps": [
             {
                 "key": "cases", "name": "תיקים ופניות",
                 "package": "cases",
-                "summary_prompt": "אילו תיקים פתוחים וכמה חמורים הם?",
+                "summary_prompt": (
+                    "State which cases are open and their severity. Answer "
+                    "in Hebrew."
+                ),
             },
             {
                 "key": "inspections", "name": "ביקורות שטח",
                 "package": "inspections",
-                "summary_prompt": "אילו ליקויים נמצאו ומה דורש מעקב?",
+                "summary_prompt": (
+                    "State which defects were found and what needs follow-up. "
+                    "Answer in Hebrew."
+                ),
             },
             {
                 "key": "payments", "name": "חיובים ותשלומים",
                 "package": "payments",
-                "summary_prompt": "מה יתרת החוב ומה מקורה?",
+                "summary_prompt": (
+                    "State the outstanding balance and its source. Answer in "
+                    "Hebrew."
+                ),
             },
         ],
     },
@@ -384,14 +422,18 @@ WORKFLOWS = [
         "description": "פניות מול המוקד — נפתח לשאלות המשך.",
         "role": "detail",
         "system_prompt": (
-            "סכם בעברית את היסטוריית הפניות מול המוקד: ערוצים, "
-            "נושאים חוזרים ושיעור הפתרון."
+            "Summarize the service-center interaction history, including "
+            "channels, recurring topics, and resolution rate. Write the "
+            "result in Hebrew."
         ),
         "steps": [
             {
                 "key": "interactions", "name": "אינטראקציות שירות",
                 "package": "interactions",
-                "summary_prompt": "אילו פניות היו ומה לא נפתר?",
+                "summary_prompt": (
+                    "State which interactions occurred and what remained "
+                    "unresolved. Answer in Hebrew."
+                ),
             },
         ],
     },
@@ -401,13 +443,17 @@ WORKFLOWS = [
         "description": "העמקה בחיובים לשאלות המשך על כסף.",
         "role": "detail",
         "system_prompt": (
-            "פרט בעברית את החיובים: סכומים, מועדים, מה שולם ומה לא."
+            "Detail the charges, amounts, dates, payments, and outstanding "
+            "items. Write the result in Hebrew."
         ),
         "steps": [
             {
                 "key": "payments", "name": "חיובים ותשלומים",
                 "package": "payments",
-                "summary_prompt": "פרט כל חשבונית ואת מצב התשלום שלה.",
+                "summary_prompt": (
+                    "Detail each invoice and its payment status. Answer in "
+                    "Hebrew."
+                ),
             },
         ],
     },
@@ -421,15 +467,18 @@ WORKFLOWS = [
         # summary, which dragged the final synthesis toward "nothing found".
         "role": "detail",
         "system_prompt": (
-            "סכם בעברית את הישויות שנמצאו באזור שסומן, "
-            "והדגש היכן מרוכזים תיקים פתוחים."
+            "Summarize the entities found in the selected area and emphasize "
+            "where open cases are concentrated. Write the result in Hebrew."
         ),
         "steps": [
             {
                 "key": "area", "name": "סריקת אזור",
                 "package": "area-scan",
                 "input_source": "workflow.boundaries",
-                "summary_prompt": "אילו ישויות נמצאו באזור ומה מצבן?",
+                "summary_prompt": (
+                    "State which entities were found in the area and their "
+                    "status. Answer in Hebrew."
+                ),
             },
         ],
     },
@@ -445,9 +494,10 @@ SKILLS = [
         "description": "חמש נקודות קצרות להנהלה.",
         "user_selectable": True,
         "content": (
-            "כתוב תדריך מנהלים בעברית, עד חמש נקודות. כל נקודה במשפט אחד, "
-            "ומבוססת אך ורק על סעיפי הסיכום שסופקו. ציין בסוף אילו סעיפים "
-            "שימשו אותך. אם חסר מידע, אמור זאת במפורש ואל תשלים מהדמיון."
+            "Write an executive brief in Hebrew with at most five points, "
+            "one sentence each, based only on the supplied summary sections. "
+            "Name the sections used. State missing information explicitly "
+            "and never invent it."
         ),
     },
     {
@@ -457,9 +507,9 @@ SKILLS = [
         "description": "פעולות מעשיות לפי סדר עדיפות.",
         "user_selectable": True,
         "content": (
-            "הצע עד חמש פעולות מעשיות בעברית, מסודרות לפי דחיפות. "
-            "לכל פעולה ציין את הגורם המטפל ואת הראיה שממנה היא נובעת. "
-            "אל תציע פעולה שאין לה בסיס בראיות."
+            "Propose at most five practical actions in Hebrew, ordered by "
+            "urgency. For each action, name the responsible party and the "
+            "supporting evidence. Do not propose an action without evidence."
         ),
     },
 ]
