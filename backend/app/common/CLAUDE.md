@@ -35,7 +35,8 @@ raising on any other geometry type.
 
 Why it exists: FLAPI cube parameters accept **opaque strings**, so an area
 drawn on the map travels into `PackageInputCube.values` exactly like an
-identifier does. See
+identifier does — which is also why `SummaryCreate` calls it to turn a
+map-only request's area into that request's `root_id`. See
 [dal/providers/flapi/CLAUDE.md](../dal/providers/flapi/CLAUDE.md).
 
 Deliberately **dependency-free** — shapely is not a backend dependency.

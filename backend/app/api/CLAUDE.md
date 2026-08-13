@@ -14,6 +14,12 @@ decisions stay under `bl/`; SQL stays under `dal/repository/`.
 
 - User-facing validation and authentication errors are Hebrew.
 - Identifiers stay opaque strings, including values such as `00123`.
+- `SummaryCreate` **derives `root_id` from `boundaries`** when the caller sent
+  an area and no identifier: the drawn MultiPolygon becomes the request's
+  identifier as WKT, so a step reading `workflow.id` gets the polygon rather
+  than a warning. It is derived here, through `common/geometry.py`, so the WKT
+  has one implementation and every client gets the behavior. An identifier the
+  caller did send is never replaced.
 - Cookies remain `HttpOnly` and `SameSite=Lax`.
 - Never log passwords, tokens, request bodies, or full identifiers.
 - `PlanChatCreate.focus_field` names the one form field an interview is about;

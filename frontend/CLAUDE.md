@@ -138,6 +138,13 @@ ID/evidence, and reuse the conversation's stored boundaries.
   `toMultiPolygonParts` returns `null` for an empty selection, because
   `GeoBoundaries` rejects an empty `coordinates` ("נדרש לפחות פוליגון אחד")
   while the API contract sends `boundaries: null` when nothing was drawn.
+- **The drawn area is also the request's identifier.** A map request is sent
+  with `root_id: null` and comes back with the conversation's `root_id` set to
+  the area's `MULTIPOLYGON` WKT — the backend derives it, so the polygon has
+  one serializer instead of one per side of the wire. `send` adopts what came
+  back. Such an identifier is thousands of characters, so the topbar and the
+  history rows show it through `identifierLabel` with the full value on
+  `title`; they name a conversation and are not where the value is read.
 - Conversation history is titled by the opening question; the raw identifier
   is secondary. Conversations created before titles fall back to the
   identifier.

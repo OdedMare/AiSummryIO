@@ -392,6 +392,46 @@ def test_map_boundaries_reach_the_package_as_multipolygon_wkt():
     ]
 
 
+def test_a_map_request_carries_the_drawn_area_as_its_identifier_too():
+    """No identifier typed: the area becomes `root_id` as WKT.
+
+    A step reading `workflow.id` then receives the polygon instead of
+    degrading to a warning, which is the whole point of the substitution —
+    to FLAPI an identifier and a WKT area are equally opaque strings.
+    """
+    request = SummaryCreate(boundaries={
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[
+                [34.75, 32.05], [34.80, 32.05],
+                [34.80, 32.10], [34.75, 32.05],
+            ]],
+            [[
+                [35.10, 31.90], [35.20, 31.90],
+                [35.20, 32.00], [35.10, 31.90],
+            ]],
+        ],
+    })
+    wkt = (
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)), "
+        "((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))"
+    )
+
+    assert request.root_id == wkt
+    assert SummaryService._identifiers(
+        {"input_source": "workflow.id"},
+        {"workflow": {"id": request.root_id}, "steps": {}},
+    ) == [wkt]
+
+
+def test_a_typed_identifier_survives_a_request_that_also_draws_an_area():
+    """Both scopes may travel together, and the typed one is never replaced."""
+    request = SummaryCreate(root_id="HOME-ABC-001", boundaries=_SQUARE)
+
+    assert request.root_id == "HOME-ABC-001"
+    assert request.boundaries is not None
+
+
 def test_a_step_scoped_to_the_map_fails_clearly_without_a_drawn_area():
     step = {"input_source": "workflow.boundaries"}
     context = {"workflow": {"id": "ROOT-1", "boundaries": None}, "steps": {}}
