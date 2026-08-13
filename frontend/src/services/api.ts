@@ -108,7 +108,10 @@ export const api = {
   messages: (id: string) =>
     request<ConversationTurn[]>(`/api/conversations/${id}/messages`),
   // Either rootId or boundaries must be present; the backend rejects a
-  // request carrying neither.
+  // request carrying neither. A request sent from the map with no identifier
+  // typed comes back with `conversation.root_id` set to the drawn area's WKT
+  // MULTIPOLYGON — the backend derives it, so the polygon has one serializer
+  // rather than one per side of the wire.
   start: (
     rootId: string,
     question: string,

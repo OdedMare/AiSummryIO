@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.common.geometry import multipolygon_to_wkt
 from app.common.runtime_settings.normalizers import MASKED_SECRET
 
 
@@ -241,9 +242,15 @@ class SummaryCreate(BaseModel):
     """A summary request scoped by an identifier, an area, or both.
 
     Either ``root_id`` or ``boundaries`` must be present. A request carrying
-    only an area runs the agent-enabled workflows whose steps read
-    ``workflow.boundaries``; steps needing ``workflow.id`` degrade to a
-    warning rather than failing the run.
+    only an area **becomes** a request whose identifier is that area: the
+    drawn MultiPolygon is serialized to WKT and stored as ``root_id`` as well,
+    so a step reading ``workflow.id`` receives the polygon instead of degrading
+    to a warning. To FLAPI both are opaque strings, which is what makes the
+    substitution meaningful rather than a trick — see ``common/geometry.py``.
+
+    An identifier the caller typed is never overwritten: a request may
+    intentionally carry both, and there the drawn area reaches only the steps
+    that asked for ``workflow.boundaries``.
     """
 
     root_id: Optional[str] = None
@@ -272,6 +279,11 @@ class SummaryCreate(BaseModel):
     def scope_required(self):
         if not self.root_id and not self.boundaries:
             raise ValueError("נדרש מזהה או אזור על המפה")
+        if not self.root_id:
+            # The area is the identifier. Derived here rather than in the
+            # browser so the WKT has exactly one implementation, the one
+            # `workflow.boundaries` already uses.
+            self.root_id = multipolygon_to_wkt(self.boundaries.model_dump())
         return self
 
 

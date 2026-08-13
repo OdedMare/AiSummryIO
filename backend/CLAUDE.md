@@ -96,6 +96,12 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   serialized by `common/geometry.py` to an OGC `MULTIPOLYGON` WKT string and
   passed into `PackageInputCube.values` like any other opaque identifier. A
   step that requests it fails clearly when no area was drawn.
+- **A request scoped only by an area carries that area as its `root_id` too.**
+  `SummaryCreate` fills the identifier with the same `MULTIPOLYGON` WKT when
+  the caller sent no identifier, so `workflow.id` steps run against the drawn
+  polygon instead of degrading to a warning, and every enabled workflow — not
+  only the geo-capable ones — can answer a map request. A typed identifier is
+  never overwritten.
 - Package input mode is `single` or `many`; both preserve strings.
 - Claims require evidence references. Package failures stay visible and do
   not discard successful sections.

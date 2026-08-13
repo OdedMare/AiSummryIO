@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { detectIdentifier } from "../src/components/AppShell/commands";
+import {
+  detectIdentifier, identifierLabel,
+} from "../src/components/AppShell/commands";
 import { api } from "../src/services/api";
 import { toMultiPolygonParts } from "../src/types/geo";
 
@@ -48,6 +50,8 @@ test("map submission sends every drawn part as one MultiPolygon", async (t) => {
 
   assert.equal(sentPath, "/api/summaries");
   assert.equal(sentOptions?.method, "POST");
+  // `root_id` stays null on the wire: the backend derives it from these same
+  // boundaries, so the WKT has one serializer rather than one per side.
   assert.deepEqual(JSON.parse(String(sentOptions?.body)), {
     root_id: null,
     question: "",
@@ -57,6 +61,16 @@ test("map submission sends every drawn part as one MultiPolygon", async (t) => {
       coordinates: parts.map((part) => part.coordinates),
     },
   });
+});
+
+
+test("a multipolygon identifier is clipped where it is only a label", () => {
+  const wkt = "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, "
+    + "34.75 32.05)), ((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))";
+
+  assert.equal(identifierLabel(wkt), "MULTIPOLYGON (((34.75 32.05, 34…");
+  assert.equal(identifierLabel(wkt).length, 32);
+  assert.equal(identifierLabel("HOME-ABC-001"), "HOME-ABC-001");
 });
 
 

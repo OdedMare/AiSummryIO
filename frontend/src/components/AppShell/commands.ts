@@ -79,6 +79,17 @@ export function detectIdentifier(
   return match[1];
 }
 
+/**
+ * The identifier as a label. A request drawn on the map carries the whole
+ * `MULTIPOLYGON (((…)))` as its identifier, which runs to thousands of
+ * characters: the topbar and the history row name a conversation, they are
+ * not where the value is read, so a long identifier is clipped to its head.
+ */
+export function identifierLabel(identifier: string, max = 32) {
+  const cleaned = identifier.trim();
+  return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned;
+}
+
 export function identifierNotice(identifier: string) {
   return `זיהינו את המזהה ${identifier}. בדקו אותו ולחצו שוב לאישור.`;
 }

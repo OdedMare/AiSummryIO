@@ -2,6 +2,7 @@ import {
   Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
 } from "lucide-react";
 import BrandMark from "./BrandMark";
+import { identifierLabel } from "./commands";
 import type { AppShellController } from "./useAppShell";
 
 export default function Sidebar({ app }: { app: AppShellController }) {
@@ -51,10 +52,14 @@ function HistoryList({ app }: { app: AppShellController }) {
           <span>
             {item.title
               ? <strong>{item.title}</strong>
-              : <strong dir="ltr">{item.root_id}</strong>}
+              : <strong dir="ltr" title={item.root_id}>
+                  {identifierLabel(item.root_id)}
+                </strong>}
             <small>
               {item.title && item.root_id &&
-                <span dir="ltr">{item.root_id} · </span>}
+                <span dir="ltr" title={item.root_id}>
+                  {identifierLabel(item.root_id, 24)} ·{" "}
+                </span>}
               {new Date(item.updated_at).toLocaleDateString("he-IL")}
             </small>
           </span>

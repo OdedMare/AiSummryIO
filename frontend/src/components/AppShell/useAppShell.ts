@@ -127,6 +127,10 @@ export function useAppShell() {
         geometry,
       );
       setConversation(next.conversation);
+      // A map request is sent without an identifier and comes back carrying
+      // one: the drawn area as WKT. Adopting what the server stored keeps the
+      // shell showing the identifier the run actually uses.
+      setRootId(next.conversation.root_id);
       setRun(next.run);
       setRuns((thread) => conversation ? [...thread, next.run] : [next.run]);
       setMessage("");
