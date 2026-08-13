@@ -252,6 +252,27 @@ when an environment change appears to have no effect.
 Backend and frontend implementation rules are documented in their respective
 `CLAUDE.md` files.
 
+## Batch a spreadsheet of areas
+
+`backend/scripts/area_batch.py` asks the same questions about every area in an
+Excel sheet and writes the answers back into the same rows. One row holds one
+area, as WKT (`MULTIPOLYGON`/`POLYGON`) or as GeoJSON.
+
+```bash
+cd backend
+pip install openpyxl
+python scripts/area_batch.py --workbook areas.xlsx --dry-run   # check the areas
+python scripts/area_batch.py --workbook areas.xlsx
+```
+
+The questions, the column holding the area, which answer field lands in which
+column, and the cooldown between calls (2 minutes by default) are the `CONFIG`
+block at the top of the script; `--help` lists the per-run overrides. Runs are
+sequential against a running service through `/api/v1`, the workbook is saved
+after every row, and re-running asks only what is still unanswered — so an
+interrupted batch resumes instead of repeating. See
+[backend/scripts/CLAUDE.md](backend/scripts/CLAUDE.md).
+
 ## First FDE setup
 
 Step-by-step instructions, exact field meanings, a troubleshooting table, and

@@ -3,12 +3,14 @@ import logging
 import sys
 import time
 from types import ModuleType
+from unittest import mock
 
 import pandas as pd
 import pytest
 from pydantic import ValidationError
 
 from app.common.errors import AgentError, ProviderError
+from app.common.geometry import multipolygon_to_wkt, wkt_to_multipolygon
 from app.api.models import GeoBoundaries
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
@@ -257,6 +259,144 @@ def test_boundaries_must_be_a_closed_multipolygon():
     ring = [[34.75, 32.05], [34.80, 32.05], [34.80, 32.10]]
     with pytest.raises(ValidationError):
         GeoBoundaries(type="MultiPolygon", coordinates=[[ring]])
+
+
+def test_wkt_parses_back_into_boundaries_the_api_accepts():
+    """A spreadsheet holds WKT; the API takes GeoJSON. The trip is exact."""
+    with_hole = {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [
+                [[34.75, 32.05], [34.8, 32.05], [34.8, 32.1], [34.75, 32.05]],
+                [[34.76, 32.06], [34.78, 32.06], [34.78, 32.08],
+                 [34.76, 32.06]],
+            ],
+            [[[34.9, 32.2], [34.95, 32.2], [34.95, 32.25], [34.9, 32.2]]],
+        ],
+    }
+
+    parsed = wkt_to_multipolygon(multipolygon_to_wkt(with_hole))
+
+    assert parsed == with_hole
+    GeoBoundaries(**parsed)
+
+
+def test_a_wkt_polygon_becomes_a_one_polygon_multipolygon():
+    """POLYGON is what most GIS exports write, and it must not be refused."""
+    assert wkt_to_multipolygon(
+        "SRID=4326;POLYGON ((34.75 32.05 0, 34.8 32.05 0, 34.8 32.1 0,"
+        " 34.75 32.05 0))"
+    ) == _SQUARE
+    assert wkt_to_multipolygon("MULTIPOLYGON EMPTY") is None
+    with pytest.raises(ValueError, match="MULTIPOLYGON"):
+        wkt_to_multipolygon("POINT (34.75 32.05)")
+
+
+def test_the_batch_script_reads_an_area_cell_written_either_way():
+    from scripts.area_batch import geometry_of
+
+    assert geometry_of(json.dumps(_SQUARE)) == _SQUARE
+    assert geometry_of(multipolygon_to_wkt(_SQUARE)) == _SQUARE
+    assert geometry_of(json.dumps({
+        "type": "Polygon", "coordinates": _SQUARE["coordinates"][0],
+    })) == _SQUARE
+    with pytest.raises(ValueError):
+        geometry_of("")
+
+
+def test_the_batch_script_renders_an_answer_into_one_cell():
+    from scripts.area_batch import answer_field, as_cell
+
+    payload = {
+        "headline": "תשובה",
+        "key_findings": ["ממצא א", "ממצא ב"],
+        "skill_results": [{"skill_key": "risk", "summary": "סיכון"}],
+    }
+
+    assert answer_field(payload, "skill_results.0.summary") == "סיכון"
+    assert answer_field(payload, "skill_results.9.summary") is None
+    assert as_cell(payload["key_findings"]) == "• ממצא א\n• ממצא ב"
+    assert as_cell(["a" * 40000]).endswith("(נחתך)")
+    # Blank has to keep meaning "never asked", so an empty answer is written.
+    assert as_cell(None) == ""
+    assert as_cell([]) == "—"
+
+
+def test_the_batch_asks_follow_ups_in_the_first_questions_conversation():
+    """Only the first question pays for the packages; the rest reuse evidence.
+
+    The same test pins the two rules that make an interrupted batch safe to
+    re-run: an answered question is skipped, and a failed call lands in the
+    row rather than stopping the sheet.
+    """
+    openpyxl = pytest.importorskip("openpyxl")
+    from scripts.area_batch import Sheet, run_row
+
+    worksheet = openpyxl.Workbook().active
+    worksheet["A1"], worksheet["B1"] = "אזור", "תשובה"
+    worksheet["A2"] = multipolygon_to_wkt(_SQUARE)
+    sheet = Sheet(worksheet, 1)
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def create(self, question, boundaries, root_id, skill_keys):
+            self.calls.append(("create", question))
+            assert boundaries == _SQUARE
+            return {
+                "conversation_id": "conv-1",
+                "run": {"id": "run-1", "status": "completed",
+                        "result": {"headline": "ראשונה"}},
+            }
+
+        def follow_up(self, conversation_id, question, skill_keys):
+            self.calls.append(("follow_up", conversation_id))
+            raise RuntimeError("המנוע נפל")
+
+    config = {
+        "geometry_column": 1,
+        "root_id_column": 0,
+        "reuse_conversation": True,
+        "skip_answered": True,
+        "questions": [
+            {"question": "ראשונה", "skill_keys": [],
+             "columns": {sheet.column("תשובה"): "headline"}},
+            {"question": "שנייה", "skill_keys": [], "columns": {
+                sheet.column("סיכונים", create=True): "risks",
+                sheet.column("שגיאה", create=True): "error",
+            }},
+        ],
+    }
+    client = FakeClient()
+
+    calls = run_row(client, sheet, 2, config, lambda: None, lambda text: None)
+
+    assert calls == 2
+    assert [kind for kind, _ in client.calls] == ["create", "follow_up"]
+    assert client.calls[1][1] == "conv-1"
+    assert worksheet["B2"].value == "ראשונה"
+    assert "המנוע נפל" in worksheet["D2"].value
+
+    # Re-running the row repeats only what is still unanswered: the first
+    # question keeps its answer, and the failed one — its answer column still
+    # empty — is asked again, in a conversation of its own this time.
+    client.calls = []
+    run_row(client, sheet, 2, config, lambda: None, lambda text: None)
+    assert client.calls == [("create", "שנייה")]
+
+
+def test_the_batch_never_sleeps_before_its_first_call():
+    from scripts.area_batch import make_cooldown
+
+    slept = []
+    cooldown = make_cooldown(120, lambda text: None)
+    with mock.patch("time.sleep", slept.append):
+        cooldown()
+        cooldown()
+        cooldown()
+
+    assert slept == [120, 120]
 
 
 def test_invalid_workflow_cannot_reference_a_future_step():

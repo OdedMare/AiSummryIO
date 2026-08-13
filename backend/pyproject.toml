@@ -19,7 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0,<8.4"]
+# openpyxl is used by scripts/area_batch.py only, never by the service, so it
+# stays out of the runtime image and its tests skip when it is absent.
+dev = ["pytest>=8.0,<8.4", "openpyxl>=3.1,<4"]
 
 [build-system]
 requires = ["setuptools>=68"]

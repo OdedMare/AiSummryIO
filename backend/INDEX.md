@@ -41,6 +41,7 @@ the only implementation file at the root of `app/`.
 | Repository | [app/dal/repository/CLAUDE.md](app/dal/repository/CLAUDE.md) |
 | LLM client | [app/dal/llm/CLAUDE.md](app/dal/llm/CLAUDE.md) |
 | FLAPI adapter | [app/dal/providers/flapi/CLAUDE.md](app/dal/providers/flapi/CLAUDE.md) |
+| Operator scripts | [scripts/CLAUDE.md](scripts/CLAUDE.md) |
 | Tests | [tests/CLAUDE.md](tests/CLAUDE.md) |
 
 ## Request path

@@ -14,7 +14,8 @@ python -m pytest -q
 | FLAPI mapper | String identifiers survive; generic rows; duplicate columns rejected; empty frames |
 | FLAPI provider | Retries exactly once; `_package_query` provenance; timeout bounds the run |
 | `runner_config` | Timeout precedence; `FlapiConfig` built for both modern and legacy classes |
-| Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed |
+| Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed; WKT parses back into boundaries the API accepts |
+| Area batch script | An area cell is read as WKT or as GeoJSON; follow-ups stay in the first question's conversation; a failed call lands in the row and the batch continues; a resumed run repeats only what is unanswered; no cooldown before the first call |
 | Workflow validation | No forward step references; `depends_on` must be declared |
 | In-place editing | `agent_enabled` rides along with an ordinary save and no publish state remains; a workflow the agent uses saves without examples; a bad mapping is still refused; content deletes by row id and leaves the file-based prompt as the fallback |
 | Conversational planning | Draft carries forward between turns; sample data stays bounded and drops internals; a chat draft still passes the shared validation gate |
