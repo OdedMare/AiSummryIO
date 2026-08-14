@@ -87,15 +87,18 @@ def evaluation_workbook(batch: dict, rows: List[dict]) -> bytes:
     for row in rows:
         result = row.get("result") or {}
         sheet.append([
-            row["root_id"], row["status"], result.get("headline", ""),
-            result.get("summary", ""), result.get("coverage", ""),
+            _excel_text(row["root_id"]), _excel_text(row["status"]),
+            _excel_text(result.get("headline", "")),
+            _excel_text(result.get("summary", "")),
+            _excel_text(result.get("coverage", "")),
             _excel_text(result.get("key_findings")),
             _excel_text(result.get("risks")),
-            _excel_text(result.get("missing_data")), row.get("error") or "",
-            row.get("rating"), row.get("comment") or "",
-            row.get("duration_seconds"), row.get("run_id") or "",
-            batch["label"], batch["question"],
-            ", ".join(batch.get("skill_keys") or []),
+            _excel_text(result.get("missing_data")),
+            _excel_text(row.get("error") or ""), row.get("rating"),
+            _excel_text(row.get("comment") or ""),
+            row.get("duration_seconds"), _excel_text(row.get("run_id") or ""),
+            _excel_text(batch["label"]), _excel_text(batch["question"]),
+            _excel_text(", ".join(batch.get("skill_keys") or [])),
             batch["cooldown_seconds"],
         ])
     sheet.auto_filter.ref = sheet.dimensions
@@ -138,4 +141,8 @@ def _excel_text(value: Any) -> str:
         text = json.dumps(value, ensure_ascii=False, indent=2)
     else:
         text = str(value)
-    return text if len(text) <= _CELL_LIMIT else text[:_CELL_LIMIT - 12] + "\n… (נחתך)"
+    text = text if len(text) <= _CELL_LIMIT else text[:_CELL_LIMIT - 12] + "\n… (נחתך)"
+    # Excel interprets user-controlled text that begins with one of these
+    # characters as a formula. Prefixing an apostrophe keeps the displayed
+    # value intact while forcing a literal cell in exported workbooks.
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text

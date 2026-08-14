@@ -128,7 +128,13 @@ async def request_log(request: Request, call_next):
     started = time.time()
     # Polling hits /api/runs/{id} every 1.5s; logging each one at INFO buries
     # everything else, so the poll is traced at DEBUG only.
-    quiet = request.url.path.startswith("/api/runs/")
+    quiet = (
+        request.url.path.startswith("/api/runs/")
+        or (
+            request.method == "GET"
+            and request.url.path.startswith("/api/evaluations")
+        )
+    )
     if not quiet:
         _log.info("--> %s %s", request.method, request.url.path)
     response = await call_next(request)

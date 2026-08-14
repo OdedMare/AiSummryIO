@@ -33,6 +33,8 @@ from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
 from app.dal.repository import Repository
+from app.dal.repository import evaluations as evaluation_repository_module
+from app.dal.repository.evaluations import EvaluationRepository
 from app.dal.repository.content import _set_agent_workflows
 from app.dal.repository.schema import SCHEMA
 from app.dal.repository.conversations import conversation_title
@@ -91,6 +93,62 @@ def test_evaluation_input_preserves_order_duplicates_and_opaque_ids():
     assert payload.cooldown_seconds == 30
 
 
+def test_evaluation_batch_bulk_insert_uses_psycopg_cursor(monkeypatch):
+    """psycopg3 exposes executemany on cursors, not connections."""
+    inserted = []
+
+    class Result:
+        @staticmethod
+        def fetchone():
+            return None
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        @staticmethod
+        def executemany(_query, rows):
+            inserted.extend(rows)
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        @staticmethod
+        def execute(*_args):
+            return Result()
+
+        @staticmethod
+        def cursor():
+            return Cursor()
+
+        @staticmethod
+        def commit():
+            return None
+
+    monkeypatch.setattr(
+        evaluation_repository_module, "connect", lambda _store: Connection()
+    )
+    repository = EvaluationRepository()
+    repository._store = object()
+    repository.get_evaluation_batch = lambda batch_id: {"id": batch_id}
+
+    repository.create_evaluation_batch(
+        "session", {
+            "label": "בדיקה", "question": "מה קורה?",
+            "skill_keys": [], "cooldown_seconds": 0,
+        }, ["001", "001"],
+    )
+
+    assert [row[2:] for row in inserted] == [(1, "001"), (2, "001")]
+
+
 def test_excel_import_finds_root_id_and_preserves_formatted_leading_zeroes():
     from openpyxl import Workbook
 
@@ -134,6 +192,25 @@ def test_evaluation_excel_export_contains_summary_review_and_failure_reason():
     assert sheet.cell(2, values["summary"]).value == "סיכום"
     assert sheet.cell(2, values["error"]).value == "provider unavailable"
     assert sheet.cell(2, values["rating"]).value == 2
+
+
+def test_evaluation_excel_export_neutralizes_formula_cells():
+    from openpyxl import load_workbook
+
+    data = evaluation_workbook({
+        "label": "=HYPERLINK(\"bad\")", "question": "+cmd",
+        "skill_keys": [], "cooldown_seconds": 0,
+    }, [{
+        "root_id": "@SUM(A1:A2)", "status": "failed", "run_id": None,
+        "error": "-unsafe", "rating": None, "comment": "", "result": {},
+        "duration_seconds": None,
+    }])
+    sheet = load_workbook(BytesIO(data), data_only=False).active
+    values = {cell.value: index + 1 for index, cell in enumerate(sheet[1])}
+
+    assert sheet.cell(2, values["root_id"]).data_type == "s"
+    assert sheet.cell(2, values["root_id"]).value == "'@SUM(A1:A2)"
+    assert sheet.cell(2, values["error"]).value == "'-unsafe"
 
 
 def test_evaluation_runner_pauses_after_inflight_work_and_stops_pending_cases():

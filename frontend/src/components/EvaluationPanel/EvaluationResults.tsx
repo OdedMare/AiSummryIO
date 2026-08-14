@@ -60,8 +60,12 @@ function BatchHeader({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url; link.download = `${safeName(batch.label)}.xlsx`; link.click();
-      URL.revokeObjectURL(url);
-    } catch { /* The shared API error is surfaced by other actions. */ }
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (reason) {
+      evaluation.reportError(
+        reason instanceof Error ? reason.message : "ייצוא ה-Excel נכשל",
+      );
+    }
   };
   const stop = () => {
     if (!window.confirm("לעצור את הריצה? פריטים שטרם התחילו לא יורצו.")) return;

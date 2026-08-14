@@ -173,6 +173,7 @@ export function useEvaluation() {
   return {
     batches, selectedId, batch, cases, selectedCase, selectedCaseId,
     status, search, page, loading, busy, error, activeBatch,
+    reportError: (value: string) => setError(value),
     setStatus: (value: string) => { setStatus(value); setPage(0); },
     setSearch: (value: string) => { setSearch(value); setPage(0); },
     setPage, selectBatch, selectCase, created, refresh, action, remove,

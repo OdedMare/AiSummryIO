@@ -23,9 +23,9 @@ export async function request<T>(
   const method = options?.method ?? "GET";
   const started = performance.now();
   const label = `${method} ${path}`;
-  // The 1.5s run poll would drown the console, so it is logged only when it
-  // fails or turns slow.
-  const quiet = /^\/api\/runs\//.test(path);
+  // The 1.5s run/evaluation polls would drown the console, so they are logged
+  // only when they fail or turn slow.
+  const quiet = method === "GET" && /^\/api\/(?:runs|evaluations)(?:\/|\?|$)/.test(path);
   if (!quiet) console.debug(`[api] → ${label}`, requestBody(options));
 
   let response: Response;

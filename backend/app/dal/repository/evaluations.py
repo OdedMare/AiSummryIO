@@ -13,7 +13,6 @@ from app.dal.repository.runs import _empty_progress
 
 
 _ACTIVE = ("running", "pausing", "paused", "stopping")
-_FINISHED_RUNS = ("completed", "partial", "failed")
 
 
 class EvaluationRepository:
@@ -40,15 +39,16 @@ class EvaluationRepository:
                     data.get("cooldown_seconds", 0),
                 ),
             )
-            connection.executemany(
-                """INSERT INTO evaluation_cases (
-                       id, batch_id, position, root_id
-                   ) VALUES (%s,%s,%s,%s)""",
-                [
-                    (new_id(), batch_id, position, root_id)
-                    for position, root_id in enumerate(root_ids, start=1)
-                ],
-            )
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """INSERT INTO evaluation_cases (
+                           id, batch_id, position, root_id
+                       ) VALUES (%s,%s,%s,%s)""",
+                    [
+                        (new_id(), batch_id, position, root_id)
+                        for position, root_id in enumerate(root_ids, start=1)
+                    ],
+                )
             connection.commit()
         return self.get_evaluation_batch(batch_id)
 

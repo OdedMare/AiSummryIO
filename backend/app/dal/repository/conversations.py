@@ -117,6 +117,15 @@ class ConversationRepository:
             """, (conversation_id, session_id)).fetchone()
             if not conversation:
                 raise NotFoundError("השיחה לא נמצאה")
+            evaluation = connection.execute("""
+                SELECT 1 FROM evaluation_cases
+                WHERE conversation_id=%s
+                LIMIT 1
+            """, (conversation_id,)).fetchone()
+            if evaluation:
+                raise ConflictError(
+                    "שיחה ששייכת ל-Evaluation נמחקת רק דרך מחיקת הסשן"
+                )
             active = connection.execute("""
                 SELECT 1 FROM summary_runs
                 WHERE conversation_id=%s AND status IN ('queued','running')

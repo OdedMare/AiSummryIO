@@ -2,13 +2,11 @@
 """Seed the sandbox with mock FLAPI tools, workflows, and Skills.
 
 Talks to the running backend over HTTP, so it exercises the same validation
-and publishing rules the FDE Studio does — nothing is written straight to
-Postgres.
+and save rules the FDE Studio does — nothing is written straight to Postgres.
 
     python3 devsandbox/seed_mock_data.py [--base-url http://localhost:8000]
 
-Safe to re-run: packages and workflows are append-only and versioned, so a
-second run creates version 2 of each and publishes that instead.
+Safe to re-run: existing tools, workflows, and Skills are refreshed in place.
 
 Every `package_id` here must have a generator in
 `devsandbox/fake_flunks/flunks/mock_data.py`, otherwise that tool falls back
@@ -340,8 +338,8 @@ PACKAGES = [
 ]
 
 # --- Workflows --------------------------------------------------------------
-# `packages` names the package_key each step runs, resolved to the latest
-# version id at seed time.
+# `packages` names the package_key each step runs, resolved to its tool id at
+# seed time.
 
 WORKFLOWS = [
     {
@@ -544,19 +542,31 @@ def call(base_url, method, path, payload=None):
 
 
 def seed_packages(base_url):
-    """Create every tool; return package_key -> latest version id."""
+    """Create or refresh every tool; return package_key -> tool id."""
     created = {}
+    existing = {
+        row["package_key"]: row for row in call(
+            base_url, "GET", "/api/packages"
+        )
+    }
     for package in PACKAGES:
-        row = call(base_url, "POST", "/api/packages", package)
+        current = existing.get(package["package_key"])
+        path = "/api/packages/%s" % current["id"] if current else "/api/packages"
+        row = call(base_url, "PUT" if current else "POST", path, package)
         created[package["package_key"]] = row["id"]
-        print("  tool     %-14s v%-2s %s" % (
-            package["package_key"], row["version"], row["name"]
+        print("  tool     %-14s %s" % (
+            package["package_key"], row["name"]
         ))
     return created
 
 
 def seed_workflows(base_url, package_ids):
-    """Create each workflow from tool version ids, then publish it."""
+    """Create or refresh each workflow from tool ids."""
+    existing = {
+        row["workflow_key"]: row for row in call(
+            base_url, "GET", "/api/workflows"
+        )
+    }
     for workflow in WORKFLOWS:
         payload = {
             key: value for key, value in workflow.items() if key != "steps"
@@ -573,24 +583,28 @@ def seed_workflows(base_url, package_ids):
             }
             for step in workflow["steps"]
         ]
-        row = call(base_url, "POST", "/api/workflows", payload)
-        published = call(
-            base_url, "POST", "/api/workflows/%s/publish" % row["id"]
-        )
-        print("  workflow %-16s v%-2s %-8s %s" % (
-            workflow["workflow_key"], published["version"],
-            published["role"], published["status"],
+        current = existing.get(workflow["workflow_key"])
+        path = "/api/workflows/%s" % current["id"] if current else "/api/workflows"
+        row = call(base_url, "PUT" if current else "POST", path, payload)
+        print("  workflow %-16s %-8s %s" % (
+            workflow["workflow_key"], row["role"],
+            "enabled" if row["agent_enabled"] else "disabled",
         ))
 
 
 def seed_skills(base_url):
-    for skill in SKILLS:
-        row = call(base_url, "POST", "/api/agent-content", skill)
-        published = call(
-            base_url, "POST", "/api/agent-content/%s/publish" % row["id"]
+    existing = {
+        row["content_key"]: row for row in call(
+            base_url, "GET", "/api/agent-content"
         )
-        print("  skill    %-22s v%-2s %s" % (
-            skill["content_key"], published["version"], published["status"]
+    }
+    for skill in SKILLS:
+        current = existing.get(skill["content_key"])
+        path = "/api/agent-content/%s" % current["id"] if current else "/api/agent-content"
+        row = call(base_url, "PUT" if current else "POST", path, skill)
+        print("  skill    %-22s %s" % (
+            skill["content_key"],
+            "enabled" if row["agent_enabled"] else "disabled",
         ))
 
 
