@@ -14,6 +14,7 @@ from app.api.routers import register
 from app.api.routers.context import ApiContext
 from app.api.validation_errors import format_validation_error
 from app.bl.jobs import JobRunner
+from app.bl.evaluations import EvaluationRunner
 from app.bl.workflow_engine import SummaryService
 from app.common.config.settings import Settings
 from app.common.errors import AppError
@@ -34,6 +35,7 @@ llm = OpenAIJsonClient(store)
 provider = FlapiProvider(store)
 service = SummaryService(repository, provider, llm, store)
 jobs = JobRunner(repository, service, store.get().max_parallel_workflows)
+evaluations = EvaluationRunner(repository, jobs, jobs.capacity())
 
 app = FastAPI(
     title="SumOrAI",
@@ -51,6 +53,7 @@ register(app, ApiContext(
     repository=repository,
     service=service,
     jobs=jobs,
+    evaluations=evaluations,
     store=store,
     llm=llm,
     admin_dependency=admin_dependency,
@@ -63,6 +66,7 @@ register(app, ApiContext(
 def startup():
     repository.initialize()
     jobs.recover()
+    evaluations.recover()
 
 
 @app.exception_handler(AppError)

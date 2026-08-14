@@ -1,5 +1,6 @@
 import type {
   AgentContent, Conversation, ConversationTurn, Evidence, EvidencePage,
+  EvaluationBatch, EvaluationCaseDetail, EvaluationCasePage, EvaluationImport,
   PackageInspection,
   PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
   SkillPlanChatTurn, SkillPlanDraft, SpecialistPlanChatTurn,
@@ -264,4 +265,68 @@ export const api = {
     },
   ),
   reviewQueue: () => request<Array<Record<string, unknown>>>("/api/review-queue"),
+  evaluations: () => request<EvaluationBatch[]>("/api/evaluations"),
+  evaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}`),
+  evaluationCases: (
+    id: string, offset = 0, limit = 50, status = "", search = "",
+  ) => {
+    const query = new URLSearchParams({
+      offset: String(offset), limit: String(limit), status, search,
+    });
+    return request<EvaluationCasePage>(
+      `/api/evaluations/${id}/cases?${query.toString()}`,
+    );
+  },
+  evaluationCase: (batchId: string, caseId: string) =>
+    request<EvaluationCaseDetail>(
+      `/api/evaluations/${batchId}/cases/${caseId}`,
+    ),
+  createEvaluation: (data: {
+    label: string;
+    root_ids: string[];
+    question: string;
+    skill_keys: string[];
+    cooldown_seconds: number;
+  }) => request<EvaluationBatch>("/api/evaluations", {
+    method: "POST", body: JSON.stringify(data),
+  }),
+  importEvaluation: (file: File) =>
+    request<EvaluationImport>("/api/evaluations/import", {
+      method: "POST",
+      headers: { "Content-Type": file.type ||
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      body: file,
+    }),
+  pauseEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/pause`, { method: "POST" }),
+  resumeEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/resume`, { method: "POST" }),
+  stopEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/stop`, { method: "POST" }),
+  retryFailedEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/retry-failed`, {
+      method: "POST",
+    }),
+  reviewEvaluationCase: (
+    batchId: string, caseId: string,
+    rating: 1 | 2 | 3 | 4 | 5 | null, comment: string,
+  ) => request<EvaluationCaseDetail>(
+    `/api/evaluations/${batchId}/cases/${caseId}/review`,
+    { method: "PUT", body: JSON.stringify({ rating, comment }) },
+  ),
+  deleteEvaluation: (id: string) =>
+    request<{ deleted: string; label: string; conversations: number }>(
+      `/api/evaluations/${id}`, { method: "DELETE" },
+    ),
+  exportEvaluation: (id: string) => download(`/api/evaluations/${id}/export`),
 };
+
+async function download(path: string): Promise<Blob> {
+  const response = await fetch(path, { credentials: "same-origin" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(errorDetail(data, response.status));
+  }
+  return response.blob();
+}

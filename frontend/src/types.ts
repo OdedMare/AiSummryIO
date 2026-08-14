@@ -349,3 +349,79 @@ export interface EvidencePage extends Evidence {
   limit: number;
   has_more: boolean;
 }
+
+export type EvaluationStatus =
+  | "running"
+  | "pausing"
+  | "paused"
+  | "stopping"
+  | "stopped"
+  | "completed";
+
+export type EvaluationCaseStatus =
+  | "pending"
+  | RunStatus
+  | "stopped";
+
+export interface EvaluationBatch {
+  id: string;
+  label: string;
+  question: string;
+  skill_keys: string[];
+  cooldown_seconds: number;
+  status: EvaluationStatus;
+  total: number;
+  pending: number;
+  queued: number;
+  running: number;
+  completed: number;
+  partial: number;
+  failed: number;
+  stopped: number;
+  reviewed: number;
+  average_rating: number | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+
+export interface EvaluationCase {
+  id: string;
+  batch_id: string;
+  position: number;
+  root_id: string;
+  status: EvaluationCaseStatus;
+  rating: 1 | 2 | 3 | 4 | 5 | null;
+  comment: string;
+  error: string;
+  headline: string | null;
+  summary: string | null;
+  duration_seconds: number | null;
+  run_id: string | null;
+}
+
+export interface EvaluationCaseDetail extends EvaluationCase {
+  conversation_id: string | null;
+  kind: "full" | null;
+  question: string | null;
+  skill_keys: string[] | null;
+  run_status: RunStatus | null;
+  progress: SummaryRun["progress"] | null;
+  result: SummaryResult | null;
+  run_created_at: string | null;
+  finished_at: string | null;
+}
+
+export interface EvaluationCasePage {
+  items: EvaluationCase[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface EvaluationImport {
+  root_ids: string[];
+  sheet: string;
+  column: string;
+  warnings: string[];
+}

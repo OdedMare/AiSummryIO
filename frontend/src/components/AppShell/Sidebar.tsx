@@ -1,5 +1,5 @@
 import {
-  Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
+  Beaker, Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
 } from "lucide-react";
 import BrandMark from "./BrandMark";
 import { identifierLabel } from "./commands";
@@ -74,6 +74,9 @@ function HistoryList({ app }: { app: AppShellController }) {
 function SidebarActions({ app }: { app: AppShellController }) {
   return (
     <div className="sidebar-actions">
+      <button type="button" onClick={() => app.setEvaluationOpen(true)}>
+        <Beaker size={18} /> Evaluation
+      </button>
       <button type="button" onClick={() => app.setSettingsOpen(true)}>
         <Settings size={18} /> הגדרות
       </button>

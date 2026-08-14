@@ -1,6 +1,7 @@
 "use client";
 
 import AgentStudioPanel from "@/components/AgentStudioPanel";
+import EvaluationPanel from "@/components/EvaluationPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import SummaryWorkspace from "@/components/SummaryWorkspace";
 import Composer from "./Composer";
@@ -16,6 +17,10 @@ export default function AppShell() {
   // lend them a fraction of it.
   if (app.studioOpen) {
     return <AgentStudioPanel onClose={() => app.setStudioOpen(false)} />;
+  }
+  if (app.evaluationOpen) {
+    return <EvaluationPanel skills={app.skills}
+      onClose={() => app.setEvaluationOpen(false)} />;
   }
   return (
     <div className={`app-shell${app.conversation ? "" : " has-map"}`}>

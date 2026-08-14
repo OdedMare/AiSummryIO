@@ -76,6 +76,10 @@ class ConversationRepository:
             ) AS last_status
             FROM conversations c
             WHERE session_id=%s AND expires_at > NOW()
+              AND NOT EXISTS (
+                  SELECT 1 FROM evaluation_cases evaluation
+                  WHERE evaluation.conversation_id=c.id
+              )
             ORDER BY updated_at DESC LIMIT 30
         """, (session_id,))
 
@@ -85,6 +89,10 @@ class ConversationRepository:
             rows = connection.execute("""
                 DELETE FROM conversations AS conversation
                 WHERE expires_at <= NOW()
+                  AND NOT EXISTS (
+                      SELECT 1 FROM evaluation_cases evaluation
+                      WHERE evaluation.conversation_id=conversation.id
+                  )
                   AND NOT EXISTS (
                       SELECT 1 FROM summary_runs
                       WHERE conversation_id=conversation.id

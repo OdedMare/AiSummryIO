@@ -194,6 +194,48 @@ CREATE TABLE IF NOT EXISTS summary_feedback (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+COMMIT;
+
+CREATE TABLE IF NOT EXISTS evaluation_batches (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    question TEXT NOT NULL,
+    skill_keys JSONB NOT NULL DEFAULT '[]',
+    cooldown_seconds INTEGER NOT NULL DEFAULT 0
+        CHECK (cooldown_seconds BETWEEN 0 AND 3600),
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'running','pausing','paused','stopping','stopped','completed'
+        )
+    ),
+    next_start_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ
+);
+
+COMMIT;
+
+CREATE TABLE IF NOT EXISTS evaluation_cases (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL REFERENCES evaluation_batches(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    root_id TEXT NOT NULL,
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    run_id TEXT REFERENCES summary_runs(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','failed','stopped')),
+    error TEXT NOT NULL DEFAULT '',
+    rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(batch_id, position)
+);
+
+COMMIT;
+
 -- Feedback moved from thumbs up/down (-1/1) to a 1-5 star rating, so the
 -- router (`bl/workflow_engine_pkg/routing.py`) has a graded quality signal
 -- per route instead of a binary one. `DROP ... IF EXISTS` then re-`ADD` is
@@ -465,4 +507,9 @@ CREATE INDEX IF NOT EXISTS evidence_run_idx
     ON summary_evidence(run_id, created_at);
 CREATE INDEX IF NOT EXISTS feedback_run_idx
     ON summary_feedback(run_id, created_at);
+CREATE INDEX IF NOT EXISTS evaluation_cases_batch_idx
+    ON evaluation_cases(batch_id, position);
+CREATE UNIQUE INDEX IF NOT EXISTS evaluation_one_active_idx
+    ON evaluation_batches ((TRUE))
+    WHERE status IN ('running','pausing','paused','stopping');
 """

@@ -1825,7 +1825,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     border-inline-start: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--studio-rail-border);
   }
 
   .studio-nav > button {

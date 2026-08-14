@@ -8,12 +8,13 @@ test build a router over fakes without a database.
 
 class ApiContext:
     def __init__(
-        self, repository, service, jobs, store, llm,
+        self, repository, service, jobs, evaluations, store, llm,
         admin_dependency, user_session, set_session_cookie,
     ):
         self.repository = repository
         self.service = service
         self.jobs = jobs
+        self.evaluations = evaluations
         self.store = store
         self.llm = llm
         self.admin_dependency = admin_dependency

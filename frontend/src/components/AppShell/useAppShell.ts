@@ -35,6 +35,7 @@ export function useAppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [evaluationOpen, setEvaluationOpen] = useState(false);
   const [dark, setDark] = useState(true);
   const [notice, setNotice] = useState("");
 
@@ -173,6 +174,8 @@ export function useAppShell() {
     setSettingsOpen,
     studioOpen,
     setStudioOpen,
+    evaluationOpen,
+    setEvaluationOpen,
     dark,
     setDark,
     notice,

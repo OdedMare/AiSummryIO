@@ -327,6 +327,53 @@ class FeedbackCreate(BaseModel):
     comment: str = ""
 
 
+class EvaluationCreate(BaseModel):
+    """One shared batch over opaque identifiers."""
+
+    label: str
+    root_ids: List[str]
+    question: str
+    skill_keys: List[str] = Field(default_factory=list)
+    cooldown_seconds: int = Field(default=0, ge=0, le=3600)
+
+    @field_validator("label", "question")
+    @classmethod
+    def evaluation_text_required(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("שדה חובה")
+        if len(cleaned) > 5000:
+            raise ValueError("הטקסט ארוך מדי")
+        return cleaned
+
+    @field_validator("root_ids")
+    @classmethod
+    def evaluation_ids_required(cls, values: List[str]) -> List[str]:
+        if not values:
+            raise ValueError("נדרש לפחות מזהה אחד")
+        if len(values) > 10000:
+            raise ValueError("אפשר להריץ עד 10,000 מזהים ב-Batch")
+        return [_identifier(value) for value in values]
+
+    @field_validator("skill_keys")
+    @classmethod
+    def evaluation_skill_keys(cls, values: List[str]) -> List[str]:
+        return SummaryCreate.valid_skill_keys(values)
+
+
+class EvaluationReview(BaseModel):
+    rating: Optional[Literal[1, 2, 3, 4, 5]] = None
+    comment: str = ""
+
+    @field_validator("comment")
+    @classmethod
+    def bounded_comment(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) > 5000:
+            raise ValueError("ההערה ארוכה מדי")
+        return cleaned
+
+
 class ModelsProbeRequest(BaseModel):
     """Unsaved LLM connection settings used to probe available models.
 

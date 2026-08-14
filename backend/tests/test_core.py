@@ -2,6 +2,7 @@ import json
 import logging
 import sys
 import time
+from io import BytesIO
 from types import ModuleType
 
 import pandas as pd
@@ -9,7 +10,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.common.errors import AgentError, ProviderError, UnavailableError
-from app.api.models import GeoBoundaries
+from app.api.models import EvaluationCreate, GeoBoundaries
+from app.api.evaluation_excel import evaluation_workbook, read_root_ids
+from app.bl.evaluations import EvaluationRunner
 from app.api.routers import conversations as conversation_routes
 from app.api.routers import health as health_routes
 from app.api.routers import summaries as summary_routes
@@ -74,6 +77,131 @@ def test_flunks_mapper_preserves_string_identifiers_and_generic_rows():
         {"name": "בית", "score": 4.0},
         {"name": "סביבה", "score": None},
     ]
+
+
+def test_evaluation_input_preserves_order_duplicates_and_opaque_ids():
+    payload = EvaluationCreate(
+        label="prompt-v3", question="מה מאפיין את המזהה?",
+        root_ids=["00123", "HOME-A/7", "00123"],
+        skill_keys=["risk", "risk"], cooldown_seconds=30,
+    )
+
+    assert payload.root_ids == ["00123", "HOME-A/7", "00123"]
+    assert payload.skill_keys == ["risk"]
+    assert payload.cooldown_seconds == 30
+
+
+def test_excel_import_finds_root_id_and_preserves_formatted_leading_zeroes():
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "קלט"
+    sheet.append(["שם", "root id"])
+    sheet.append(["ראשון", "HOME-A"])
+    sheet.append(["שני", 123])
+    sheet["B3"].number_format = "00000"
+    target = BytesIO()
+    workbook.save(target)
+
+    imported = read_root_ids(target.getvalue())
+
+    assert imported["root_ids"] == ["HOME-A", "00123"]
+    assert imported["sheet"] == "קלט"
+    assert imported["column"] == "root id"
+    assert imported["warnings"]
+
+
+def test_evaluation_excel_export_contains_summary_review_and_failure_reason():
+    from openpyxl import load_workbook
+
+    data = evaluation_workbook({
+        "label": "בדיקה", "question": "מה קורה?", "skill_keys": ["risk"],
+        "cooldown_seconds": 15,
+    }, [{
+        "root_id": "001", "status": "failed", "run_id": "run-1",
+        "error": "provider unavailable", "rating": 2, "comment": "חסר",
+        "duration_seconds": 3.5,
+        "result": {
+            "headline": "כותרת", "summary": "סיכום", "coverage": "מלא",
+            "key_findings": ["א"], "risks": ["ב"], "missing_data": [],
+        },
+    }])
+    sheet = load_workbook(BytesIO(data), data_only=True).active
+    values = {cell.value: index + 1 for index, cell in enumerate(sheet[1])}
+
+    assert sheet.cell(2, values["root_id"]).value == "001"
+    assert sheet.cell(2, values["summary"]).value == "סיכום"
+    assert sheet.cell(2, values["error"]).value == "provider unavailable"
+    assert sheet.cell(2, values["rating"]).value == 2
+
+
+def test_evaluation_runner_pauses_after_inflight_work_and_stops_pending_cases():
+    class Repository:
+        def __init__(self):
+            self.batch = {
+                "id": "batch", "status": "pausing", "queued": 0,
+                "running": 1, "pending": 4,
+            }
+            self.settled = []
+
+        def active_evaluation_batch(self):
+            return dict(self.batch)
+
+        def settle_evaluation(self, _batch_id, status):
+            self.settled.append(status)
+
+    repository = Repository()
+    runner = EvaluationRunner(repository, object(), 3)
+
+    runner.tick()
+    assert repository.settled == []
+
+    repository.batch.update(running=0)
+    runner.tick()
+    assert repository.settled == ["paused"]
+
+    repository.batch.update(status="stopping")
+    runner.tick()
+    assert repository.settled == ["paused", "stopped"]
+
+
+def test_evaluation_runner_admits_only_capacity_without_prequeueing_batch():
+    class Repository:
+        def __init__(self):
+            self.pending = 20
+            self.started = 0
+
+        def active_evaluation_batch(self):
+            return {
+                "id": "batch", "status": "running", "queued": 0,
+                "running": 0, "pending": self.pending,
+            }
+
+        def start_next_evaluation_case(self, _batch_id):
+            self.started += 1
+            self.pending -= 1
+            return {"case_id": str(self.started), "run_id": str(self.started)}
+
+    class Jobs:
+        def __init__(self):
+            self.runs = []
+
+        def submit(self, run_id):
+            self.runs.append(run_id)
+
+    repository, jobs = Repository(), Jobs()
+    EvaluationRunner(repository, jobs, 3).tick()
+
+    assert jobs.runs == ["1", "2", "3"]
+    assert repository.pending == 17
+
+
+def test_schema_persists_one_shared_evaluation_and_cascades_its_cases():
+    assert "CREATE TABLE IF NOT EXISTS evaluation_batches" in SCHEMA
+    assert "CREATE TABLE IF NOT EXISTS evaluation_cases" in SCHEMA
+    assert "evaluation_one_active_idx" in SCHEMA
+    assert "REFERENCES evaluation_batches(id) ON DELETE CASCADE" in SCHEMA
 
 
 def test_normalized_records_are_json_serializable(monkeypatch):
