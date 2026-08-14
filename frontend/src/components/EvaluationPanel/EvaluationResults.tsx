@@ -140,7 +140,7 @@ function Stats({ batch }: { batch: EvaluationBatch }) {
     ["חלקיים", batch.partial, "warning", <AlertTriangle key="partial" />],
     ["נכשלו", batch.failed, "danger", <CircleStop key="failed" />],
     ["רצים / בתור", batch.running + batch.queued, "active",
-      <LoaderCircle key="active" />],
+      <LoaderCircle className="spin" key="active" />],
     ["ציון ממוצע", batch.average_rating ?? "—", "rating", <Star key="rating" />],
   ];
   return <section className="evaluation-stats" aria-label="נתוני הריצה">

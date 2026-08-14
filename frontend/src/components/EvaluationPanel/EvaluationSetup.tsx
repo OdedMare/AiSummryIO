@@ -91,17 +91,18 @@ export default function EvaluationSetup({
         לאחר שתסתיים או תיעצר.
       </p>}
       <form className="evaluation-form" onSubmit={submit}>
-        <label><span>שם הריצה</span>
+        <label><span>שם הריצה <b aria-hidden="true">*</b></span>
           <input value={label} onChange={(event) => setLabel(event.target.value)}
             placeholder="לדוגמה: prompt-v3 · אוגוסט" maxLength={5000} required />
         </label>
-        <label className="evaluation-question"><span>שאלה משותפת</span>
+        <label className="evaluation-question"><span>שאלה משותפת{" "}
+          <b aria-hidden="true">*</b></span>
           <textarea value={question}
             onChange={(event) => setQuestion(event.target.value)} rows={3}
             placeholder="איזה סיכום להפיק עבור כל מזהה?" maxLength={5000} required />
         </label>
         <section className="evaluation-identifiers" aria-labelledby="ids-title">
-          <header><div><span id="ids-title">מזהים</span>
+          <header><div><span id="ids-title">מזהים <b aria-hidden="true">*</b></span>
             <small>מזהה אחד בכל שורה; כפילויות נשמרות כריצות נפרדות.</small>
           </div>
             <button className="secondary-button" type="button"

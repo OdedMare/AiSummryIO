@@ -158,14 +158,16 @@
   overflow-y: auto;
 }
 
+/* Light in both themes, like the category rail beside it: both are fixed
+   grounds the form is read against, not surfaces that follow the theme. */
 .studio-list,
 .workflow-library {
   padding: 22px 18px;
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--primary-soft) 28%, var(--surface-2)),
-      var(--surface-2) 34%);
-  border-left: 1px solid var(--border);
+      color-mix(in srgb, #f7ebe4 28%, var(--studio-rail)),
+      var(--studio-rail) 34%);
+  border-left: 1px solid var(--studio-rail-border);
 }
 
 .studio-list > header,
@@ -366,6 +368,68 @@
   color: var(--primary);
   background: var(--primary-soft);
   border-radius: 8px;
+}
+
+/* The list ground stays light in both themes, so everything drawn on it is
+   pinned to the light palette too. These cards are shared with surfaces that
+   do follow the theme, so the overrides are scoped to the list. */
+.studio-list .catalog-card,
+.studio-list .content-card,
+.studio-list .workflow-card,
+.workflow-library .workflow-card,
+.workflow-library .catalog-card {
+  color: var(--studio-rail-text);
+  background: var(--studio-rail-hover);
+  border-color: var(--studio-rail-border);
+}
+
+.studio-list .catalog-card strong,
+.studio-list .content-card strong,
+.studio-list .workflow-card strong,
+.workflow-library .workflow-card strong,
+.workflow-library .catalog-card strong {
+  color: var(--studio-rail-text);
+}
+
+.studio-list .catalog-card small,
+.studio-list .content-card small,
+.studio-list .workflow-card small,
+.studio-list > header span,
+.workflow-library .workflow-card small,
+.workflow-library .catalog-card small,
+.workflow-library > header span {
+  color: var(--studio-rail-muted);
+}
+
+.studio-list .catalog-card-delete,
+.workflow-library .catalog-card-delete {
+  color: var(--studio-rail-muted);
+  border-inline-start-color: var(--studio-rail-border);
+}
+
+.studio-list .catalog-icon,
+.studio-list .content-card button > span:first-child,
+.workflow-library .catalog-icon {
+  color: #a94f32;
+  background: #f7ebe4;
+}
+
+.studio-list h3,
+.workflow-library h3 {
+  color: var(--studio-rail-text);
+}
+
+.studio-list .studio-new,
+.workflow-library .studio-new {
+  color: var(--studio-rail-muted);
+  background: var(--studio-rail-hover);
+  border-color: var(--studio-rail-border);
+}
+
+.studio-list .studio-new:hover,
+.workflow-library .studio-new:hover {
+  color: #a94f32;
+  border-color: #a94f32;
 }
 
 .studio-form {

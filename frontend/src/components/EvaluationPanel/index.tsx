@@ -68,7 +68,8 @@ function HistoryItem({
   onClick: () => void;
 }) {
   const done = batch.completed + batch.partial + batch.failed + batch.stopped;
-  return <button type="button" className={active ? "active" : ""} onClick={onClick}>
+  return <button type="button" className={active ? "active" : ""}
+    aria-current={active ? "page" : undefined} onClick={onClick}>
     <span className={`history-status ${batch.status}`} aria-hidden="true" />
     <span><strong>{batch.label}</strong><small>
       {BATCH_STATUS[batch.status] ?? batch.status} · {done}/{batch.total} ·{" "}
