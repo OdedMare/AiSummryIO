@@ -41,6 +41,15 @@
   --brand-glow: 0 6px 18px rgba(217, 119, 87, 0.22);
   /* Dims the area of the workflow minimap that is off-screen. */
   --canvas-minimap-mask: rgba(238, 236, 227, 0.72);
+  /* The studio category rail stays light in both themes, the mirror of the
+     history rail staying dark in both: each is a fixed ground the content
+     beside it is read against, not a surface that follows the theme. */
+  --studio-rail: #faf9f5;
+  --studio-rail-hover: #ffffff;
+  --studio-rail-border: #e5e2d9;
+  --studio-rail-text: #1f1e1d;
+  --studio-rail-muted: #726f66;
+  --studio-rail-count: #eeece3;
 }
 
 :root[data-theme="dark"] {

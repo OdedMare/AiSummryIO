@@ -64,8 +64,8 @@
   gap: 4px;
   padding: 14px 10px;
   overflow-y: auto;
-  background: var(--surface-2);
-  border-inline-start: 1px solid var(--border);
+  background: var(--studio-rail);
+  border-inline-start: 1px solid var(--studio-rail-border);
 }
 
 .studio-nav > button {
@@ -76,7 +76,7 @@
   width: 100%;
   min-height: 52px;
   padding: 0 12px;
-  color: var(--text-muted);
+  color: var(--studio-rail-muted);
   text-align: start;
   background: transparent;
   border: 1px solid transparent;
@@ -85,14 +85,17 @@
 }
 
 .studio-nav > button:hover {
-  color: var(--text);
-  background: var(--surface);
+  color: var(--studio-rail-text);
+  background: var(--studio-rail-hover);
 }
 
+/* The rail is light in both themes, so the active state is pinned to the
+   light-mode terracotta: dark mode's lifted --primary is tuned for a dark
+   ground and washes out on this one. */
 .studio-nav > button.active {
-  color: var(--primary);
-  background: var(--primary-soft);
-  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  color: #a94f32;
+  background: #f7ebe4;
+  border-color: color-mix(in srgb, #a94f32 28%, transparent);
   font-weight: 700;
 }
 
@@ -104,7 +107,7 @@
 }
 
 .studio-nav-label small {
-  color: var(--text-muted);
+  color: var(--studio-rail-muted);
   font-size: 10.5px;
   font-weight: 400;
 }
@@ -115,7 +118,8 @@
   min-width: 22px;
   height: 20px;
   padding: 0 6px;
-  background: color-mix(in srgb, var(--surface-3) 84%, transparent);
+  color: var(--studio-rail-muted);
+  background: var(--studio-rail-count);
   border-radius: 999px;
   font-size: 10px;
 }
