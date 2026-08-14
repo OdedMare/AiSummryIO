@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowRight, Beaker, LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle, ArrowRight, Beaker, LoaderCircle, Plus, RefreshCw,
+} from "lucide-react";
 import type { EvaluationBatch, SummarySkill } from "@/types";
 import EvaluationResults from "./EvaluationResults";
 import EvaluationSetup from "./EvaluationSetup";
@@ -32,8 +34,12 @@ export default function EvaluationPanel({
             ? <p className="loading-line"><LoaderCircle className="spin" /> טוען…</p>
             : evaluation.selectedId
               ? <EvaluationResults evaluation={evaluation} />
-              : <EvaluationSetup skills={skills} activeBatch={evaluation.activeBatch}
-                  onCreated={evaluation.created} />}
+              : <>
+                {evaluation.error && <p className="form-error evaluation-load-error"
+                  role="alert"><AlertTriangle size={17} /> {evaluation.error}</p>}
+                <EvaluationSetup skills={skills} activeBatch={evaluation.activeBatch}
+                  onCreated={evaluation.created} />
+              </>}
         </section>
       </div>
     </div>
@@ -64,7 +70,13 @@ function HistoryItem({
   const done = batch.completed + batch.partial + batch.failed + batch.stopped;
   return <button type="button" className={active ? "active" : ""} onClick={onClick}>
     <span className={`history-status ${batch.status}`} aria-hidden="true" />
-    <span><strong>{batch.label}</strong><small>{done}/{batch.total} ·{" "}
+    <span><strong>{batch.label}</strong><small>
+      {BATCH_STATUS[batch.status] ?? batch.status} · {done}/{batch.total} ·{" "}
       {new Date(batch.created_at).toLocaleDateString("he-IL")}</small></span>
   </button>;
 }
+
+const BATCH_STATUS: Record<string, string> = {
+  running: "רץ", pausing: "מושהה בקרוב", paused: "מושהה",
+  stopping: "עוצר", stopped: "נעצר", completed: "הושלם",
+};

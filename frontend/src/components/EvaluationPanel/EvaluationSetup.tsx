@@ -2,7 +2,9 @@
 
 import type { FormEvent } from "react";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Play, Upload } from "lucide-react";
+import {
+  FileSpreadsheet, Layers3, Play, Server, Upload,
+} from "lucide-react";
 import { api } from "@/services/api";
 import type { EvaluationBatch, SummarySkill } from "@/types";
 
@@ -77,7 +79,12 @@ export default function EvaluationSetup({
     <main className="evaluation-setup" id="main-workspace">
       <header><span className="eyebrow">Batch חדש</span>
         <h1>בדיקת סיכומים על קבוצת מזהים</h1>
-        <p>ההרצה ממשיכה בשרת גם לאחר סגירת הדפדפן.</p>
+        <p>מגדירים פעם אחת, עוקבים אחרי כל תוצאה ובודקים את איכות הסיכומים.</p>
+        <div className="evaluation-assurances" aria-label="מאפייני ההרצה">
+          <span><Server size={16} /><b>רץ בשרת</b> גם כשהדפדפן סגור</span>
+          <span><Layers3 size={16} /><b>עד 3</b> סיכומים במקביל</span>
+          <span><FileSpreadsheet size={16} /><b>עד 10,000</b> מזהים</span>
+        </div>
       </header>
       {activeBatch && <p className="evaluation-notice" role="status">
         הריצה “{activeBatch.label}” פעילה. ניתן להכין את הטופס, אך להתחיל רק
@@ -86,12 +93,12 @@ export default function EvaluationSetup({
       <form className="evaluation-form" onSubmit={submit}>
         <label><span>שם הריצה</span>
           <input value={label} onChange={(event) => setLabel(event.target.value)}
-            placeholder="לדוגמה: prompt-v3 · אוגוסט" maxLength={5000} />
+            placeholder="לדוגמה: prompt-v3 · אוגוסט" maxLength={5000} required />
         </label>
         <label className="evaluation-question"><span>שאלה משותפת</span>
           <textarea value={question}
             onChange={(event) => setQuestion(event.target.value)} rows={3}
-            placeholder="איזה סיכום להפיק עבור כל מזהה?" maxLength={5000} />
+            placeholder="איזה סיכום להפיק עבור כל מזהה?" maxLength={5000} required />
         </label>
         <section className="evaluation-identifiers" aria-labelledby="ids-title">
           <header><div><span id="ids-title">מזהים</span>
@@ -107,7 +114,7 @@ export default function EvaluationSetup({
           </header>
           <textarea dir="ltr" value={rootIds}
             onChange={(event) => { setRootIds(event.target.value); setImportNote(""); }}
-            rows={10} placeholder={"ROOT-001\nROOT-002\nROOT-003"} />
+            rows={10} placeholder={"ROOT-001\nROOT-002\nROOT-003"} required />
           <footer><span><FileSpreadsheet size={15} />
             {ids.length.toLocaleString("he-IL")} מזהים</span>
             {importNote && <span role="status">{importNote}</span>}</footer>
@@ -131,7 +138,7 @@ export default function EvaluationSetup({
           <div className="cooldown-presets">
             {[0, 30, 60, 120].map((value) => <button type="button" key={value}
               className={cooldown === value ? "active" : ""}
-              onClick={() => setCooldown(value)}>{value} שנ׳</button>)}
+              onClick={() => setCooldown(value)}>{cooldownLabel(value)}</button>)}
           </div>
           <label><span>ערך מותאם בשניות</span>
             <input type="number" min={0} max={3600} value={cooldown}
@@ -147,4 +154,9 @@ export default function EvaluationSetup({
       </form>
     </main>
   );
+}
+
+function cooldownLabel(seconds: number) {
+  if (!seconds) return "ללא";
+  return seconds < 60 ? `${seconds} שנ׳` : `${seconds / 60} דק׳`;
 }

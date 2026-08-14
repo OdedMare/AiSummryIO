@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CircleStop,
-  Download, LoaderCircle, Pause, Play, RefreshCw, Search, Star, Trash2,
+  AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
+  CircleStop, Download, Layers3, LoaderCircle, Pause, Play, RefreshCw,
+  Search, Star, Timer, Trash2,
 } from "lucide-react";
 import { SummaryContent } from "@/components/SummaryWorkspace/RunContent";
 import { api } from "@/services/api";
@@ -31,12 +32,7 @@ export default function EvaluationResults({
   return (
     <main className="evaluation-results" id="main-workspace">
       <BatchHeader batch={batch} evaluation={evaluation} />
-      <section className="evaluation-progress" aria-label={`התקדמות ${progress}%`}>
-        <div><span style={{ width: `${progress}%` }} /></div>
-        <p aria-live="polite">{done.toLocaleString("he-IL")} מתוך{" "}
-          {batch.total.toLocaleString("he-IL")} · {progress}%</p>
-      </section>
-      <Stats batch={batch} />
+      <Overview batch={batch} done={done} progress={progress} />
       {evaluation.error && <p className="form-error evaluation-error" role="alert">
         <AlertTriangle size={17} /> {evaluation.error}</p>}
       <div className="evaluation-review-layout">
@@ -73,25 +69,32 @@ function BatchHeader({
   };
   return (
     <header className="evaluation-results-header">
-      <div><span className={`evaluation-status ${batch.status}`}>
-        {STATUS[batch.status] ?? batch.status}</span>
+      <div className="evaluation-title-block"><div className="evaluation-title-labels">
+        <span className={`evaluation-status ${batch.status}`}>
+          {STATUS[batch.status] ?? batch.status}</span>
+        <span className="evaluation-batch-label">Evaluation batch</span>
+      </div>
         <h1>{batch.label}</h1>
         <p>{batch.question}</p>
-        <small>{new Date(batch.created_at).toLocaleString("he-IL")} · cooldown{" "}
-          {batch.cooldown_seconds} שנ׳
-          {!!batch.skill_keys.length && ` · ${batch.skill_keys.join(" · ")}`}</small>
+        <div className="evaluation-meta">
+          <span><CalendarDays size={14} />
+            {new Date(batch.created_at).toLocaleString("he-IL")}</span>
+          <span><Timer size={14} /> Cooldown: {batch.cooldown_seconds} שנ׳</span>
+          {!!batch.skill_keys.length && <span><Layers3 size={14} />
+            {batch.skill_keys.join(" · ")}</span>}
+        </div>
       </div>
       <nav aria-label="פעולות ריצה">
         {batch.status === "running" && <button className="secondary-button"
           type="button" disabled={evaluation.busy}
           onClick={() => void evaluation.action(
             () => api.pauseEvaluation(batch.id), "השהיית הריצה נכשלה",
-          )}><Pause size={17} /> Pause</button>}
+          )}><Pause size={17} /> השהיה</button>}
         {batch.status === "paused" && <button className="primary-button"
           type="button" disabled={evaluation.busy}
           onClick={() => void evaluation.action(
             () => api.resumeEvaluation(batch.id), "חידוש הריצה נכשל",
-          )}><Play size={17} /> Resume</button>}
+          )}><Play size={17} /> המשך</button>}
         {active && !["stopping", "stopped"].includes(batch.status) &&
           <button className="evaluation-stop" type="button"
             disabled={evaluation.busy} onClick={stop}>
@@ -110,17 +113,40 @@ function BatchHeader({
   );
 }
 
+function Overview({
+  batch, done, progress,
+}: {
+  batch: EvaluationBatch;
+  done: number;
+  progress: number;
+}) {
+  return <section className="evaluation-overview" aria-labelledby="progress-title">
+    <header><div><span id="progress-title">התקדמות הריצה</span>
+      <strong>{progress}%</strong></div>
+      <p aria-live="polite">{done.toLocaleString("he-IL")} מתוך{" "}
+        {batch.total.toLocaleString("he-IL")} תוצאות</p></header>
+    <div className="evaluation-progress" role="progressbar"
+      aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}
+      aria-label={`התקדמות ${progress}%`}>
+      <span style={{ width: `${progress}%` }} />
+    </div>
+    <Stats batch={batch} />
+  </section>;
+}
+
 function Stats({ batch }: { batch: EvaluationBatch }) {
   const stats = [
-    ["הושלמו", batch.completed, "success"],
-    ["חלקיים", batch.partial, "warning"],
-    ["נכשלו", batch.failed, "danger"],
-    ["רצים / בתור", batch.running + batch.queued, "active"],
-    ["ציון ממוצע", batch.average_rating ?? "—", "rating"],
+    ["הושלמו", batch.completed, "success", <CheckCircle2 key="done" />],
+    ["חלקיים", batch.partial, "warning", <AlertTriangle key="partial" />],
+    ["נכשלו", batch.failed, "danger", <CircleStop key="failed" />],
+    ["רצים / בתור", batch.running + batch.queued, "active",
+      <LoaderCircle key="active" />],
+    ["ציון ממוצע", batch.average_rating ?? "—", "rating", <Star key="rating" />],
   ];
   return <section className="evaluation-stats" aria-label="נתוני הריצה">
-    {stats.map(([label, value, tone]) => <article key={String(label)}
-      className={String(tone)}><span>{label}</span><strong>{value}</strong></article>)}
+    {stats.map(([label, value, tone, icon]) => <article key={String(label)}
+      className={String(tone)}><i aria-hidden="true">{icon}</i><div>
+        <span>{label}</span><strong>{value}</strong></div></article>)}
   </section>;
 }
 
@@ -176,7 +202,9 @@ function CaseRow({
   return <tr className={evaluation.selectedCaseId === item.id ? "selected" : ""}>
     <td>{item.position}</td>
     <td><button type="button" dir="ltr" title={item.root_id}
-      onClick={() => void evaluation.selectCase(item.id)}>{item.root_id}</button></td>
+      aria-label={`פתיחת תוצאה עבור ${item.root_id}`}
+      onClick={() => void evaluation.selectCase(item.id)}><span>{item.root_id}</span>
+      <ChevronLeft size={15} aria-hidden="true" /></button></td>
     <td><span className={`case-status ${item.status}`}>
       {item.status === "completed" && <CheckCircle2 size={14} />}
       {item.status === "failed" && <AlertTriangle size={14} />}
@@ -189,7 +217,8 @@ function CaseRow({
 function CaseDetail({ evaluation }: { evaluation: EvaluationController }) {
   const detail = evaluation.selectedCase;
   if (!detail) return <section className="evaluation-detail empty">
-    <Search size={26} /><h2>בחרו תוצאה לבדיקה</h2>
+    <span className="evaluation-empty-icon"><Search size={25} /></span>
+    <h2>בחרו תוצאה לבדיקה</h2>
     <p>הסיכום המלא, סיבת הכשל והדירוג יופיעו כאן.</p></section>;
   return <section className="evaluation-detail">
     <header><div><span>root_id</span><strong dir="ltr" title={detail.root_id}>
