@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import {
-  FileSpreadsheet, Layers3, Play, Server, Upload,
+  FileSpreadsheet, Layers3, LoaderCircle, Play, Server, Upload,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type { EvaluationBatch, SummarySkill } from "@/types";
@@ -23,6 +23,7 @@ export default function EvaluationSetup({
   const [warnings, setWarnings] = useState<string[]>([]);
   const [importNote, setImportNote] = useState("");
   const [error, setError] = useState("");
+  const [importing, setImporting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const ids = useMemo(
@@ -38,7 +39,7 @@ export default function EvaluationSetup({
 
   const importFile = async (file?: File) => {
     if (!file) return;
-    setSubmitting(true); setError(""); setWarnings([]);
+    setImporting(true); setError(""); setWarnings([]);
     try {
       const imported = await api.importEvaluation(file);
       setRootIds(imported.root_ids.join("\n"));
@@ -50,7 +51,7 @@ export default function EvaluationSetup({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "קריאת הקובץ נכשלה");
     } finally {
-      setSubmitting(false);
+      setImporting(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
@@ -106,14 +107,17 @@ export default function EvaluationSetup({
             <small>מזהה אחד בכל שורה; כפילויות נשמרות כריצות נפרדות.</small>
           </div>
             <button className="secondary-button" type="button"
-              onClick={() => fileRef.current?.click()} disabled={submitting}>
-              <Upload size={17} /> העלאת Excel
+              onClick={() => fileRef.current?.click()}
+              disabled={submitting || importing}>
+              {importing ? <LoaderCircle className="spin" size={17} /> :
+                <Upload size={17} />} {importing ? "טוען…" : "העלאת Excel"}
             </button>
             <input ref={fileRef} className="visually-hidden" type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(event) => void importFile(event.target.files?.[0])} />
           </header>
           <textarea dir="ltr" value={rootIds}
+            aria-labelledby="ids-title"
             onChange={(event) => { setRootIds(event.target.value); setImportNote(""); }}
             rows={10} placeholder={"ROOT-001\nROOT-002\nROOT-003"} required />
           <footer><span><FileSpreadsheet size={15} />
@@ -139,6 +143,7 @@ export default function EvaluationSetup({
           <div className="cooldown-presets">
             {[0, 30, 60, 120].map((value) => <button type="button" key={value}
               className={cooldown === value ? "active" : ""}
+              aria-pressed={cooldown === value}
               onClick={() => setCooldown(value)}>{cooldownLabel(value)}</button>)}
           </div>
           <label><span>ערך מותאם בשניות</span>
@@ -149,8 +154,9 @@ export default function EvaluationSetup({
         </fieldset>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button evaluation-start" type="submit"
-          disabled={submitting || !!activeBatch}>
-          <Play size={18} /> {submitting ? "מתחיל…" : "התחלת Evaluation"}
+          disabled={submitting || importing || !!activeBatch}>
+          {submitting ? <LoaderCircle className="spin" size={18} /> :
+            <Play size={18} />} {submitting ? "מתחיל…" : "התחלת Evaluation"}
         </button>
       </form>
     </main>
