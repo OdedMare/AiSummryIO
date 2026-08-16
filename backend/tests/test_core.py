@@ -85,11 +85,13 @@ def test_evaluation_input_preserves_order_duplicates_and_opaque_ids():
     payload = EvaluationCreate(
         label="prompt-v3", question="מה מאפיין את המזהה?",
         root_ids=["00123", "HOME-A/7", "00123"],
-        skill_keys=["risk", "risk"], cooldown_seconds=30,
+        skill_keys=["risk", "risk"],
+        agent_keys=["geo", "web", "geo"], cooldown_seconds=30,
     )
 
     assert payload.root_ids == ["00123", "HOME-A/7", "00123"]
     assert payload.skill_keys == ["risk"]
+    assert payload.agent_keys == ["geo", "web"]
     assert payload.cooldown_seconds == 30
 
 
@@ -279,6 +281,7 @@ def test_schema_persists_one_shared_evaluation_and_cascades_its_cases():
     assert "CREATE TABLE IF NOT EXISTS evaluation_cases" in SCHEMA
     assert "evaluation_one_active_idx" in SCHEMA
     assert "REFERENCES evaluation_batches(id) ON DELETE CASCADE" in SCHEMA
+    assert SCHEMA.count("agent_keys JSONB NOT NULL DEFAULT '[]'") == 4
 
 
 def test_normalized_records_are_json_serializable(monkeypatch):
@@ -2891,6 +2894,40 @@ def test_specialists_share_duplicate_workflows_and_cap_total_breadth():
     assert [item["id"] for item in workflows] == ["w1", "w2", "w3"]
     assert workflows[0]["_agent_keys"] == ["a", "b"]
     assert [item["id"] for item in states[1]["workflows"]] == ["w1", "w3"]
+
+
+def test_manually_selected_specialists_all_run_past_automatic_caps():
+    agents = [
+        {"id": "a%d" % index, "content_key": "agent-%d" % index,
+         "name": "Agent %d" % index}
+        for index in range(1, 5)
+    ]
+
+    class Llm:
+        @staticmethod
+        def complete_json(*_args):
+            raise AssertionError("manual selection must bypass leader routing")
+
+    assignments = specialists._delegations(
+        type("Service", (), {"_llm": Llm()})(), "question", agents, [],
+        "leader", 4, manually_selected=True,
+    )
+    states = [
+        {
+            "agent": assignment["agent"],
+            "workflows": [{
+                "id": "w%d" % index, "workflow_key": "workflow-%d" % index,
+            }],
+        }
+        for index, assignment in enumerate(assignments, start=1)
+    ]
+
+    workflows = specialists._bounded_workflows(states, total_limit=None)
+
+    assert [item["agent"]["content_key"] for item in assignments] == [
+        "agent-1", "agent-2", "agent-3", "agent-4",
+    ]
+    assert [item["id"] for item in workflows] == ["w1", "w2", "w3", "w4"]
 
 
 def test_the_leader_review_sees_summaries_not_every_fact():
