@@ -105,6 +105,7 @@ def build(context) -> APIRouter:
                 "label": source["label"] + " · ניסיון חוזר",
                 "question": source["question"],
                 "skill_keys": source["skill_keys"],
+                "agent_keys": source["agent_keys"],
                 "cooldown_seconds": source["cooldown_seconds"],
             },
             root_ids,

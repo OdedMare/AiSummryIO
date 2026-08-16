@@ -38,7 +38,8 @@ def build(context) -> APIRouter:
             payload.question,
         )
         run = context.repository.create_run(
-            conversation["id"], payload.question, "full", payload.skill_keys
+            conversation["id"], payload.question, "full", payload.skill_keys,
+            payload.agent_keys,
         )
         context.jobs.submit(run["id"])
         context.set_session_cookie(response, session_id)
@@ -55,11 +56,16 @@ def build(context) -> APIRouter:
     ):
         context.repository.get_conversation(conversation_id, session_id)
         run = context.repository.create_run(
-            conversation_id, payload.question, "follow_up", payload.skill_keys
+            conversation_id, payload.question, "follow_up", payload.skill_keys,
+            payload.agent_keys,
         )
         context.jobs.submit(run["id"])
         context.set_session_cookie(response, session_id)
         return _await_run(context, run, wait, response)
+
+    @router.get("/specialists")
+    def specialists():
+        return context.service.specialist_options()
 
     @router.get("/runs/{run_id}")
     def run_status(run_id: str, session_id: str = Depends(context.user_session)):

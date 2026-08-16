@@ -43,14 +43,24 @@ class ContentRepository:
         by_key = {row["content_key"]: row for row in rows}
         return [by_key[key] for key in keys if key in by_key]
 
-    def enabled_specialists(self) -> List[dict]:
+    def enabled_specialists(self, keys=None) -> List[dict]:
         """The specialists the leader may delegate to."""
-        return self._with_workflow_keys(self._all("""
+        params = ()
+        selected = _keys(keys)
+        where = ""
+        if selected:
+            where = " AND content_key = ANY(%s)"
+            params = (selected,)
+        rows = self._with_workflow_keys(self._all("""
             SELECT id, content_key, kind, name, description, content, config
             FROM agent_content
-            WHERE kind='agent' AND agent_enabled IS TRUE
+            WHERE kind='agent' AND agent_enabled IS TRUE""" + where + """
             ORDER BY name
-        """))
+        """, params))
+        if not selected:
+            return rows
+        by_key = {row["content_key"]: row for row in rows}
+        return [by_key[key] for key in selected if key in by_key]
 
     def enabled_skill_options(self, keys: List[str]) -> List[dict]:
         return self._enabled_skills(keys, include_content=False)

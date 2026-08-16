@@ -30,12 +30,13 @@ class EvaluationRepository:
                 raise ConflictError("כבר קיימת ריצת Evaluation פעילה")
             connection.execute(
                 """INSERT INTO evaluation_batches (
-                       id, session_id, label, question, skill_keys,
+                       id, session_id, label, question, skill_keys, agent_keys,
                        cooldown_seconds, status, next_start_at
-                   ) VALUES (%s,%s,%s,%s,%s,%s,'running',NOW())""",
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,'running',NOW())""",
                 (
                     batch_id, session_id, data["label"], data["question"],
                     Jsonb(data.get("skill_keys") or []),
+                    Jsonb(data.get("agent_keys") or []),
                     data.get("cooldown_seconds", 0),
                 ),
             )
@@ -200,11 +201,13 @@ class EvaluationRepository:
             connection.execute(
                 """INSERT INTO summary_runs (
                        id, conversation_id, kind, question, skill_keys,
+                       agent_keys,
                        status, progress
-                   ) VALUES (%s,%s,'full',%s,%s,'queued',%s)""",
+                   ) VALUES (%s,%s,'full',%s,%s,%s,'queued',%s)""",
                 (
                     run_id, conversation_id, batch["question"],
-                    Jsonb(batch["skill_keys"]), Jsonb(_empty_progress()),
+                    Jsonb(batch["skill_keys"]), Jsonb(batch["agent_keys"]),
+                    Jsonb(_empty_progress()),
                 ),
             )
             connection.execute(
@@ -334,7 +337,8 @@ SELECT evaluation.id, evaluation.batch_id, evaluation.position,
        evaluation.root_id, evaluation.rating, evaluation.comment,
        evaluation.error AS case_error, """ + _CASE_STATUS + """ AS status,
        run.id AS run_id, run.conversation_id, run.kind, run.question,
-       run.skill_keys, run.status AS run_status, run.progress, run.result,
+       run.skill_keys, run.agent_keys, run.status AS run_status, run.progress,
+       run.result,
        run.result ->> 'headline' AS headline,
        run.result ->> 'summary' AS summary,
        COALESCE(run.error, evaluation.error) AS error,

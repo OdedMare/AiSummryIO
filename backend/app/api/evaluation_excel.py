@@ -76,7 +76,7 @@ def evaluation_workbook(batch: dict, rows: List[dict]) -> bytes:
         "root_id", "status", "headline", "summary", "coverage",
         "key_findings", "risks", "missing_data", "error", "rating",
         "comment", "duration_seconds", "run_id", "batch_label", "question",
-        "skills", "cooldown_seconds",
+        "skills", "agents", "cooldown_seconds",
     ]
     sheet.append(headers)
     header_fill = PatternFill("solid", fgColor="B8563C")
@@ -99,10 +99,12 @@ def evaluation_workbook(batch: dict, rows: List[dict]) -> bytes:
             row.get("duration_seconds"), _excel_text(row.get("run_id") or ""),
             _excel_text(batch["label"]), _excel_text(batch["question"]),
             _excel_text(", ".join(batch.get("skill_keys") or [])),
+            _excel_text(", ".join(batch.get("agent_keys") or [])),
             batch["cooldown_seconds"],
         ])
     sheet.auto_filter.ref = sheet.dimensions
-    widths = [28, 14, 34, 70, 38, 50, 45, 45, 45, 10, 45, 16, 38, 24, 48, 28, 18]
+    widths = [28, 14, 34, 70, 38, 50, 45, 45, 45, 10, 45, 16, 38, 24, 48,
+              28, 28, 18]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     for row in sheet.iter_rows(min_row=2):

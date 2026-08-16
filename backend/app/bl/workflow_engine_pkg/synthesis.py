@@ -275,6 +275,13 @@ def _shared_summary(
         "\nUse the sections' `patterns` and `outliers`: include a broad "
         "distribution in `key_findings` only when it changes the conclusion, "
         "and put an outlier in `risks`. Write all output text in Hebrew."
+        "\nWhen the question asks for a rating, ranking, or comparison, keep "
+        "the exact scale, direction, criteria, and scope it requests; never "
+        "default to 1-5. Put each item or dimension in `key_findings` as "
+        "`name — score/maximum — evidence-based reason`, ordered from highest "
+        "to lowest unless asked otherwise, with honest ties preserved. Do not "
+        "score a criterion the sections do not support; name that gap in "
+        "`missing_data` instead of guessing."
     )
     data = {"question": question, "sections": safe_sections}
     if agent_context:

@@ -256,6 +256,7 @@ class SummaryCreate(BaseModel):
     root_id: Optional[str] = None
     question: str = ""
     skill_keys: List[str] = Field(default_factory=list)
+    agent_keys: List[str] = Field(default_factory=list)
     boundaries: Optional[GeoBoundaries] = None
 
     @field_validator("root_id")
@@ -274,6 +275,13 @@ class SummaryCreate(BaseModel):
         if len(cleaned) > 3:
             raise ValueError("אפשר לבחור עד 3 Skills")
         return cleaned
+
+    @field_validator("agent_keys")
+    @classmethod
+    def valid_agent_keys(cls, values: List[str]) -> List[str]:
+        return list(dict.fromkeys(
+            value.strip() for value in values if value.strip()
+        ))
 
     @model_validator(mode="after")
     def scope_required(self):
@@ -306,6 +314,7 @@ class DryRunCreate(BaseModel):
 class FollowUpCreate(BaseModel):
     question: str
     skill_keys: List[str] = Field(default_factory=list)
+    agent_keys: List[str] = Field(default_factory=list)
 
     @field_validator("question")
     @classmethod
@@ -319,6 +328,11 @@ class FollowUpCreate(BaseModel):
     @classmethod
     def valid_skill_keys(cls, values: List[str]) -> List[str]:
         return SummaryCreate.valid_skill_keys(values)
+
+    @field_validator("agent_keys")
+    @classmethod
+    def valid_agent_keys(cls, values: List[str]) -> List[str]:
+        return SummaryCreate.valid_agent_keys(values)
 
 
 class FeedbackCreate(BaseModel):
@@ -334,6 +348,7 @@ class EvaluationCreate(BaseModel):
     root_ids: List[str]
     question: str
     skill_keys: List[str] = Field(default_factory=list)
+    agent_keys: List[str] = Field(default_factory=list)
     cooldown_seconds: int = Field(default=0, ge=0, le=3600)
 
     @field_validator("label", "question")
@@ -359,6 +374,11 @@ class EvaluationCreate(BaseModel):
     @classmethod
     def evaluation_skill_keys(cls, values: List[str]) -> List[str]:
         return SummaryCreate.valid_skill_keys(values)
+
+    @field_validator("agent_keys")
+    @classmethod
+    def evaluation_agent_keys(cls, values: List[str]) -> List[str]:
+        return SummaryCreate.valid_agent_keys(values)
 
 
 class EvaluationReview(BaseModel):

@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS summary_runs (
     kind TEXT NOT NULL CHECK (kind IN ('full','follow_up')),
     question TEXT NOT NULL DEFAULT '',
     skill_keys JSONB NOT NULL DEFAULT '[]',
+    agent_keys JSONB NOT NULL DEFAULT '[]',
     status TEXT NOT NULL CHECK (
         status IN ('queued','running','completed','partial','failed')
     ),
@@ -171,6 +172,9 @@ CREATE TABLE IF NOT EXISTS summary_runs (
 
 ALTER TABLE summary_runs
     ADD COLUMN IF NOT EXISTS skill_keys JSONB NOT NULL DEFAULT '[]';
+
+ALTER TABLE summary_runs
+    ADD COLUMN IF NOT EXISTS agent_keys JSONB NOT NULL DEFAULT '[]';
 
 COMMIT;
 
@@ -202,6 +206,7 @@ CREATE TABLE IF NOT EXISTS evaluation_batches (
     label TEXT NOT NULL,
     question TEXT NOT NULL,
     skill_keys JSONB NOT NULL DEFAULT '[]',
+    agent_keys JSONB NOT NULL DEFAULT '[]',
     cooldown_seconds INTEGER NOT NULL DEFAULT 0
         CHECK (cooldown_seconds BETWEEN 0 AND 3600),
     status TEXT NOT NULL CHECK (
@@ -214,6 +219,9 @@ CREATE TABLE IF NOT EXISTS evaluation_batches (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finished_at TIMESTAMPTZ
 );
+
+ALTER TABLE evaluation_batches
+    ADD COLUMN IF NOT EXISTS agent_keys JSONB NOT NULL DEFAULT '[]';
 
 COMMIT;
 

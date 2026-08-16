@@ -33,37 +33,57 @@ _MAX_SPECIALISTS = 2
 _MAX_WORKFLOWS = 3
 
 
-def available(service) -> List[dict]:
+def available(service, agent_keys=None) -> List[dict]:
     """Enabled specialists when agent mode is on, otherwise none."""
     try:
         rounds = service._store.get().agent_max_rounds
     except AttributeError:
         return []
+    keys = _texts(agent_keys)
+    if rounds <= 0:
+        if keys:
+            raise ValueError("מצב הסוכנים כבוי בהגדרות")
+        return []
     reader = getattr(service._repository, "enabled_specialists", None)
-    return reader() if rounds > 0 and reader else []
+    if not reader:
+        return []
+    agents = reader(keys) if keys else reader()
+    found = {item["content_key"] for item in agents}
+    missing = [key for key in keys if key not in found]
+    if missing:
+        raise ValueError(
+            "הסוכנים שנבחרו אינם זמינים: " + ", ".join(missing)
+        )
+    return agents
 
 
-def full_summary(service, run, conversation, progress, agents) -> dict:
+def full_summary(
+    service, run, conversation, progress, agents, manually_selected=False
+) -> dict:
     return _orchestrate(
         service, run, conversation, progress, agents,
-        run["question"], False, [],
+        run["question"], False, [], manually_selected,
     )
 
 
-def follow_up(service, run, conversation, progress, agents) -> dict:
+def follow_up(
+    service, run, conversation, progress, agents, manually_selected=False
+) -> dict:
     turns = history.recent_turns(service, conversation)
     question = history.standalone_question(service, run["question"], turns)
     return _orchestrate(
         service, run, conversation, progress, agents,
-        question, True, turns,
+        question, True, turns, manually_selected,
     )
 
 
 def _orchestrate(
-    service, run, conversation, progress, agents, question, is_follow_up, turns
+    service, run, conversation, progress, agents, question, is_follow_up, turns,
+    manually_selected,
 ) -> dict:
     settings = service._store.get()
-    limit = min(_MAX_SPECIALISTS, max(1, settings.max_parallel_workflows))
+    workers = max(1, settings.max_parallel_workflows)
+    routing_limit = min(_MAX_SPECIALISTS, workers)
     max_rounds = max(0, min(5, settings.agent_max_rounds))
     leader_prompt = _prompt(service, "leader-orchestrator", _LEADER_FALLBACK)
     worker_prompt = _prompt(service, "workflow-worker", _WORKER_FALLBACK)
@@ -71,13 +91,17 @@ def _orchestrate(
         service, conversation, run["id"]
     )
     assignments = _delegations(
-        service, question, agents, turns, leader_prompt, limit
+        service, question, agents, turns, leader_prompt,
+        len(agents) if manually_selected else routing_limit,
+        manually_selected,
     )
     states = _plan_states(
         service, assignments, prior_sections, question, is_follow_up,
-        worker_prompt, limit,
+        worker_prompt, workers,
     )
-    workflows = _bounded_workflows(states)
+    workflows = _bounded_workflows(
+        states, None if manually_selected else _MAX_WORKFLOWS
+    )
     _emit(
         progress, 0, len(workflows), [], states, "delegating",
         max_rounds, 0,
@@ -93,7 +117,8 @@ def _orchestrate(
     evidence = None
     for round_number in range(1, max_rounds + 1):
         decision = _review(
-            service, question, states, leader_prompt, limit
+            service, question, states, leader_prompt,
+            len(states) if manually_selected else routing_limit,
         )
         leader_missing.extend(_texts(decision.get("missing_data")))
         questions = decision.get("questions", [])
@@ -105,7 +130,7 @@ def _orchestrate(
             )
         _answer_questions(
             service, states, questions, evidence, worker_prompt,
-            round_number, limit,
+            round_number, workers,
         )
         rounds_used = round_number
         _emit(
@@ -149,8 +174,11 @@ def _prompt(service, key: str, fallback: str) -> str:
 
 
 def _delegations(
-    service, question, agents, turns, leader_prompt, limit
+    service, question, agents, turns, leader_prompt, limit,
+    manually_selected=False,
 ) -> List[dict]:
+    if manually_selected:
+        return [{"agent": item, "task": question} for item in agents]
     catalog = {item["content_key"]: item for item in agents}
     payload = {
         "question": question,
@@ -291,17 +319,17 @@ def _plan_state(
     }
 
 
-def _bounded_workflows(states) -> List[dict]:
+def _bounded_workflows(states, total_limit=_MAX_WORKFLOWS) -> List[dict]:
     """Run each workflow once and share its section with its owners."""
     unique = {}
     for state in states:
         agent_key = state["agent"]["content_key"]
         bounded = []
-        for workflow in state["workflows"]:
+        for workflow in state["workflows"][:_MAX_WORKFLOWS]:
             workflow_id = workflow["id"]
             selected = unique.get(workflow_id)
             if selected is None:
-                if len(unique) == _MAX_WORKFLOWS:
+                if total_limit is not None and len(unique) == total_limit:
                     continue
                 selected = dict(workflow)
                 selected["_agent_keys"] = []

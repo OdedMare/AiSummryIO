@@ -28,10 +28,11 @@ class SummaryService:
         self._store = settings_store
 
     def full_summary(self, run: dict, conversation: dict, progress) -> dict:
-        agents = specialists.available(self)
+        agent_keys = run.get("agent_keys", [])
+        agents = specialists.available(self, agent_keys)
         if agents:
             return specialists.full_summary(
-                self, run, conversation, progress, agents
+                self, run, conversation, progress, agents, bool(agent_keys)
             )
         workflows = self._repository.enabled_workflows(["baseline", "both"])
         keys = run.get("skill_keys", [])
@@ -42,12 +43,23 @@ class SummaryService:
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
-        agents = specialists.available(self)
+        agent_keys = run.get("agent_keys", [])
+        agents = specialists.available(self, agent_keys)
         if agents:
             return specialists.follow_up(
-                self, run, conversation, progress, agents
+                self, run, conversation, progress, agents, bool(agent_keys)
             )
         return routing.follow_up(self, run, conversation, progress)
+
+    def specialist_options(self) -> List[dict]:
+        return [
+            {
+                "content_key": item["content_key"],
+                "name": item["name"],
+                "description": item.get("description", ""),
+            }
+            for item in specialists.available(self)
+        ]
 
     def plan_workflow(self, prompt: str) -> dict:
         return planning.plan_workflow(self, prompt)
