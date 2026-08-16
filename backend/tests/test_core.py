@@ -2,14 +2,20 @@ import json
 import logging
 import sys
 import time
+from io import BytesIO
 from types import ModuleType
 
 import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from app.common.errors import AgentError, ProviderError
-from app.api.models import GeoBoundaries
+from app.common.errors import AgentError, ProviderError, UnavailableError
+from app.api.models import EvaluationCreate, GeoBoundaries
+from app.api.evaluation_excel import evaluation_workbook, read_root_ids
+from app.bl.evaluations import EvaluationRunner
+from app.api.routers import conversations as conversation_routes
+from app.api.routers import health as health_routes
+from app.api.routers import summaries as summary_routes
 from app.common.config.settings import Settings
 from app.common.runtime_settings.normalizers import (
     extract_url_schema,
@@ -20,21 +26,36 @@ from app.common.runtime_settings.normalizers import (
 from app.common.runtime_settings.runtime_settings_store import (
     RuntimeSettingsStore,
 )
+from app.dal.llm.openai_client import OpenAIJsonClient
 from app.dal.providers.flapi.mapper import FlunksMapper
 from app.dal.providers.flapi.provider import FlapiProvider
 from app.dal.providers.flapi.runner_config import (
     build_flapi_config, resolve_timeout,
 )
 from app.dal.repository import Repository
+from app.dal.repository import evaluations as evaluation_repository_module
+from app.dal.repository.evaluations import EvaluationRepository
+from app.dal.repository.content import _set_agent_workflows
+from app.dal.repository.schema import SCHEMA
 from app.dal.repository.conversations import conversation_title
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.bl.workflow_engine_pkg import history
-from app.bl.workflow_engine_pkg.execution import chunk_facts
+from app.bl.workflow_engine_pkg import history, specialists
+from app.bl.workflow_engine_pkg.execution import chunk_facts, fact_chunks
+from app.bl.workflow_engine_pkg.schemas import (
+    FINAL_SCHEMA, LEADER_DELEGATION_SCHEMA, LEADER_REVIEW_SCHEMA,
+    WORKER_ANSWER_SCHEMA, WORKER_PLAN_SCHEMA,
+)
 from app.api.models import (
-    ModelsProbeRequest, SkillPreview, SkillPreviewSection, SummaryCreate,
-    WorkflowStep,
+    DryRunCreate, ModelsProbeRequest, PackageInspect, SkillPreview,
+    SkillPreviewSection, SummaryCreate, WorkflowStep,
+)
+
+
+_MULTIPOLYGON_IDENTIFIER = "MULTIPOLYGON (((%s)))" % ", ".join(
+    ["34.%07d 32.%07d" % (index, index) for index in range(40)]
+    + ["34.0000000 32.0000000"]
 )
 
 
@@ -58,6 +79,206 @@ def test_flunks_mapper_preserves_string_identifiers_and_generic_rows():
         {"name": "בית", "score": 4.0},
         {"name": "סביבה", "score": None},
     ]
+
+
+def test_evaluation_input_preserves_order_duplicates_and_opaque_ids():
+    payload = EvaluationCreate(
+        label="prompt-v3", question="מה מאפיין את המזהה?",
+        root_ids=["00123", "HOME-A/7", "00123"],
+        skill_keys=["risk", "risk"], cooldown_seconds=30,
+    )
+
+    assert payload.root_ids == ["00123", "HOME-A/7", "00123"]
+    assert payload.skill_keys == ["risk"]
+    assert payload.cooldown_seconds == 30
+
+
+def test_evaluation_batch_bulk_insert_uses_psycopg_cursor(monkeypatch):
+    """psycopg3 exposes executemany on cursors, not connections."""
+    inserted = []
+
+    class Result:
+        @staticmethod
+        def fetchone():
+            return None
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        @staticmethod
+        def executemany(_query, rows):
+            inserted.extend(rows)
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        @staticmethod
+        def execute(*_args):
+            return Result()
+
+        @staticmethod
+        def cursor():
+            return Cursor()
+
+        @staticmethod
+        def commit():
+            return None
+
+    monkeypatch.setattr(
+        evaluation_repository_module, "connect", lambda _store: Connection()
+    )
+    repository = EvaluationRepository()
+    repository._store = object()
+    repository.get_evaluation_batch = lambda batch_id: {"id": batch_id}
+
+    repository.create_evaluation_batch(
+        "session", {
+            "label": "בדיקה", "question": "מה קורה?",
+            "skill_keys": [], "cooldown_seconds": 0,
+        }, ["001", "001"],
+    )
+
+    assert [row[2:] for row in inserted] == [(1, "001"), (2, "001")]
+
+
+def test_excel_import_finds_root_id_and_preserves_formatted_leading_zeroes():
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "קלט"
+    sheet.append(["שם", "root id"])
+    sheet.append(["ראשון", "HOME-A"])
+    sheet.append(["שני", 123])
+    sheet["B3"].number_format = "00000"
+    target = BytesIO()
+    workbook.save(target)
+
+    imported = read_root_ids(target.getvalue())
+
+    assert imported["root_ids"] == ["HOME-A", "00123"]
+    assert imported["sheet"] == "קלט"
+    assert imported["column"] == "root id"
+    assert imported["warnings"]
+
+
+def test_evaluation_excel_export_contains_summary_review_and_failure_reason():
+    from openpyxl import load_workbook
+
+    data = evaluation_workbook({
+        "label": "בדיקה", "question": "מה קורה?", "skill_keys": ["risk"],
+        "cooldown_seconds": 15,
+    }, [{
+        "root_id": "001", "status": "failed", "run_id": "run-1",
+        "error": "provider unavailable", "rating": 2, "comment": "חסר",
+        "duration_seconds": 3.5,
+        "result": {
+            "headline": "כותרת", "summary": "סיכום", "coverage": "מלא",
+            "key_findings": ["א"], "risks": ["ב"], "missing_data": [],
+        },
+    }])
+    sheet = load_workbook(BytesIO(data), data_only=True).active
+    values = {cell.value: index + 1 for index, cell in enumerate(sheet[1])}
+
+    assert sheet.cell(2, values["root_id"]).value == "001"
+    assert sheet.cell(2, values["summary"]).value == "סיכום"
+    assert sheet.cell(2, values["error"]).value == "provider unavailable"
+    assert sheet.cell(2, values["rating"]).value == 2
+
+
+def test_evaluation_excel_export_neutralizes_formula_cells():
+    from openpyxl import load_workbook
+
+    data = evaluation_workbook({
+        "label": "=HYPERLINK(\"bad\")", "question": "+cmd",
+        "skill_keys": [], "cooldown_seconds": 0,
+    }, [{
+        "root_id": "@SUM(A1:A2)", "status": "failed", "run_id": None,
+        "error": "-unsafe", "rating": None, "comment": "", "result": {},
+        "duration_seconds": None,
+    }])
+    sheet = load_workbook(BytesIO(data), data_only=False).active
+    values = {cell.value: index + 1 for index, cell in enumerate(sheet[1])}
+
+    assert sheet.cell(2, values["root_id"]).data_type == "s"
+    assert sheet.cell(2, values["root_id"]).value == "'@SUM(A1:A2)"
+    assert sheet.cell(2, values["error"]).value == "'-unsafe"
+
+
+def test_evaluation_runner_pauses_after_inflight_work_and_stops_pending_cases():
+    class Repository:
+        def __init__(self):
+            self.batch = {
+                "id": "batch", "status": "pausing", "queued": 0,
+                "running": 1, "pending": 4,
+            }
+            self.settled = []
+
+        def active_evaluation_batch(self):
+            return dict(self.batch)
+
+        def settle_evaluation(self, _batch_id, status):
+            self.settled.append(status)
+
+    repository = Repository()
+    runner = EvaluationRunner(repository, object(), 3)
+
+    runner.tick()
+    assert repository.settled == []
+
+    repository.batch.update(running=0)
+    runner.tick()
+    assert repository.settled == ["paused"]
+
+    repository.batch.update(status="stopping")
+    runner.tick()
+    assert repository.settled == ["paused", "stopped"]
+
+
+def test_evaluation_runner_admits_only_capacity_without_prequeueing_batch():
+    class Repository:
+        def __init__(self):
+            self.pending = 20
+            self.started = 0
+
+        def active_evaluation_batch(self):
+            return {
+                "id": "batch", "status": "running", "queued": 0,
+                "running": 0, "pending": self.pending,
+            }
+
+        def start_next_evaluation_case(self, _batch_id):
+            self.started += 1
+            self.pending -= 1
+            return {"case_id": str(self.started), "run_id": str(self.started)}
+
+    class Jobs:
+        def __init__(self):
+            self.runs = []
+
+        def submit(self, run_id):
+            self.runs.append(run_id)
+
+    repository, jobs = Repository(), Jobs()
+    EvaluationRunner(repository, jobs, 3).tick()
+
+    assert jobs.runs == ["1", "2", "3"]
+    assert repository.pending == 17
+
+
+def test_schema_persists_one_shared_evaluation_and_cascades_its_cases():
+    assert "CREATE TABLE IF NOT EXISTS evaluation_batches" in SCHEMA
+    assert "CREATE TABLE IF NOT EXISTS evaluation_cases" in SCHEMA
+    assert "evaluation_one_active_idx" in SCHEMA
+    assert "REFERENCES evaluation_batches(id) ON DELETE CASCADE" in SCHEMA
 
 
 def test_normalized_records_are_json_serializable(monkeypatch):
@@ -154,6 +375,108 @@ def test_flapi_provider_retries_once_and_adds_query_provenance(monkeypatch):
     assert records == [{"name": "בית", "_package_query": "home-summary"}]
 
 
+def test_multipolygon_identifier_runs_unchanged_in_inspect_dry_run_and_live():
+    """All three entry points must reach ``runner.run()`` with one WKT value."""
+    assert len(_MULTIPOLYGON_IDENTIFIER) > 256
+
+    package = {
+        "package_key": "geo-facts",
+        "name": "מידע גיאוגרפי",
+        "package_id": "PKG-GEO",
+        "input_cube_name": "area",
+        "input_cube_parameter": "identifier",
+        "input_mode": "single",
+        "output_cube_name": "facts",
+    }
+    workflow = {
+        "id": "workflow-geo",
+        "workflow_key": "geo",
+        "name": "מידע גיאוגרפי",
+        "system_prompt": "",
+        "output_schema": {},
+        "steps": [{
+            "key": "geo",
+            "name": "מידע גיאוגרפי",
+            "package_version_id": "package-geo",
+            "input_source": "workflow.id",
+            "depends_on": [],
+        }],
+    }
+
+    class Settings:
+        flapi_username = "fde"
+        flapi_token = "token"
+        package_timeout_seconds = 5
+        max_parallel_workflows = 1
+        agent_max_rounds = 0
+
+    class Store:
+        @staticmethod
+        def get():
+            return Settings()
+
+    configured, executed = [], []
+
+    class Runner:
+        def __init__(self, values):
+            self.values = values
+
+        def run(self):
+            executed.append(self.values)
+            return pd.DataFrame([{"matched": True}])
+
+    def factory(_settings, config):
+        values = list(config.main_input_cube.values)
+        configured.append(values)
+        return Runner(values)
+
+    class FakeRepository:
+        @staticmethod
+        def get_workflow(_workflow_id):
+            return workflow
+
+        @staticmethod
+        def get_package(_package_id):
+            return package
+
+        @staticmethod
+        def enabled_workflows(_roles):
+            return [workflow]
+
+        @staticmethod
+        def save_evidence(*_args):
+            return "evidence-1"
+
+        @staticmethod
+        def enabled_content(_key, fallback):
+            return fallback
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(*_args):
+            raise AgentError("model unavailable")
+
+    provider = FlapiProvider(Store(), runner_factory=factory)
+    service = SummaryService(FakeRepository(), provider, FakeLlm(), Store())
+
+    # These HTTP contracts used to reject realistic WKT at 256 characters.
+    inspect_payload = PackageInspect(**dict(package, root_id=_MULTIPOLYGON_IDENTIFIER))
+    dry_payload = DryRunCreate(root_id=_MULTIPOLYGON_IDENTIFIER)
+    live_payload = SummaryCreate(root_id=_MULTIPOLYGON_IDENTIFIER)
+
+    service.inspect_tool(package, inspect_payload.root_id)
+    service.dry_run("workflow-geo", dry_payload.root_id)
+    service.full_summary(
+        {"id": "run-live", "question": "", "skill_keys": []},
+        {"root_id": live_payload.root_id, "boundaries": None},
+        lambda *_args: None,
+    )
+
+    expected = [[_MULTIPOLYGON_IDENTIFIER]] * 3
+    assert configured == expected
+    assert executed == expected
+
+
 def test_flapi_outbound_diagnostic_is_comparable_without_leaking_secrets(
     caplog
 ):
@@ -200,6 +523,35 @@ def test_workflow_identifier_mapping_supports_fanout_and_deduplication():
     assert SummaryService._identifiers(step, context) == ["001", "A-7"]
 
 
+def test_workflow_identifier_mapping_keeps_multipolygons_as_values():
+    step = {"input_source": "steps.places", "input_field": "geo"}
+    first = {
+        "type": "MultiPolygon",
+        "coordinates": [[[
+            [34.75, 32.05], [34.80, 32.05],
+            [34.80, 32.10], [34.75, 32.05],
+        ]]],
+    }
+    second = {
+        "type": "MultiPolygon",
+        "coordinates": [[[
+            [35.10, 31.90], [35.20, 31.90],
+            [35.20, 32.00], [35.10, 31.90],
+        ]]],
+    }
+    context = {
+        "workflow": {"id": "ROOT-1"},
+        "steps": {"places": [
+            {"geo": first}, {"geo": second}, {"geo": first}, {"geo": None},
+        ]},
+    }
+
+    assert SummaryService._identifiers(step, context) == [
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)))",
+        "MULTIPOLYGON (((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))",
+    ]
+
+
 def test_a_saved_input_value_is_valid_and_reaches_the_package_unchanged():
     step = {
         "key": "fixed-input", "input_source": "workflow.value",
@@ -218,23 +570,71 @@ def test_a_saved_input_value_is_valid_and_reaches_the_package_unchanged():
 def test_map_boundaries_reach_the_package_as_multipolygon_wkt():
     """The drawn area travels to flunks as one opaque WKT string."""
     step = {"input_source": "workflow.boundaries"}
+    request = SummaryCreate(boundaries={
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[
+                [34.75, 32.05], [34.80, 32.05],
+                [34.80, 32.10], [34.75, 32.05],
+            ]],
+            [[
+                [35.10, 31.90], [35.20, 31.90],
+                [35.20, 32.00], [35.10, 31.90],
+            ]],
+        ],
+    })
     context = {
         "workflow": {
-            "id": "ROOT-1",
-            "boundaries": {
-                "type": "MultiPolygon",
-                "coordinates": [[[
-                    [34.75, 32.05], [34.80, 32.05],
-                    [34.80, 32.10], [34.75, 32.05],
-                ]]],
-            },
+            "id": request.root_id,
+            "boundaries": request.boundaries.model_dump(),
         },
         "steps": {},
     }
 
     assert SummaryService._identifiers(step, context) == [
-        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)))"
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)), "
+        "((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))"
     ]
+
+
+def test_a_map_request_carries_the_drawn_area_as_its_identifier_too():
+    """No identifier typed: the area becomes `root_id` as WKT.
+
+    A step reading `workflow.id` then receives the polygon instead of
+    degrading to a warning, which is the whole point of the substitution —
+    to FLAPI an identifier and a WKT area are equally opaque strings.
+    """
+    request = SummaryCreate(boundaries={
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[
+                [34.75, 32.05], [34.80, 32.05],
+                [34.80, 32.10], [34.75, 32.05],
+            ]],
+            [[
+                [35.10, 31.90], [35.20, 31.90],
+                [35.20, 32.00], [35.10, 31.90],
+            ]],
+        ],
+    })
+    wkt = (
+        "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, 34.75 32.05)), "
+        "((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))"
+    )
+
+    assert request.root_id == wkt
+    assert SummaryService._identifiers(
+        {"input_source": "workflow.id"},
+        {"workflow": {"id": request.root_id}, "steps": {}},
+    ) == [wkt]
+
+
+def test_a_typed_identifier_survives_a_request_that_also_draws_an_area():
+    """Both scopes may travel together, and the typed one is never replaced."""
+    request = SummaryCreate(root_id="HOME-ABC-001", boundaries=_SQUARE)
+
+    assert request.root_id == "HOME-ABC-001"
+    assert request.boundaries is not None
 
 
 def test_a_step_scoped_to_the_map_fails_clearly_without_a_drawn_area():
@@ -574,6 +974,311 @@ def test_progress_is_reported_for_every_completed_workflow():
 
     assert seen[0] == (0, 2)
     assert seen[-1] == (2, 2)
+
+
+def test_leader_delegates_distinct_work_and_deepens_without_rerunning_tools():
+    """Workers get narrow contexts and follow-up reads the saved evidence.
+
+    The unselected Waze workflow must never run, and the Geo Skill's full
+    instructions must not leak into planning or the Web specialist.
+    """
+    workflows = {
+        "google-maps": _specialist_workflow(
+            "wf-google-v3", "google-maps", "Google Maps"
+        ),
+        "waze": _specialist_workflow("wf-waze-v1", "waze", "Waze"),
+        "web-search": _specialist_workflow(
+            "wf-web-v2", "web-search", "Web"
+        ),
+    }
+    agents = [
+        {
+            "id": "agent-geo-v2", "content_key": "geo", "version": 2,
+            "name": "מומחה Geo", "description": "מפות ותנועה",
+            "content": "GEO_AGENT_INSTRUCTIONS",
+            "config": {
+                "workflow_keys": ["google-maps", "waze"],
+                "skill_keys": ["geo-analysis"],
+            },
+        },
+        {
+            "id": "agent-web-v1", "content_key": "web", "version": 1,
+            "name": "מומחה Web", "description": "מידע פתוח ברשת",
+            "content": "WEB_AGENT_INSTRUCTIONS",
+            "config": {
+                "workflow_keys": ["web-search"], "skill_keys": [],
+            },
+        },
+    ]
+
+    class FakeRepository:
+        def __init__(self):
+            self.loaded_skills = []
+
+        @staticmethod
+        def enabled_specialists():
+            return agents
+
+        @staticmethod
+        def enabled_content(_key, fallback):
+            return fallback
+
+        @staticmethod
+        def enabled_workflows_by_keys(keys, _roles):
+            return [workflows[key] for key in keys if key in workflows]
+
+        @staticmethod
+        def enabled_skill_options(keys):
+            return [{
+                "id": "skill-geo-v4", "content_key": "geo-analysis",
+                "version": 4, "name": "ניתוח גאוגרפי",
+                "description": "מזהה דפוסים במרחב",
+            }] if "geo-analysis" in keys else []
+
+        def enabled_skills(self, keys):
+            self.loaded_skills.extend(keys)
+            return [{
+                "id": "skill-geo-v4", "content_key": "geo-analysis",
+                "version": 4, "name": "ניתוח גאוגרפי",
+                "description": "מזהה דפוסים במרחב",
+                "content": "GEO_SKILL_SECRET",
+            }] if "geo-analysis" in keys else []
+
+        @staticmethod
+        def enabled_summary_skills(_keys):
+            return []
+
+        @staticmethod
+        def run_evidence(_run_id):
+            return [
+                {
+                    "id": "ev-google", "workflow_id": "wf-google-v3",
+                    "step_key": "lookup", "records": [{"place": "פארק"}],
+                },
+                {
+                    "id": "ev-web", "workflow_id": "wf-web-v2",
+                    "step_key": "lookup", "records": [{"site": "עירייה"}],
+                },
+            ]
+
+        @staticmethod
+        def get_workflow(workflow_id):
+            return next(item for item in workflows.values()
+                        if item["id"] == workflow_id)
+
+        @staticmethod
+        def get_package(_package_id):
+            return {"output_schema": {}}
+
+    class FakeLlm:
+        def __init__(self):
+            self.review_calls = 0
+            self.plan_calls = []
+
+        def complete_json(self, system, user, schema):
+            payload = json.loads(user)
+            if schema is LEADER_DELEGATION_SCHEMA:
+                return {"assignments": [
+                    {"agent_key": "geo", "task": "בדוק מידע מהמפות"},
+                    {"agent_key": "web", "task": "בדוק מידע מהרשת"},
+                ]}
+            if schema is WORKER_PLAN_SCHEMA:
+                self.plan_calls.append((system, user))
+                if payload["delegated_task"] == "בדוק מידע מהמפות":
+                    return {
+                        "workflow_keys": ["google-maps"],
+                        "skill_keys": ["geo-analysis"],
+                        "use_cached": False,
+                    }
+                return {
+                    "workflow_keys": ["web-search"],
+                    "skill_keys": [], "use_cached": False,
+                }
+            if schema is LEADER_REVIEW_SCHEMA:
+                self.review_calls += 1
+                if self.review_calls == 1:
+                    return {
+                        "done": False,
+                        "questions": [{
+                            "agent_key": "geo",
+                            "question": "מה המשמעות של הקרבה לפארק?",
+                        }],
+                        "missing_data": [],
+                    }
+                return {"done": True, "questions": [], "missing_data": []}
+            if schema is WORKER_ANSWER_SCHEMA:
+                assert payload["leader_question"] == (
+                    "מה המשמעות של הקרבה לפארק?"
+                )
+                return {
+                    "answer": "נמצאה קרבה לפארק.",
+                    "findings": ["הפארק נמצא בנתוני המפה"],
+                    "limitations": [],
+                    # The Web citation is foreign and must be discarded.
+                    "evidence_ids": ["ev-web", "ev-google"],
+                }
+            if schema is FINAL_SCHEMA:
+                return {
+                    "headline": "נאסף מידע מהמפה ומהרשת.",
+                    "summary": "סיכום משולב.", "coverage": "שני מקורות",
+                    "key_findings": ["נמצא פארק"], "risks": [],
+                    "missing_data": [], "suggested_questions": [],
+                    "skill_results": [],
+                }
+            raise AssertionError("unexpected LLM schema")
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                max_parallel_workflows = 4
+                agent_max_rounds = 2
+            return Values()
+
+    repository = FakeRepository()
+    llm = FakeLlm()
+    service = SummaryService(repository, None, llm, FakeStore())
+    executed = []
+
+    def execute(
+        _run, _root_id, workflow, _save_evidence=True, _boundaries=None
+    ):
+        executed.append({
+            "key": workflow["workflow_key"],
+            "system": workflow["system_prompt"],
+        })
+        return {
+            "workflow_id": workflow["id"],
+            "workflow_key": workflow["workflow_key"],
+            "name": workflow["name"], "status": "completed",
+            "summary": "סיכום " + workflow["name"],
+            "coverage": "רשומה אחת", "facts": ["עובדה"],
+            "patterns": [], "outliers": [], "warnings": [],
+            "suggested_questions": [],
+            "evidence_ids": [
+                "ev-google" if workflow["workflow_key"] == "google-maps"
+                else "ev-web"
+            ],
+        }
+
+    service._execute_workflow = execute
+    progress = []
+    result = service.full_summary(
+        {"id": "run-1", "question": "סכם את הפוליגון", "skill_keys": []},
+        {"root_id": "polygon-x", "boundaries": None, "runs": []},
+        lambda completed, total, sections, trace, phase: progress.append(phase),
+    )
+
+    assert sorted(item["key"] for item in executed) == [
+        "google-maps", "web-search",
+    ]
+    assert "waze" not in [item["key"] for item in executed]
+    assert repository.loaded_skills == ["geo-analysis"]
+    assert all("GEO_SKILL_SECRET" not in system + user
+               for system, user in llm.plan_calls)
+    by_workflow = {item["key"]: item["system"] for item in executed}
+    assert "GEO_SKILL_SECRET" in by_workflow["google-maps"]
+    assert "GEO_SKILL_SECRET" not in by_workflow["web-search"]
+    assert llm.review_calls == 2
+    assert result["agent_trace"]["rounds_used"] == 1
+    geo = next(item for item in result["agent_trace"]["specialists"]
+               if item["agent_key"] == "geo")
+    assert geo["answers"][0]["evidence_ids"] == ["ev-google"]
+    assert result["partial"] is False
+    assert "questioning" in progress
+
+
+def _specialist_workflow(version_id, key, name):
+    return {
+        "id": version_id, "workflow_key": key, "version": 1,
+        "name": name, "description": name, "role": "both",
+        "status": "published", "system_prompt": "WORKFLOW_INSTRUCTIONS",
+        "output_schema": {},
+        "steps": [{
+            "key": "lookup", "name": "בדיקה",
+            "package_version_id": "package-v1", "depends_on": [],
+            "input_source": "workflow.id", "input_field": "",
+            "input_value": "", "summary_prompt": "",
+        }],
+    }
+
+
+def test_worker_answer_with_only_foreign_evidence_is_rejected():
+    class FakeRepository:
+        @staticmethod
+        def get_workflow(_workflow_id):
+            return _specialist_workflow("wf-geo", "geo-map", "Geo")
+
+        @staticmethod
+        def get_package(_package_id):
+            return {"output_schema": {}}
+
+    class FakeLlm:
+        @staticmethod
+        def complete_json(_system, _user, schema):
+            assert schema is WORKER_ANSWER_SCHEMA
+            return {
+                "answer": "טענה ללא ראיה שייכת", "findings": ["טענה"],
+                "limitations": [], "evidence_ids": ["ev-web"],
+            }
+
+    service = SummaryService(FakeRepository(), None, FakeLlm(), None)
+    state = {
+        "agent": {
+            "content_key": "geo", "content": "Geo",
+            "config": {"workflow_keys": ["geo-map"]},
+        },
+        "task": "בדוק מפה", "skills": [], "sections": [],
+    }
+    answer = specialists._answer(
+        service, state, "מה נמצא?", [{
+            "id": "ev-web", "workflow_id": "wf-web",
+            "step_key": "lookup", "records": [{"site": "x"}],
+            "_workflow_key": "web-search",
+        }], "worker", 1,
+    )
+
+    assert answer["status"] == "failed"
+    assert answer["evidence_ids"] == []
+    assert "נדחתה" in answer["limitations"][0]
+
+
+def test_zero_agent_rounds_keeps_the_existing_summary_path():
+    class FakeRepository:
+        @staticmethod
+        def enabled_specialists():
+            raise AssertionError("specialists must stay disabled")
+
+        @staticmethod
+        def enabled_workflows(roles):
+            assert roles == ["baseline", "both"]
+            return [{"workflow_key": "legacy"}]
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                agent_max_rounds = 0
+            return Values()
+
+    service = SummaryService(FakeRepository(), None, None, FakeStore())
+    captured = {}
+
+    def execute(
+        _run, _root_id, _question, workflows, _progress, _skills,
+        _boundaries,
+    ):
+        captured["workflows"] = workflows
+        return {"summary": "legacy"}
+
+    service._execute = execute
+    result = service.full_summary(
+        {"id": "run-1", "question": "q", "skill_keys": []},
+        {"root_id": "001", "boundaries": None}, lambda *_args: None,
+    )
+
+    assert result == {"summary": "legacy"}
+    assert captured["workflows"] == [{"workflow_key": "legacy"}]
 
 
 def test_workflow_output_schema_extends_the_shared_section_contract():
@@ -1203,6 +1908,16 @@ def test_schema_name_must_be_a_plain_identifier():
             normalize_database_schema(bad)
 
 
+def test_legacy_schema_setting_is_migrated_to_sumorai(tmp_path):
+    path = tmp_path / "runtime-settings.json"
+    path.write_text(json.dumps({"database_schema": "mosaic_magen"}))
+
+    store = RuntimeSettingsStore(Settings(runtime_settings_file=str(path)))
+
+    assert store.get().database_schema == "sumorai"
+    assert json.loads(path.read_text())["database_schema"] == "sumorai"
+
+
 def test_jdbc_url_from_the_environment_is_normalized_at_boot(tmp_path):
     """Normalization used to run only on UI edits, so a jdbc: URL supplied
     through the environment reached libpq unconverted and failed."""
@@ -1239,6 +1954,21 @@ def test_an_invalid_environment_schema_does_not_prevent_boot(tmp_path):
         database_schema="evil; DROP TABLE x",
     ))
     assert store.get().database_schema == ""
+
+
+def test_agent_rounds_are_bounded_for_environment_and_ui(tmp_path):
+    high = RuntimeSettingsStore(Settings(
+        runtime_settings_file=str(tmp_path / "high.json"),
+        agent_max_rounds=99,
+    ))
+    low = RuntimeSettingsStore(Settings(
+        runtime_settings_file=str(tmp_path / "low.json"),
+        agent_max_rounds=-3,
+    ))
+
+    assert high.get().agent_max_rounds == 5
+    assert low.get().agent_max_rounds == 0
+    assert high.update({"agent_max_rounds": "2"}).agent_max_rounds == 2
 
 
 def _store(tmp_path):
@@ -1284,6 +2014,48 @@ def test_saved_settings_survive_a_restart(tmp_path):
     assert _store(tmp_path).get().llm_model == "gemma4:31b-cloud-v2"
 
 
+def test_llm_timeout_reaches_the_client_and_reacts_to_a_saved_change(
+    tmp_path, monkeypatch
+):
+    """`llm_timeout_seconds` was a setting the UI exposed and nothing applied,
+    leaving the SDK's 600s default in force — long enough for one hung local
+    model server to hold a job worker. The timeout also has to be part of the
+    client cache key, or a client built before the change keeps serving every
+    later call and the saved value silently does nothing."""
+    built = []
+
+    class _Recorder:
+        def __init__(self, **kwargs):
+            built.append(kwargs)
+
+    monkeypatch.setattr("app.dal.llm.openai_client.OpenAI", _Recorder)
+    store = _store(tmp_path)
+    store.update({"llm_timeout_seconds": 7, "openai_api_key": "sk-test"})
+    client = OpenAIJsonClient(store)
+
+    settings = store.get()
+    client._client_for(
+        settings.openai_api_key, settings.llm_base_url,
+        settings.llm_timeout_seconds,
+    )
+    assert built[-1]["timeout"] == 7
+
+    # The same values must not rebuild; a changed timeout must.
+    client._client_for(
+        settings.openai_api_key, settings.llm_base_url,
+        settings.llm_timeout_seconds,
+    )
+    assert len(built) == 1
+
+    updated = store.update({"llm_timeout_seconds": 9})
+    client._client_for(
+        updated.openai_api_key, updated.llm_base_url,
+        updated.llm_timeout_seconds,
+    )
+    assert built[-1]["timeout"] == 9
+    assert len(built) == 2
+
+
 def test_invalid_saved_value_does_not_prevent_boot(tmp_path):
     path = tmp_path / "runtime-settings.json"
     store = _store(tmp_path)
@@ -1323,12 +2095,46 @@ def _workflow_answer(**overrides):
     return answer
 
 
-def _chat_service(answer, tools=None):
+def _skill_answer(**overrides):
+    answer = {
+        "reply": "", "question": None, "resolved": [], "open_points": [],
+        "awaiting_confirmation": False, "ready": False,
+        "draft": {
+            "name": "", "description": "", "content": "",
+            "user_selectable": True, "agent_enabled": True,
+        },
+    }
+    answer.update(overrides)
+    return answer
+
+
+def _specialist_answer(**overrides):
+    answer = {
+        "reply": "", "question": None, "resolved": [], "open_points": [],
+        "awaiting_confirmation": False, "ready": False,
+        "draft": {
+            "name": "", "description": "", "content": "",
+            "agent_enabled": True, "workflow_keys": [], "skill_keys": [],
+        },
+    }
+    answer.update(overrides)
+    return answer
+
+
+def _chat_service(answer, tools=None, workflows=None, content=None):
     """A service whose model returns one canned interview turn."""
     class FakeRepository:
         @staticmethod
         def list_packages():
             return list(tools or [])
+
+        @staticmethod
+        def list_workflows():
+            return list(workflows or [])
+
+        @staticmethod
+        def list_agent_content():
+            return list(content or [])
 
     class FakeLlm:
         payload = None
@@ -1719,6 +2525,98 @@ def test_workflow_chat_explains_an_empty_catalog_without_calling_the_model():
     assert result["open_points"]
 
 
+def test_confirmed_skill_chat_loads_a_complete_draft_without_dropping_text():
+    """A terse confirmation turn must keep the operational Skill text the
+    interview authored earlier, or confirmation would empty the form."""
+    service, _llm = _chat_service(_skill_answer(
+        ready=True,
+        draft={
+            "name": "", "description": "", "content": "",
+            "user_selectable": True, "agent_enabled": True,
+        },
+    ))
+    result = service.plan_skill_chat(
+        [{"role": "fde", "text": "מאשר"}],
+        {
+            "name": "בדיקת ציות", "description": "מאתר חריגות ציות",
+            "content": "Use only supplied sections and cite their names.",
+            "user_selectable": True, "agent_enabled": True,
+        },
+    )
+
+    assert result["ready"] is True
+    assert result["draft"]["name"] == "בדיקת ציות"
+    assert result["draft"]["content"].startswith("Use only")
+
+
+def test_specialist_chat_rejects_capabilities_it_cannot_safely_assign():
+    service, _llm = _chat_service(
+        _specialist_answer(
+            ready=True,
+            draft={
+                "name": "מומחה בעלות", "description": "בודק בעלות",
+                "content": "Use the minimum evidence needed.",
+                "agent_enabled": True,
+                "workflow_keys": ["free", "owned", "off", "invented"],
+                "skill_keys": ["risk", "off-skill", "invented-skill"],
+            },
+        ),
+        workflows=[
+            {"workflow_key": "free", "name": "חופשי", "agent_enabled": True,
+             "agent_id": None},
+            {"workflow_key": "owned", "name": "תפוס", "agent_enabled": True,
+             "agent_id": "agent-other"},
+            {"workflow_key": "off", "name": "כבוי", "agent_enabled": False,
+             "agent_id": None},
+        ],
+        content=[
+            {"id": "agent-other", "content_key": "other", "kind": "agent",
+             "name": "מומחה אחר"},
+            {"id": "skill-risk", "content_key": "risk", "kind": "skill",
+             "name": "סיכונים", "agent_enabled": True},
+            {"id": "skill-off", "content_key": "off-skill", "kind": "skill",
+             "name": "כבוי", "agent_enabled": False},
+        ],
+    )
+    result = service.plan_specialist_chat(
+        [{"role": "fde", "text": "מאשר"}], {}
+    )
+
+    assert result["ready"] is False
+    assert result["draft"]["workflow_keys"] == ["free"]
+    assert result["draft"]["skill_keys"] == ["risk"]
+    assert any("מומחה אחר" in point for point in result["open_points"])
+
+
+def test_specialist_chat_keeps_workflow_owned_by_the_specialist_being_edited():
+    service, _llm = _chat_service(
+        _specialist_answer(
+            ready=True,
+            draft={
+                "name": "מומחה Geo", "description": "מנתח מרחב",
+                "content": "Answer only from supplied geographic evidence.",
+                "agent_enabled": True, "workflow_keys": ["geo"],
+                "skill_keys": [],
+            },
+        ),
+        workflows=[{
+            "workflow_key": "geo", "name": "Geo", "agent_enabled": True,
+            "agent_id": "agent-geo",
+        }],
+        content=[{
+            "id": "agent-geo", "content_key": "geo-specialist",
+            "kind": "agent", "name": "מומחה Geo",
+        }],
+    )
+    result = service.plan_specialist_chat(
+        [{"role": "fde", "text": "מאשר"}],
+        {"content_key": "geo-specialist"},
+    )
+
+    assert result["ready"] is True
+    assert result["draft"]["workflow_keys"] == ["geo"]
+
+
 def test_plan_chat_requires_at_least_one_message():
     from app.api.models import PlanChatCreate
 
@@ -1757,6 +2655,20 @@ def test_each_interview_sends_its_own_prompt_file():
     }])
     service.plan_workflow_chat([{"role": "fde", "text": "שלום"}], {})
     assert llm.system == prompts.load("workflow_interview")
+
+    service, llm = _chat_service(_skill_answer())
+    service.plan_skill_chat([{"role": "fde", "text": "שלום"}], {})
+    assert llm.system == prompts.load("skill_interview")
+
+    service, llm = _chat_service(
+        _specialist_answer(),
+        workflows=[{
+            "workflow_key": "ownership", "name": "בעלות",
+            "description": "", "agent_enabled": True, "agent_id": None,
+        }],
+    )
+    service.plan_specialist_chat([{"role": "fde", "text": "שלום"}], {})
+    assert llm.system == prompts.load("specialist_interview")
 
 
 def test_every_shipped_prompt_composes():
@@ -1877,6 +2789,284 @@ def test_summary_fields_policy_still_hides_internal_columns_from_rows():
 
     assert chunk["rows"] == [{"owner_name": "דנה"}]
     assert "internal_code" not in chunk["stats"]
+
+
+def test_six_thousand_rows_become_one_bounded_exact_digest():
+    records = [
+        {
+            "id": "ID-%04d" % index,
+            "state": ("פתוח", "סגור", "ממתין")[index % 3],
+            "amount": index,
+            "description": "רשומת בדיקה %d" % index,
+        }
+        for index in range(6000)
+    ]
+
+    facts = chunk_facts({"cases": records})
+
+    assert len(facts) == 1
+    digest = facts[0]
+    assert digest["row_count"] == 6000
+    assert digest["sampled_row_count"] == 100
+    assert digest["rows"][0]["id"] == "ID-0000"
+    assert digest["rows"][-1]["id"] == "ID-5999"
+    assert digest["stats"]["state"]["counts"] == {
+        "ממתין": 2000, "סגור": 2000, "פתוח": 2000,
+    }
+    assert len(json.dumps(facts, ensure_ascii=False).encode("utf-8")) < 100_000
+
+
+def test_section_summary_maps_every_row_and_bounds_each_reduce_call():
+    records = [{"id": "ID-%04d" % index} for index in range(1301)]
+    facts = fact_chunks({"cases": records})
+
+    assert len(facts) == 14
+    assert [row["id"] for fact in facts for row in fact["rows"]] == [
+        row["id"] for row in records
+    ]
+    assert all(len(fact["rows"]) <= 100 for fact in facts)
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            return type("Settings", (), {"max_parallel_workflows": 4})()
+
+    class FakeLlm:
+        def __init__(self):
+            self.payloads = []
+
+        def complete_json(self, _system, user, _schema):
+            payload = json.loads(user)
+            self.payloads.append(payload)
+            if "fact_chunk" in payload:
+                rows = payload["fact_chunk"]["rows"]
+                marker = "%s–%s" % (rows[0]["id"], rows[-1]["id"])
+            else:
+                marker = "reduced"
+            return {
+                "summary": marker,
+                "coverage": marker,
+                "facts": [marker],
+                "patterns": [],
+                "outliers": [],
+                "warnings": [],
+                "suggested_questions": [],
+            }
+
+    llm = FakeLlm()
+    service = SummaryService(None, None, llm, FakeStore())
+    result = service._section_summary(
+        {"name": "תיקים", "system_prompt": "", "output_schema": {}},
+        facts,
+        [],
+    )
+
+    map_payloads = [item for item in llm.payloads if "fact_chunk" in item]
+    reduce_payloads = [item for item in llm.payloads if "chunk_analyses" in item]
+    assert len(map_payloads) == 14
+    assert max(len(item["chunk_analyses"]) for item in reduce_payloads) <= 12
+    assert reduce_payloads[-1]["whole_dataset"][0]["row_count"] == 1301
+    assert result["summary"] == "reduced"
+
+
+def test_specialists_share_duplicate_workflows_and_cap_total_breadth():
+    shared = {"id": "w1", "workflow_key": "shared", "_agent_key": "a"}
+    states = [
+        {
+            "agent": {"content_key": "a"},
+            "workflows": [shared, {"id": "w2", "workflow_key": "two"}],
+        },
+        {
+            "agent": {"content_key": "b"},
+            "workflows": [
+                dict(shared),
+                {"id": "w3", "workflow_key": "three"},
+                {"id": "w4", "workflow_key": "four"},
+            ],
+        },
+    ]
+
+    workflows = specialists._bounded_workflows(states)
+
+    assert [item["id"] for item in workflows] == ["w1", "w2", "w3"]
+    assert workflows[0]["_agent_keys"] == ["a", "b"]
+    assert [item["id"] for item in states[1]["workflows"]] == ["w1", "w3"]
+
+
+def test_the_leader_review_sees_summaries_not_every_fact():
+    """The review payload must not grow with the rows collected.
+
+    It is resent on every round, so carrying whole `facts` made a long run
+    truncate on a local model — and a truncated review returns an arbitrary
+    done=true instead of a visible error. The leader only decides *whether*
+    to ask more, so a count replaces the facts while patterns and outliers,
+    already bounded summaries, stay.
+
+    `_report_section` is asserted in the same test on purpose: the worker
+    answers *from* the evidence and still needs the facts, so this pins which
+    of the two views may be trimmed.
+    """
+    section = {
+        "workflow_key": "permits", "name": "היתרי בנייה", "status": "partial",
+        "summary": "נמצאו 41 היתרים", "coverage": "412 שורות",
+        "facts": ["fact-%d" % index for index in range(40)],
+        "patterns": ["263 מתוך 412 באזור א׳"],
+        "outliers": ["היתר אחד מ-1987"],
+        "warnings": ["שלב 2 נכשל"],
+    }
+
+    review = specialists._review_section(section)
+
+    assert "facts" not in review
+    assert review["fact_count"] == 40
+    assert review["patterns"] == ["263 מתוך 412 באזור א׳"]
+    assert review["outliers"] == ["היתר אחד מ-1987"]
+    assert review["warnings"] == ["שלב 2 נכשל"]
+    assert review["summary"] == "נמצאו 41 היתרים"
+    assert review["status"] == "partial"
+
+    # The worker's own view is the one that must keep them.
+    assert specialists._report_section(section)["facts"] == section["facts"]
+
+    states = [{
+        "agent": {"content_key": "permits-agent", "name": "מומחה היתרים"},
+        "status": "partial", "sections": [section], "answers": [],
+    }]
+    assert specialists._reports(states)[0]["sections"][0] == review
+
+
+def test_liveness_fails_only_once_abandoned_threads_have_eaten_the_pool(
+    monkeypatch
+):
+    """A wedged pool has to be visible to something that can act on it.
+
+    A thread lost inside flunks is never reclaimed, so once as many have been
+    abandoned as the pool holds, no full run can start again — while the port
+    stays open and a tcpSocket probe stays green. `/health` keeps answering
+    either way, because a human still needs the numbers when the answer is
+    bad.
+    """
+    counter = {"abandoned": 0}
+    monkeypatch.setattr(
+        health_routes, "abandoned_workers", lambda: counter["abandoned"]
+    )
+
+    class Context:
+        repository = type("R", (), {"health": staticmethod(lambda: {
+            "database": "ok"
+        })})()
+        jobs = type("J", (), {"capacity": staticmethod(lambda: 3)})()
+
+    router = health_routes.build(Context())
+    routes = {route.path: route.endpoint for route in router.routes}
+
+    assert routes["/health"]() == {
+        "status": "ok", "database": "ok",
+        "abandoned_workers": 0, "worker_capacity": 3,
+    }
+    assert routes["/health/live"]() == {"status": "ok"}
+
+    # Below capacity the pool still has a worker, so the pod must stay up.
+    counter["abandoned"] = 2
+    assert routes["/health/live"]() == {"status": "ok"}
+    assert routes["/health"]()["abandoned_workers"] == 2
+
+    counter["abandoned"] = 3
+    with pytest.raises(UnavailableError) as failure:
+        routes["/health/live"]()
+    assert failure.value.status_code == 503
+    # /health must keep reporting rather than failing with it.
+    assert routes["/health"]()["abandoned_workers"] == 3
+
+
+def test_delete_conversation_route_uses_the_callers_session():
+    captured = {}
+
+    class Repository:
+        @staticmethod
+        def delete_conversation(conversation_id, session_id):
+            captured.update(conversation_id=conversation_id, session_id=session_id)
+            return {"deleted": conversation_id, "title": "בדיקה"}
+
+    class Context:
+        repository = Repository()
+
+        @staticmethod
+        def user_session():
+            return "dependency-session"
+
+        @staticmethod
+        def set_session_cookie(_response, _session_id):
+            return None
+
+    router = conversation_routes.build(Context())
+    endpoint = next(
+        route.endpoint for route in router.routes
+        if route.path == "/conversations/{conversation_id}"
+        and "DELETE" in route.methods
+    )
+
+    result = endpoint("conversation-1", "owned-session")
+
+    assert result["deleted"] == "conversation-1"
+    assert captured == {
+        "conversation_id": "conversation-1", "session_id": "owned-session",
+    }
+
+
+def test_evidence_routes_authorize_and_page_without_loading_all_records():
+    calls = []
+
+    class Repository:
+        @staticmethod
+        def get_run(run_id):
+            calls.append(("run", run_id))
+            return {"id": run_id, "conversation_id": "conversation-1"}
+
+        @staticmethod
+        def get_conversation(conversation_id, session_id):
+            calls.append(("conversation", conversation_id, session_id))
+            return {"id": conversation_id}
+
+        @staticmethod
+        def evidence_catalog(run_id):
+            calls.append(("catalog", run_id))
+            return [{"id": "evidence-1", "row_count": 6000}]
+
+        @staticmethod
+        def evidence_page(run_id, evidence_id, offset, limit):
+            calls.append(("page", run_id, evidence_id, offset, limit))
+            return {"records": [{"id": offset}], "has_more": True}
+
+    class Context:
+        repository = Repository()
+
+        @staticmethod
+        def user_session():
+            return "dependency-session"
+
+    router = summary_routes.build(Context())
+    catalog = next(
+        route.endpoint for route in router.routes
+        if route.path == "/runs/{run_id}/evidence"
+    )
+    page = next(
+        route.endpoint for route in router.routes
+        if route.path == "/runs/{run_id}/evidence/{evidence_id}"
+    )
+
+    assert catalog("run-1", "owned-session")[0]["row_count"] == 6000
+    assert page("run-1", "evidence-1", 200, 50, "owned-session") == {
+        "records": [{"id": 200}], "has_more": True,
+    }
+    assert calls == [
+        ("run", "run-1"),
+        ("conversation", "conversation-1", "owned-session"),
+        ("catalog", "run-1"),
+        ("run", "run-1"),
+        ("conversation", "conversation-1", "owned-session"),
+        ("page", "run-1", "evidence-1", 200, 50),
+    ]
 
 
 def test_a_section_falling_back_is_marked_degraded_rather_than_looking_thin():
@@ -2342,8 +3532,9 @@ class _EditableWorkflows(Repository):
     it.
     """
 
-    def __init__(self, agent_enabled=True, steps=None):
+    def __init__(self, agent_enabled=True, steps=None, has_agents=False):
         self._store = None
+        self._has_agents = has_agents
         self._row = {
             "id": "wf", "workflow_key": "ownership", "name": "Ownership",
             "agent_enabled": agent_enabled, "steps": steps or [],
@@ -2355,6 +3546,11 @@ class _EditableWorkflows(Repository):
 
     def get_package(self, package_version_id):
         return {"name": "tool", "example_input": [], "example_output": []}
+
+    def _all(self, query, params=()):
+        if "FROM agent_content" in query and self._has_agents:
+            return [{"id": params[0] if params else "agent-1"}]
+        return []
 
 
 class _FakeConnection:
@@ -2400,6 +3596,56 @@ def test_saving_a_workflow_carries_the_agent_switch(monkeypatch):
     update = next(s for s in repository.statements if s.startswith("UPDATE"))
     assert "agent_enabled=%s" in update
     assert "status" not in update, "publishing state no longer exists"
+
+
+def test_an_active_workflow_is_saved_with_the_chosen_agent(monkeypatch):
+    repository = _EditableWorkflows(
+        steps=[_STEP], has_agents=True,
+    )
+    _capture_sql(monkeypatch, repository)
+
+    repository.update_workflow("wf", {
+        "name": "Ownership", "agent_enabled": True,
+        "agent_id": "agent-1", "steps": [_STEP],
+    })
+
+    update = next(s for s in repository.statements if s.startswith("UPDATE"))
+    assert "agent_id=%s" in update
+
+
+def test_an_active_workflow_requires_an_agent_when_agents_exist(monkeypatch):
+    repository = _EditableWorkflows(
+        steps=[_STEP], has_agents=True,
+    )
+    _capture_sql(monkeypatch, repository)
+
+    with pytest.raises(ValueError, match="סוכן אחראי"):
+        repository.update_workflow("wf", {
+            "name": "Ownership", "agent_enabled": True, "steps": [_STEP],
+        })
+
+    assert not repository.statements
+
+
+def test_schema_owns_workflow_assignment_in_the_real_table():
+    assert "agent_id TEXT" in SCHEMA
+    assert "FOREIGN KEY (agent_id) REFERENCES agent_content(id)" in SCHEMA
+    assert "table_schema = current_schema()" in SCHEMA
+
+
+def test_specialist_save_writes_the_workflow_owner_column():
+    statements = []
+    connection = _FakeConnection(statements)
+
+    _set_agent_workflows(connection, "agent-1", {
+        "kind": "agent",
+        "config": {"workflow_keys": ["ownership"]},
+    })
+
+    assert statements == [
+        "UPDATE summary_workflows SET agent_id=NULL WHERE agent_id=%s",
+        "UPDATE summary_workflows SET agent_id=%s WHERE workflow_key = ANY(%s)",
+    ]
 
 
 def test_a_workflow_the_agent_uses_can_be_saved_without_examples(monkeypatch):

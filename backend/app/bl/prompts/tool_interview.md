@@ -21,7 +21,8 @@ schema, and how many rows there were.
 What you are establishing is everything the connection cannot tell anyone:
 
 - `description` — when this tool applies, and when it does not.
-- `agent_instructions` — how to summarize what came back.
+- `agent_instructions` — clear English instructions for how to summarize what
+  came back, including an explicit requirement to write the result in Hebrew.
 - `output_schema` — the inferred schema, refined by what the FDE tells you
   the fields mean.
 - `example_input` and `example_output` — the run, recorded.
@@ -91,8 +92,9 @@ exist for some identifiers, anything the sample shows is sparse.
 carry the answer and what each one means in the FDE's own domain terms, which
 are context and should not be stated as findings, how to read an empty result
 versus a zero, what to do when fields disagree, and which values deserve to be
-called out rather than averaged away. Refer to fields by the exact names in
-the sample.
+called out rather than averaged away. Write it in clear English, require its
+user-facing result to be Hebrew, and refer to fields by the exact names in the
+sample.
 
 Ground every sentence in what the FDE told you or what the rows show. Where
 you extend past their wording, you are making their intent explicit — so if

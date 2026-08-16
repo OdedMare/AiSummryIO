@@ -60,12 +60,24 @@ uvicorn app.main:app --reload
   stays in the `agent_content` table** — Skills, the `workflow-planner` prompt,
   and a workflow's `system_prompt` are edited live in Agent Studio and must not
   move into files. See [app/bl/prompts/README.md](app/bl/prompts/README.md).
+- `bl/workflow_engine_pkg/specialists.py` — bounded leader/worker
+  orchestration over agent-enabled specialists. A leader delegates a focused task
+  to at most two specialists; each worker plans only against the workflows and
+  Skills assigned to it; the leader then reviews and may ask follow-up
+  questions for up to `agent_max_rounds` rounds before synthesis. Active only
+  when `agent_max_rounds > 0` — at 0 the existing summary path runs unchanged.
 - `bl/workflow_engine_pkg/history.py` — conversation memory: the thread's
   recent turns, and the follow-up restated to stand alone before routing.
   The user's original wording is what is stored and shown; the rewrite is
   internal, and every failure path falls back to the question as typed.
 - `bl/jobs.py` — `JobRunner`: bounded background queue. Interactive follow-ups
-  have priority.
+  have priority. A daemon watchdog reports in-flight runs every 15s, names any
+  past 180s as stuck, and purges expired conversations every 5 minutes.
+  `capacity()` is exposed so a health check can compare it against threads
+  abandoned to FLAPI timeouts.
+- `common/logging_setup.py` — logging configuration and the `trace(name)`
+  logger factory, called from `main.py` **before any other logger is
+  constructed** so no start-up line is lost. Also owns `abandoned_workers()`.
 - `api/` — Pydantic HTTP contracts and signed authentication.
 - `main.py` — FastAPI routes and composition root.
 
@@ -84,6 +96,12 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   serialized by `common/geometry.py` to an OGC `MULTIPOLYGON` WKT string and
   passed into `PackageInputCube.values` like any other opaque identifier. A
   step that requests it fails clearly when no area was drawn.
+- **A request scoped only by an area carries that area as its `root_id` too.**
+  `SummaryCreate` fills the identifier with the same `MULTIPOLYGON` WKT when
+  the caller sent no identifier, so `workflow.id` steps run against the drawn
+  polygon instead of degrading to a warning, and every enabled workflow — not
+  only the geo-capable ones — can answer a map request. A typed identifier is
+  never overwritten.
 - Package input mode is `single` or `many`; both preserve strings.
 - Claims require evidence references. Package failures stay visible and do
   not discard successful sections.
@@ -92,10 +110,10 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   from individual facts so a 300-record split does not read as the equal of one
   record. A section the model failed to produce is marked `degraded: true`
   rather than passed off as a thin result.
-- Summary synthesis receives whole `rows` plus `stats` computed in Python over
-  every row — frequency, ranges, and emptiness are arithmetic, so deriving them
-  in code is exact and cannot be hallucinated. The model states counts from
-  `stats`; it never counts for itself.
+- Summary synthesis maps over bounded, disjoint `rows` batches that together
+  contain every summary-eligible row, then reduces every batch analysis into
+  one section. `stats` is still computed in Python over the whole dataset —
+  frequency, ranges, and emptiness are exact and never counted by the model.
 - `_safe_section` deliberately withholds `evidence_ids` from the final-summary
   model, so the summary is traceable only at section granularity. Per-claim
   citations would require changing what that call receives — do not render them
@@ -113,7 +131,25 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   the original question rather than failing the run.
 - Conversation history is derived from `summary_runs`, never stored in a
   second table, and only finished runs become turns.
-- Never log API keys, tokens, raw package bodies, or full user IDs.
+- **Agent mode is bounded on purpose.** At most 2 specialists per question and
+  3 workflows overall; `agent_max_rounds` is clamped to 0–5 in both settings
+  and the runtime store. Raise the caps only after load tests show the extra
+  breadth improves answers — otherwise one question multiplies into dozens of
+  model and FLAPI calls. A leader routing failure must fail *small*: it falls
+  back to one specialist, never to assigning all of them.
+- `agent_max_rounds = 0` must keep the pre-agent summary path byte-for-byte
+  intact; there is a test pinning exactly that.
+- `llm_timeout_seconds` bounds **one** HTTP completion, not a whole logical
+  call — the degradation ladder and the parse retry above it each get their
+  own, so a pathological call can take a multiple of it. It exists to stop a
+  hung model server from holding a worker for the SDK's 600s default.
+- Never log API keys, tokens, raw package bodies, or full user IDs. Diagnostic
+  logging of outbound credentials is masked; there is a test asserting it.
+- Unhandled exceptions are logged with a full traceback and returned as JSON.
+  Starlette's default is a bare non-JSON "Internal Server Error", which the
+  client then fails to parse — leaving a 500 with no cause on either side.
+- The run poll (`/api/runs/{id}`, every 1.5s) is traced at DEBUG only. At INFO
+  it buries every other line.
 - There is no authentication: FDE routes are open and the service must be
   deployed on a trusted network only. Anonymous conversation sessions still
   use an HttpOnly signed cookie.
@@ -129,6 +165,16 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   optional documentation rather than a requirement.
 - A disabled or deleted prompt falls back to the built-in text under
   `bl/prompts/`, so turning one off is a way back to the shipped wording.
+- **A specialist is validated when it is enabled, not when it is saved.**
+  Publishing used to be that moment; enabling is now the point its config
+  starts being used, so `_validate_specialist` runs from create/update when
+  `agent_enabled` is true: every chosen workflow and Skill must itself be
+  enabled. **`summary_workflows.agent_id` is the single source of truth for
+  ownership**, and a workflow may belong to only one specialist. The API
+  derives `config.workflow_keys` from that column so older callers keep their
+  shape without reintroducing JSON state that can drift. A disabled specialist
+  skips the enabled-dependency gate for the same reason a draft did — it routes
+  nothing, and half-built work has to stay savable.
 - Because a row is mutable, `summary_evidence` records which workflow ran but
   no longer pins the exact steps it ran with.
 - Keep the design simple: add a module only when it owns a distinct boundary.

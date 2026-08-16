@@ -15,7 +15,7 @@ modules. It opens a connection per operation through
 | `content.py` | Skills and prompts |
 | `conversations.py` | Conversations, retention, and thread history |
 | `runs.py` | Runs, progress, and evidence |
-| `feedback.py` | Feedback and review queue |
+| `feedback.py` | Feedback, the review queue, and per-route rating aggregates |
 | `validation.py` | Pure workflow-step validation |
 | `schema.py` | DDL used at startup |
 | `seed_content.py` | Built-in Skills and prompts |
@@ -33,6 +33,33 @@ answer, and offering it as context would invite the model to treat a question
 that was never answered as if it had been. The newest turns are selected and
 then reversed, so a long thread keeps its most recent context.
 
+## Feedback ratings
+
+`summary_feedback.rating` is a 1-5 star rating (`CHECK (rating BETWEEN 1 AND
+5)`), rating a whole run's answer rather than one workflow in isolation.
+`route_ratings()` turns that into an average per **route** — a real
+workflow's row id, or `"tool:" + package_version_id"` for a standalone tool —
+keyed exactly as `summary_evidence.workflow_id` already is, so the caller
+never has to join back to `summary_workflows`/`summary_packages`. A run
+answered by several workflows counts its rating toward each of them, which is
+why `routing.py` treats a route's `rating_count` as a confidence signal, not
+just its `avg_rating`. `review_queue()` still lists a run for an FDE to look
+at on a poor rating (`rating <= 2`) or any left comment.
+
+`schema.py` migrates the constraint itself, not just the column: it was
+`CHECK (rating IN (-1,1))` (thumbs up/down) before the 1-5 scale. `ADD
+CONSTRAINT` validates every existing row, so re-adding it unconditionally
+against a database still carrying old -1 rows failed startup outright, on
+every restart. The migration now drops the old constraint, and — only when
+`pg_get_constraintdef` shows positive evidence it *was* the old one (a
+literal `-1`, which never appears in `BETWEEN 1 AND 5`) — translates old
+rows onto the new scale's meaning (thumbs-down to the worst star, thumbs-up
+to the best) before re-adding it. That evidence check is what keeps this
+one-time: once the constraint reads `BETWEEN 1 AND 5`, a genuine 1-star
+rating collected afterward is never mistaken for the old thumbs-up again. A
+final unconditional clamp is belt-and-braces for anything still out of
+range regardless of the constraint's prior shape.
+
 ## Collapsing the old version history and publish state
 
 `schema.py` carries a one-time migration, guarded on the `version` column so
@@ -49,17 +76,16 @@ A second guarded block replaces `status` with `agent_enabled`, set from
 `status = 'published'` so a draft or archived row stays unselected instead of
 going live the moment the migration runs.
 
-## `summary_feedback.rating`'s CHECK constraint
-
-The `rating IN (-1,1)` rule is added out-of-band (an `UPDATE` clamp followed
-by a `pg_constraint`-guarded `ALTER TABLE ADD CONSTRAINT`), not inline on
-`CREATE TABLE IF NOT EXISTS summary_feedback`. Inline only applies the first
-time the table is created — `IF NOT EXISTS` skips the whole statement,
-constraint included, on a database that already has the table. Any row
-outside `{-1,1}` (a wider scale from before this contract, or a hand-written
-row) would otherwise make `ADD CONSTRAINT` fail every time the app starts.
-Clamping first (`> 0` keeps the "up" vote, everything else becomes "down")
-makes the constraint safe to (re)apply unconditionally.
+`schema.py` is sent to Postgres as one script, and a `COMMIT;` sits after
+every independent block. Without those, the whole script runs as a single
+implicit transaction, so one guarded block failing on a particular database's
+data rolls back every other statement already run in that call — including
+unrelated `ADD COLUMN IF NOT EXISTS` statements. That once left
+`summary_workflows` permanently missing `agent_enabled`: the backfill sits
+later in the file than the `summary_feedback` rating migration above, so a
+startup that failed there re-failed at the same earlier block on every
+restart, before ever reaching and committing the later one. Add a new guarded
+migration after its own `COMMIT;` so a failure there stays contained to it.
 
 ## Rules
 
@@ -72,7 +98,13 @@ makes the constraint safe to (re)apply unconditionally.
 - There is no publishing. `agent_enabled` is an ordinary column written by
   the same create/update as every other field, and `enabled_workflows`,
   `enabled_summary_skills`, and `enabled_content` are what the agent reads.
-  `validate_steps` on create and update is the only gate a save must clear.
+  `validate_steps` on create and update is the structural gate; owner selection
+  is validated separately against real specialist rows.
+- A workflow's specialist owner is `summary_workflows.agent_id`, a foreign key
+  to the owning `agent_content` row. `config.workflow_keys` is an API projection
+  built from that column, never stored. Saving from either editor updates the
+  same owner field; enabling a workflow requires an owner once specialists
+  exist.
 - `delete_*` takes a row id. A tool is refused while a workflow step points at
   it, and the blocking workflows are named; a workflow and a Skill or prompt
   have nothing pinning them, so they go. Deleting content is a reset for a

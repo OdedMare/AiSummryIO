@@ -59,6 +59,9 @@ function Done({ section }: { section: SummarySection }) {
     and is owed an answer about their question, not about our scheduler. */
 function statusLabel(run: SummaryRun, arrived: number): string {
   if (run.status === "queued") return "הסוכן מתחיל…";
+  if (run.progress.phase === "delegating") return "המנהל בוחר מומחים…";
+  if (run.progress.phase === "questioning") return "המנהל מעמיק עם המומחים…";
+  if (run.progress.phase === "synthesizing") return "המנהל מחבר את התשובה…";
   if (!arrived) return "הסוכן אוסף מידע מהמקורות…";
   return "הסוכן מנסח את התשובה…";
 }

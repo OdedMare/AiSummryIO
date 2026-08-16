@@ -19,6 +19,46 @@ export interface SummarySection {
   /** The model did not answer; the text is counts, not a summary. */
   degraded?: boolean;
   evidence_ids: string[];
+  agent_key?: string;
+}
+
+export type AgentPhase =
+  | "delegating"
+  | "running_workflows"
+  | "questioning"
+  | "synthesizing"
+  | "completed";
+
+export interface SpecialistAnswer {
+  round: number;
+  question: string;
+  answer: string;
+  findings: string[];
+  limitations: string[];
+  evidence_ids: string[];
+  status: "completed" | "failed";
+}
+
+export interface SpecialistTrace {
+  agent_id: string;
+  agent_key: string;
+  name: string;
+  task: string;
+  status: "planned" | "running" | "completed" | "partial" | "failed";
+  workflow_ids: string[];
+  workflow_keys: string[];
+  skill_ids: string[];
+  skill_keys: string[];
+  answers: SpecialistAnswer[];
+  error: string;
+}
+
+export interface AgentTrace {
+  phase: AgentPhase;
+  max_rounds: number;
+  rounds_used: number;
+  specialists: SpecialistTrace[];
+  missing_data?: string[];
 }
 
 export interface SummaryResult {
@@ -40,6 +80,7 @@ export interface SummaryResult {
   /** Clickable answers to the clarifying question. Empty when the honest
       answers were not a short list — free text stays the way out. */
   options?: ClarifyOption[];
+  agent_trace?: AgentTrace;
 }
 
 export interface ClarifyOption {
@@ -60,6 +101,8 @@ export interface SummaryRun {
     completed: number;
     total: number;
     sections: SummarySection[];
+    phase?: AgentPhase;
+    agent_trace?: AgentTrace;
   };
   result: SummaryResult | null;
   error: string;
@@ -156,6 +199,8 @@ export interface WorkflowVersion {
   role: "baseline" | "detail" | "both";
   /** Whether the agent may select this route. There is no publishing step. */
   agent_enabled: boolean;
+  /** Specialist owner; null keeps the workflow in direct/non-agent mode. */
+  agent_id: string | null;
   system_prompt: string;
   output_schema: Record<string, unknown>;
   examples: Array<Record<string, unknown>>;
@@ -250,13 +295,42 @@ export interface WorkflowPlanChatTurn extends PlanChatTurn {
   draft: WorkflowPlan;
 }
 
-export interface AgentContent {
-  id: string;
-  content_key: string;
-  kind: "skill" | "prompt";
+export interface SkillPlanDraft {
   name: string;
   description: string;
   content: string;
+  user_selectable: boolean;
+  agent_enabled: boolean;
+}
+
+export interface SpecialistPlanDraft {
+  name: string;
+  description: string;
+  content: string;
+  agent_enabled: boolean;
+  workflow_keys: string[];
+  skill_keys: string[];
+}
+
+export interface SkillPlanChatTurn extends PlanChatTurn {
+  draft: SkillPlanDraft;
+}
+
+export interface SpecialistPlanChatTurn extends PlanChatTurn {
+  draft: SpecialistPlanDraft;
+}
+
+export interface AgentContent {
+  id: string;
+  content_key: string;
+  kind: "skill" | "prompt" | "agent";
+  name: string;
+  description: string;
+  content: string;
+  config?: {
+    workflow_keys: string[];
+    skill_keys: string[];
+  };
   user_selectable: boolean;
   agent_enabled: boolean;
 }
@@ -265,6 +339,89 @@ export interface Evidence {
   id: string;
   workflow_id: string;
   step_key: string;
-  records: Array<Record<string, unknown>>;
+  row_count: number;
   created_at: string;
+}
+
+export interface EvidencePage extends Evidence {
+  records: Array<Record<string, unknown>>;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+}
+
+export type EvaluationStatus =
+  | "running"
+  | "pausing"
+  | "paused"
+  | "stopping"
+  | "stopped"
+  | "completed";
+
+export type EvaluationCaseStatus =
+  | "pending"
+  | RunStatus
+  | "stopped";
+
+export interface EvaluationBatch {
+  id: string;
+  label: string;
+  question: string;
+  skill_keys: string[];
+  cooldown_seconds: number;
+  status: EvaluationStatus;
+  total: number;
+  pending: number;
+  queued: number;
+  running: number;
+  completed: number;
+  partial: number;
+  failed: number;
+  stopped: number;
+  reviewed: number;
+  average_rating: number | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+
+export interface EvaluationCase {
+  id: string;
+  batch_id: string;
+  position: number;
+  root_id: string;
+  status: EvaluationCaseStatus;
+  rating: 1 | 2 | 3 | 4 | 5 | null;
+  comment: string;
+  error: string;
+  headline: string | null;
+  summary: string | null;
+  duration_seconds: number | null;
+  run_id: string | null;
+}
+
+export interface EvaluationCaseDetail extends EvaluationCase {
+  conversation_id: string | null;
+  kind: "full" | null;
+  question: string | null;
+  skill_keys: string[] | null;
+  run_status: RunStatus | null;
+  progress: SummaryRun["progress"] | null;
+  result: SummaryResult | null;
+  run_created_at: string | null;
+  finished_at: string | null;
+}
+
+export interface EvaluationCasePage {
+  items: EvaluationCase[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface EvaluationImport {
+  root_ids: string[];
+  sheet: string;
+  column: string;
+  warnings: string[];
 }

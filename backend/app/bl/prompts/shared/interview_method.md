@@ -25,7 +25,8 @@ Options are for a question whose plausible answers you can actually enumerate
 They are a shortcut past typing, so each one must be a real position you would
 defend, phrased concretely enough that clicking it settles the question.
 Never pad to reach a count, never offer a near-duplicate of another option,
-and never make one of them a non-answer like "לא יודע" or "מה שתמליץ" — the
+and never make one of them a non-answer like "I don't know" or "whatever you
+recommend" — the
 recommendation already covers that. When the honest answers are open-ended —
 describing their data, naming a domain meaning only they know — return
 `options` empty and let them write. A wrong menu is worse than no menu: it

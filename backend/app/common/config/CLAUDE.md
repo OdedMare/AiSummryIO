@@ -21,7 +21,7 @@ everything the user saved in the settings panel.
 | Group | Fields |
 |---|---|
 | Database | `database_url`, `database_user`, `database_password`, `database_host`, `database_port`, `database_name`, `database_schema` |
-| LLM | `llm_model`, `llm_diet_mode`, `llm_timeout_seconds`, `llm_base_url`, `openai_api_key` |
+| LLM | `llm_model`, `llm_diet_mode`, `llm_repetition_penalty`, `llm_timeout_seconds`, `llm_base_url`, `openai_api_key` |
 | FLAPI | `flapi_username`, `flapi_token`, `flapi_verify_tls` |
 | Limits | `max_parallel_workflows`, `package_timeout_seconds`, `conversation_retention_days`, `log_retention_days` |
 | Session | `cookie_secret` |

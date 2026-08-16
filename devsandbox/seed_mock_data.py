@@ -2,13 +2,11 @@
 """Seed the sandbox with mock FLAPI tools, workflows, and Skills.
 
 Talks to the running backend over HTTP, so it exercises the same validation
-and publishing rules the FDE Studio does — nothing is written straight to
-Postgres.
+and save rules the FDE Studio does — nothing is written straight to Postgres.
 
     python3 devsandbox/seed_mock_data.py [--base-url http://localhost:8000]
 
-Safe to re-run: packages and workflows are append-only and versioned, so a
-second run creates version 2 of each and publishes that instead.
+Safe to re-run: existing tools, workflows, and Skills are refreshed in place.
 
 Every `package_id` here must have a generator in
 `devsandbox/fake_flunks/flunks/mock_data.py`, otherwise that tool falls back
@@ -37,7 +35,8 @@ PACKAGES = [
         "query_name": "identity_lookup",
         "agent_enabled": True,
         "agent_instructions": (
-            "השתמש בכלי זה כדי לאמת מיהי הישות לפני כל בדיקה אחרת."
+            "Use this tool to verify the entity's identity before any other "
+            "check. Write the result in Hebrew."
         ),
         "output_schema": {
             "type": "object",
@@ -75,7 +74,10 @@ PACKAGES = [
         "output_cube_name": "cases_by_entity",
         "query_name": "case_history",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על תיקים, תלונות וטיפול.",
+        "agent_instructions": (
+            "Use this tool for questions about cases, complaints, and their "
+            "handling. Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -114,7 +116,10 @@ PACKAGES = [
         "output_cube_name": "interactions_by_entity",
         "query_name": "service_interactions",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על קשר מול המוקד.",
+        "agent_instructions": (
+            "Use this tool for questions about service-center interactions. "
+            "Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -149,7 +154,10 @@ PACKAGES = [
         "output_cube_name": "payments_by_entity",
         "query_name": "billing_history",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על חובות, תשלומים וגבייה.",
+        "agent_instructions": (
+            "Use this tool for questions about debts, payments, and "
+            "collection. Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -186,7 +194,10 @@ PACKAGES = [
         "output_cube_name": "permits_by_entity",
         "query_name": "permit_registry",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על רישוי, היתרים ותוקף.",
+        "agent_instructions": (
+            "Use this tool for questions about licenses, permits, and "
+            "validity. Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -223,7 +234,10 @@ PACKAGES = [
         "output_cube_name": "inspections_by_entity",
         "query_name": "inspection_findings",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על ביקורות וליקויים.",
+        "agent_instructions": (
+            "Use this tool for questions about inspections and defects. "
+            "Write the result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -260,7 +274,10 @@ PACKAGES = [
         "output_cube_name": "relations_by_entity",
         "query_name": "entity_relations",
         "agent_enabled": True,
-        "agent_instructions": "השתמש בכלי זה לשאלות על גורמים קשורים.",
+        "agent_instructions": (
+            "Use this tool for questions about related parties. Write the "
+            "result in Hebrew."
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -294,7 +311,8 @@ PACKAGES = [
         "query_name": "area_scan",
         "agent_enabled": True,
         "agent_instructions": (
-            "השתמש בכלי זה רק כאשר המשתמש סימן אזור על המפה."
+            "Use this tool only when the user selected an area on the map. "
+            "Write the result in Hebrew."
         ),
         "output_schema": {
             "type": "object",
@@ -320,8 +338,8 @@ PACKAGES = [
 ]
 
 # --- Workflows --------------------------------------------------------------
-# `packages` names the package_key each step runs, resolved to the latest
-# version id at seed time.
+# `packages` names the package_key each step runs, resolved to its tool id at
+# seed time.
 
 WORKFLOWS = [
     {
@@ -330,24 +348,33 @@ WORKFLOWS = [
         "description": "זהות, רישוי וקשרים — הבסיס לכל סיכום.",
         "role": "baseline",
         "system_prompt": (
-            "סכם את פרופיל הישות בעברית. ציין את השם, הסטטוס והכתובת, "
-            "ואת מצב הרישוי. בסס כל קביעה על הראיות בלבד."
+            "Summarize the entity profile: name, status, address, and license "
+            "state. Base every claim only on evidence. Write the result in "
+            "Hebrew."
         ),
         "steps": [
             {
                 "key": "identity", "name": "פרטי ישות",
                 "package": "identity",
-                "summary_prompt": "מיהי הישות ומה הסטטוס שלה?",
+                "summary_prompt": (
+                    "Identify the entity and its status. Answer in Hebrew."
+                ),
             },
             {
                 "key": "permits", "name": "רישיונות והיתרים",
                 "package": "permits", "depends_on": ["identity"],
-                "summary_prompt": "אילו רישיונות קיימים ומה תוקפם?",
+                "summary_prompt": (
+                    "State which licenses exist and whether they are valid. "
+                    "Answer in Hebrew."
+                ),
             },
             {
                 "key": "relations", "name": "ישויות מקושרות",
                 "package": "relations", "depends_on": ["identity"],
-                "summary_prompt": "אילו גורמים קשורים לישות?",
+                "summary_prompt": (
+                    "State which parties are related to the entity. Answer "
+                    "in Hebrew."
+                ),
             },
         ],
     },
@@ -357,24 +384,33 @@ WORKFLOWS = [
         "description": "תיקים, ביקורות וחובות — תמונת הסיכון.",
         "role": "baseline",
         "system_prompt": (
-            "סכם בעברית את הסיכונים העולים מהתיקים, מהביקורות ומהחובות. "
-            "הדגש ליקויים פתוחים ותשלומים שלא שולמו."
+            "Summarize risks from cases, inspections, and debts. Emphasize "
+            "open defects and unpaid amounts. Write the result in Hebrew."
         ),
         "steps": [
             {
                 "key": "cases", "name": "תיקים ופניות",
                 "package": "cases",
-                "summary_prompt": "אילו תיקים פתוחים וכמה חמורים הם?",
+                "summary_prompt": (
+                    "State which cases are open and their severity. Answer "
+                    "in Hebrew."
+                ),
             },
             {
                 "key": "inspections", "name": "ביקורות שטח",
                 "package": "inspections",
-                "summary_prompt": "אילו ליקויים נמצאו ומה דורש מעקב?",
+                "summary_prompt": (
+                    "State which defects were found and what needs follow-up. "
+                    "Answer in Hebrew."
+                ),
             },
             {
                 "key": "payments", "name": "חיובים ותשלומים",
                 "package": "payments",
-                "summary_prompt": "מה יתרת החוב ומה מקורה?",
+                "summary_prompt": (
+                    "State the outstanding balance and its source. Answer in "
+                    "Hebrew."
+                ),
             },
         ],
     },
@@ -384,14 +420,18 @@ WORKFLOWS = [
         "description": "פניות מול המוקד — נפתח לשאלות המשך.",
         "role": "detail",
         "system_prompt": (
-            "סכם בעברית את היסטוריית הפניות מול המוקד: ערוצים, "
-            "נושאים חוזרים ושיעור הפתרון."
+            "Summarize the service-center interaction history, including "
+            "channels, recurring topics, and resolution rate. Write the "
+            "result in Hebrew."
         ),
         "steps": [
             {
                 "key": "interactions", "name": "אינטראקציות שירות",
                 "package": "interactions",
-                "summary_prompt": "אילו פניות היו ומה לא נפתר?",
+                "summary_prompt": (
+                    "State which interactions occurred and what remained "
+                    "unresolved. Answer in Hebrew."
+                ),
             },
         ],
     },
@@ -401,13 +441,17 @@ WORKFLOWS = [
         "description": "העמקה בחיובים לשאלות המשך על כסף.",
         "role": "detail",
         "system_prompt": (
-            "פרט בעברית את החיובים: סכומים, מועדים, מה שולם ומה לא."
+            "Detail the charges, amounts, dates, payments, and outstanding "
+            "items. Write the result in Hebrew."
         ),
         "steps": [
             {
                 "key": "payments", "name": "חיובים ותשלומים",
                 "package": "payments",
-                "summary_prompt": "פרט כל חשבונית ואת מצב התשלום שלה.",
+                "summary_prompt": (
+                    "Detail each invoice and its payment status. Answer in "
+                    "Hebrew."
+                ),
             },
         ],
     },
@@ -421,15 +465,18 @@ WORKFLOWS = [
         # summary, which dragged the final synthesis toward "nothing found".
         "role": "detail",
         "system_prompt": (
-            "סכם בעברית את הישויות שנמצאו באזור שסומן, "
-            "והדגש היכן מרוכזים תיקים פתוחים."
+            "Summarize the entities found in the selected area and emphasize "
+            "where open cases are concentrated. Write the result in Hebrew."
         ),
         "steps": [
             {
                 "key": "area", "name": "סריקת אזור",
                 "package": "area-scan",
                 "input_source": "workflow.boundaries",
-                "summary_prompt": "אילו ישויות נמצאו באזור ומה מצבן?",
+                "summary_prompt": (
+                    "State which entities were found in the area and their "
+                    "status. Answer in Hebrew."
+                ),
             },
         ],
     },
@@ -445,9 +492,10 @@ SKILLS = [
         "description": "חמש נקודות קצרות להנהלה.",
         "user_selectable": True,
         "content": (
-            "כתוב תדריך מנהלים בעברית, עד חמש נקודות. כל נקודה במשפט אחד, "
-            "ומבוססת אך ורק על סעיפי הסיכום שסופקו. ציין בסוף אילו סעיפים "
-            "שימשו אותך. אם חסר מידע, אמור זאת במפורש ואל תשלים מהדמיון."
+            "Write an executive brief in Hebrew with at most five points, "
+            "one sentence each, based only on the supplied summary sections. "
+            "Name the sections used. State missing information explicitly "
+            "and never invent it."
         ),
     },
     {
@@ -457,9 +505,9 @@ SKILLS = [
         "description": "פעולות מעשיות לפי סדר עדיפות.",
         "user_selectable": True,
         "content": (
-            "הצע עד חמש פעולות מעשיות בעברית, מסודרות לפי דחיפות. "
-            "לכל פעולה ציין את הגורם המטפל ואת הראיה שממנה היא נובעת. "
-            "אל תציע פעולה שאין לה בסיס בראיות."
+            "Propose at most five practical actions in Hebrew, ordered by "
+            "urgency. For each action, name the responsible party and the "
+            "supporting evidence. Do not propose an action without evidence."
         ),
     },
 ]
@@ -494,19 +542,31 @@ def call(base_url, method, path, payload=None):
 
 
 def seed_packages(base_url):
-    """Create every tool; return package_key -> latest version id."""
+    """Create or refresh every tool; return package_key -> tool id."""
     created = {}
+    existing = {
+        row["package_key"]: row for row in call(
+            base_url, "GET", "/api/packages"
+        )
+    }
     for package in PACKAGES:
-        row = call(base_url, "POST", "/api/packages", package)
+        current = existing.get(package["package_key"])
+        path = "/api/packages/%s" % current["id"] if current else "/api/packages"
+        row = call(base_url, "PUT" if current else "POST", path, package)
         created[package["package_key"]] = row["id"]
-        print("  tool     %-14s v%-2s %s" % (
-            package["package_key"], row["version"], row["name"]
+        print("  tool     %-14s %s" % (
+            package["package_key"], row["name"]
         ))
     return created
 
 
 def seed_workflows(base_url, package_ids):
-    """Create each workflow from tool version ids, then publish it."""
+    """Create or refresh each workflow from tool ids."""
+    existing = {
+        row["workflow_key"]: row for row in call(
+            base_url, "GET", "/api/workflows"
+        )
+    }
     for workflow in WORKFLOWS:
         payload = {
             key: value for key, value in workflow.items() if key != "steps"
@@ -523,24 +583,28 @@ def seed_workflows(base_url, package_ids):
             }
             for step in workflow["steps"]
         ]
-        row = call(base_url, "POST", "/api/workflows", payload)
-        published = call(
-            base_url, "POST", "/api/workflows/%s/publish" % row["id"]
-        )
-        print("  workflow %-16s v%-2s %-8s %s" % (
-            workflow["workflow_key"], published["version"],
-            published["role"], published["status"],
+        current = existing.get(workflow["workflow_key"])
+        path = "/api/workflows/%s" % current["id"] if current else "/api/workflows"
+        row = call(base_url, "PUT" if current else "POST", path, payload)
+        print("  workflow %-16s %-8s %s" % (
+            workflow["workflow_key"], row["role"],
+            "enabled" if row["agent_enabled"] else "disabled",
         ))
 
 
 def seed_skills(base_url):
-    for skill in SKILLS:
-        row = call(base_url, "POST", "/api/agent-content", skill)
-        published = call(
-            base_url, "POST", "/api/agent-content/%s/publish" % row["id"]
+    existing = {
+        row["content_key"]: row for row in call(
+            base_url, "GET", "/api/agent-content"
         )
-        print("  skill    %-22s v%-2s %s" % (
-            skill["content_key"], published["version"], published["status"]
+    }
+    for skill in SKILLS:
+        current = existing.get(skill["content_key"])
+        path = "/api/agent-content/%s" % current["id"] if current else "/api/agent-content"
+        row = call(base_url, "PUT" if current else "POST", path, skill)
+        print("  skill    %-22s %s" % (
+            skill["content_key"],
+            "enabled" if row["agent_enabled"] else "disabled",
         ))
 
 

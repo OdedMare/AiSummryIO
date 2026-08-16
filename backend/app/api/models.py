@@ -4,7 +4,25 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.common.geometry import multipolygon_to_wkt
 from app.common.runtime_settings.normalizers import MASKED_SECRET
+
+
+# FLAPI identifiers are opaque strings. A WKT MULTIPOLYGON can easily exceed
+# the old 256-character ID limit, so keep a request-size guard without treating
+# every identifier as a short database key.
+_IDENTIFIER_MAX_LENGTH = 1_000_000
+
+
+def _identifier(value: str, required: bool = True):
+    cleaned = value.strip()
+    if not cleaned:
+        if required:
+            raise ValueError("נדרש מזהה")
+        return None
+    if len(cleaned) > _IDENTIFIER_MAX_LENGTH:
+        raise ValueError("המזהה ארוך מדי")
+    return cleaned
 
 
 class PackageCreate(BaseModel):
@@ -63,6 +81,9 @@ class WorkflowCreate(BaseModel):
     # Whether the agent may select this route. There is no publishing step, so
     # a saved workflow is live unless this is turned off.
     agent_enabled: bool = True
+    # The specialist that owns this workflow. The database foreign key is the
+    # source of truth; specialist config only exposes the derived key list.
+    agent_id: Optional[str] = None
     system_prompt: str = ""
     output_schema: Dict[str, Any] = Field(default_factory=dict)
     examples: List[Dict[str, Any]] = Field(default_factory=list)
@@ -85,8 +106,8 @@ class PlanChatCreate(BaseModel):
     messages: List[PlanChatMessage] = Field(default_factory=list)
     draft: Dict[str, Any] = Field(default_factory=dict)
     # Which form field this interview is about, when it was opened from one.
-    # Empty means the whole tool or workflow, which is how the drawer has
-    # always opened. Each planner checks the name against the fields it may
+    # Empty means the whole Studio item, which is how the drawer opens. Each
+    # planner checks the name against the fields it may
     # author, so an unknown one is ignored there rather than rejected here.
     focus_field: str = ""
 
@@ -122,20 +143,21 @@ class PackageInspect(PackageCreate):
     @field_validator("root_id")
     @classmethod
     def inspection_id_required(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("נדרש מזהה בדיקה")
-        if len(cleaned) > 256:
-            raise ValueError("המזהה ארוך מדי")
-        return cleaned
+        return _identifier(value)
+
+
+class SpecialistConfig(BaseModel):
+    workflow_keys: List[str] = Field(default_factory=list)
+    skill_keys: List[str] = Field(default_factory=list)
 
 
 class AgentContentCreate(BaseModel):
     content_key: Optional[str] = None
-    kind: Literal["skill", "prompt"]
+    kind: Literal["skill", "prompt", "agent"]
     name: str
     description: str = ""
     content: str
+    config: SpecialistConfig = Field(default_factory=SpecialistConfig)
     user_selectable: bool = False
     # As on a workflow: saved means live, unless this is turned off.
     agent_enabled: bool = True
@@ -220,9 +242,15 @@ class SummaryCreate(BaseModel):
     """A summary request scoped by an identifier, an area, or both.
 
     Either ``root_id`` or ``boundaries`` must be present. A request carrying
-    only an area runs the agent-enabled workflows whose steps read
-    ``workflow.boundaries``; steps needing ``workflow.id`` degrade to a
-    warning rather than failing the run.
+    only an area **becomes** a request whose identifier is that area: the
+    drawn MultiPolygon is serialized to WKT and stored as ``root_id`` as well,
+    so a step reading ``workflow.id`` receives the polygon instead of degrading
+    to a warning. To FLAPI both are opaque strings, which is what makes the
+    substitution meaningful rather than a trick — see ``common/geometry.py``.
+
+    An identifier the caller typed is never overwritten: a request may
+    intentionally carry both, and there the drawn area reaches only the steps
+    that asked for ``workflow.boundaries``.
     """
 
     root_id: Optional[str] = None
@@ -235,12 +263,7 @@ class SummaryCreate(BaseModel):
     def root_is_string(cls, value):
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        if len(cleaned) > 256:
-            raise ValueError("המזהה ארוך מדי")
-        return cleaned
+        return _identifier(value, required=False)
 
     @field_validator("skill_keys")
     @classmethod
@@ -256,6 +279,11 @@ class SummaryCreate(BaseModel):
     def scope_required(self):
         if not self.root_id and not self.boundaries:
             raise ValueError("נדרש מזהה או אזור על המפה")
+        if not self.root_id:
+            # The area is the identifier. Derived here rather than in the
+            # browser so the WKT has exactly one implementation, the one
+            # `workflow.boundaries` already uses.
+            self.root_id = multipolygon_to_wkt(self.boundaries.model_dump())
         return self
 
 
@@ -272,12 +300,7 @@ class DryRunCreate(BaseModel):
     @field_validator("root_id")
     @classmethod
     def root_required(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("נדרש מזהה")
-        if len(cleaned) > 256:
-            raise ValueError("המזהה ארוך מדי")
-        return cleaned
+        return _identifier(value)
 
 
 class FollowUpCreate(BaseModel):
@@ -300,8 +323,55 @@ class FollowUpCreate(BaseModel):
 
 class FeedbackCreate(BaseModel):
     run_id: str
-    rating: Literal[-1, 1]
+    rating: Literal[1, 2, 3, 4, 5]
     comment: str = ""
+
+
+class EvaluationCreate(BaseModel):
+    """One shared batch over opaque identifiers."""
+
+    label: str
+    root_ids: List[str]
+    question: str
+    skill_keys: List[str] = Field(default_factory=list)
+    cooldown_seconds: int = Field(default=0, ge=0, le=3600)
+
+    @field_validator("label", "question")
+    @classmethod
+    def evaluation_text_required(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("שדה חובה")
+        if len(cleaned) > 5000:
+            raise ValueError("הטקסט ארוך מדי")
+        return cleaned
+
+    @field_validator("root_ids")
+    @classmethod
+    def evaluation_ids_required(cls, values: List[str]) -> List[str]:
+        if not values:
+            raise ValueError("נדרש לפחות מזהה אחד")
+        if len(values) > 10000:
+            raise ValueError("אפשר להריץ עד 10,000 מזהים ב-Batch")
+        return [_identifier(value) for value in values]
+
+    @field_validator("skill_keys")
+    @classmethod
+    def evaluation_skill_keys(cls, values: List[str]) -> List[str]:
+        return SummaryCreate.valid_skill_keys(values)
+
+
+class EvaluationReview(BaseModel):
+    rating: Optional[Literal[1, 2, 3, 4, 5]] = None
+    comment: str = ""
+
+    @field_validator("comment")
+    @classmethod
+    def bounded_comment(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) > 5000:
+            raise ValueError("ההערה ארוכה מדי")
+        return cleaned
 
 
 class ModelsProbeRequest(BaseModel):

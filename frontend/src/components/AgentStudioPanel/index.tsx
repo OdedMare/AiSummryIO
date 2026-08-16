@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, BookOpen, LoaderCircle, RefreshCw, Workflow,
+  AlertTriangle, ArrowRight, BookOpen, Bot, LoaderCircle, RefreshCw, Workflow,
   Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
@@ -12,9 +12,10 @@ import type {
 import ContentStudio from "./ContentStudio";
 import PackageCatalog from "./PackageCatalog";
 import { ReviewQueue } from "./StudioCommon";
+import SpecialistStudio from "./SpecialistStudio";
 import WorkflowEditor from "./WorkflowEditor";
 
-type Tab = "packages" | "workflows" | "content" | "review";
+type Tab = "packages" | "workflows" | "specialists" | "content" | "review";
 
 export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
   const studio = useStudio();
@@ -53,7 +54,9 @@ function useStudio() {
   }, [refresh]);
   const counts = useMemo(() => ({
     packages: packages.length, workflows: workflows.length,
-    content: content.length, review: review.length,
+    specialists: content.filter((item) => item.kind === "agent").length,
+    content: content.filter((item) => item.kind !== "agent").length,
+    review: review.length,
   }), [packages, workflows, content, review]);
   return {
     authorized, tab, setTab, packages, workflows, content, review, error,
@@ -113,6 +116,7 @@ function StudioContent({ studio }: { studio: Studio }) {
 const TABS = [
   ["packages", "מקורות מידע", "חבילות FLAPI", Wrench],
   ["workflows", "תהליכי סיכום", "Workflows", Workflow],
+  ["specialists", "מומחים", "Agents ועובדים", Bot],
   ["content", "Skills והנחיות", "ניסוח וסיכום", BookOpen],
   ["review", "תור שיפור", "מה נכשל", AlertTriangle],
 ] as const;
@@ -139,10 +143,21 @@ function StudioBody({ studio }: { studio: Studio }) {
   }
   if (studio.tab === "workflows") {
     return <WorkflowEditor packages={studio.packages}
-      workflows={studio.workflows} onRefresh={studio.refresh} />;
+      workflows={studio.workflows}
+      agents={studio.content.filter((item) => item.kind === "agent")}
+      onRefresh={studio.refresh} />;
+  }
+  if (studio.tab === "specialists") {
+    return <SpecialistStudio
+      items={studio.content.filter((item) => item.kind === "agent")}
+      workflows={studio.workflows}
+      skills={studio.content.filter((item) => item.kind === "skill")}
+      onRefresh={studio.refresh} />;
   }
   if (studio.tab === "content") {
-    return <ContentStudio items={studio.content} onRefresh={studio.refresh} />;
+    return <ContentStudio
+      items={studio.content.filter((item) => item.kind !== "agent")}
+      onRefresh={studio.refresh} />;
   }
   return <ReviewQueue items={studio.review} />;
 }

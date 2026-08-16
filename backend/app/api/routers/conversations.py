@@ -19,6 +19,13 @@ def build(context) -> APIRouter:
     ):
         return context.repository.get_conversation(conversation_id, session_id)
 
+    @router.delete("/conversations/{conversation_id}")
+    def delete_conversation(
+        conversation_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        return context.repository.delete_conversation(conversation_id, session_id)
+
     @router.get("/conversations/{conversation_id}/messages")
     def conversation_messages(
         conversation_id: str,

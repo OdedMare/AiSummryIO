@@ -13,6 +13,7 @@ class RuntimeSettings:
     database_schema: str
     llm_model: str
     llm_diet_mode: bool
+    llm_repetition_penalty: float
     llm_timeout_seconds: int
     llm_base_url: Optional[str]
     openai_api_key: str
@@ -20,7 +21,9 @@ class RuntimeSettings:
     flapi_token: str
     flapi_verify_tls: bool
     max_parallel_workflows: int
+    agent_max_rounds: int
     package_timeout_seconds: int
+    conversation_idle_minutes: int
     conversation_retention_days: int
     log_retention_days: int
     cookie_secret: str

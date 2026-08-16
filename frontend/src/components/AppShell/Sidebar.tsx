@@ -1,14 +1,18 @@
 import {
-  Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
+  Beaker, Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
 } from "lucide-react";
 import BrandMark from "./BrandMark";
+import { identifierLabel } from "./commands";
 import type { AppShellController } from "./useAppShell";
 
 export default function Sidebar({ app }: { app: AppShellController }) {
   return (
     <aside className={`sidebar ${app.sidebarOpen ? "open" : ""}`}>
       <Brand onClose={() => app.setSidebarOpen(false)} />
-      <button className="new-summary" type="button" onClick={app.startNew}>
+      <button className="new-summary" type="button"
+        onClick={app.conversation
+          ? () => void app.endConversation()
+          : app.startNew}>
         <Plus size={18} /> סיכום חדש
       </button>
       <div className="history-title"><History size={15} /> היסטוריה</div>
@@ -48,10 +52,14 @@ function HistoryList({ app }: { app: AppShellController }) {
           <span>
             {item.title
               ? <strong>{item.title}</strong>
-              : <strong dir="ltr">{item.root_id}</strong>}
+              : <strong dir="ltr" title={item.root_id}>
+                  {identifierLabel(item.root_id)}
+                </strong>}
             <small>
               {item.title && item.root_id &&
-                <span dir="ltr">{item.root_id} · </span>}
+                <span dir="ltr" title={item.root_id}>
+                  {identifierLabel(item.root_id, 24)} ·{" "}
+                </span>}
               {new Date(item.updated_at).toLocaleDateString("he-IL")}
             </small>
           </span>
@@ -66,6 +74,9 @@ function HistoryList({ app }: { app: AppShellController }) {
 function SidebarActions({ app }: { app: AppShellController }) {
   return (
     <div className="sidebar-actions">
+      <button type="button" onClick={() => app.setEvaluationOpen(true)}>
+        <Beaker size={18} /> Evaluation
+      </button>
       <button type="button" onClick={() => app.setSettingsOpen(true)}>
         <Settings size={18} /> הגדרות
       </button>

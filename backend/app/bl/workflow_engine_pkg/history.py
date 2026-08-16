@@ -30,11 +30,14 @@ TURN_LIMIT = 4
 _ANSWER_LIMIT = 600
 
 _FALLBACK_PROMPT = (
-    "אתה מנסח מחדש שאלת המשך בשיחה כך שתעמוד בפני עצמה.\n"
-    "החזר JSON עם השדות question ו-changed.\n"
-    "פתור כינויי גוף והשמטות לפי השיחה הקודמת, ושמר על כוונת המשתמש.\n"
-    "אל תענה על השאלה, אל תוסיף מידע שלא נאמר, ואל תמציא מזהים.\n"
-    "אם השאלה כבר עומדת בפני עצמה — החזר אותה כפי שהיא עם changed=false."
+    "Restate a conversational follow-up so it stands on its own.\n"
+    "Return JSON with the fields `question` and `changed`.\n"
+    "Resolve pronouns and omissions from the prior conversation while "
+    "preserving the user's intent and language.\n"
+    "Do not answer the question, add unstated information, or invent "
+    "identifiers.\n"
+    "If the question already stands on its own, return it unchanged with "
+    "`changed=false`. A Hebrew question must remain Hebrew."
 )
 
 

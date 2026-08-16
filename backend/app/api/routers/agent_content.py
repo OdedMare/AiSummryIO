@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.models import AgentContentCreate, SkillPreview
+from app.api.models import AgentContentCreate, PlanChatCreate, SkillPreview
 
 
 def build(context) -> APIRouter:
@@ -32,6 +32,20 @@ def build(context) -> APIRouter:
             payload.content,
             payload.question,
             [section.model_dump() for section in payload.sections],
+        )
+
+    @router.post("/plan-skill-chat")
+    def plan_skill_chat(payload: PlanChatCreate):
+        return context.service.plan_skill_chat(
+            [item.model_dump() for item in payload.messages], payload.draft,
+            payload.focus_field,
+        )
+
+    @router.post("/plan-specialist-chat")
+    def plan_specialist_chat(payload: PlanChatCreate):
+        return context.service.plan_specialist_chat(
+            [item.model_dump() for item in payload.messages], payload.draft,
+            payload.focus_field,
         )
 
     @router.delete("/{content_id}")

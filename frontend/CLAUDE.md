@@ -8,9 +8,10 @@ Hebrew-first (`lang="he"`, `dir="rtl"`) workspace for complete summaries by
 identifier. The UI reuses LocatoAI's shell: dark history/navigation rail,
 bounded conversation, bottom composer, Settings, tool catalog, and Agent
 Studio. It also has a small optional map picker in the composer
-(`components/MapWorkspace/`), ported from LocatoAI: one drawn polygon or
-rectangle scopes the request. It is a picker, not LocatoAI's full map
-workspace — no result layers, no layer catalog, no plan pipeline.
+(`components/MapWorkspace/`), ported from LocatoAI: one or more drawn
+polygons/rectangles scope the request, travelling as a single GeoJSON
+`MultiPolygon`. It is a picker, not LocatoAI's full map workspace — no result
+layers, no layer catalog, no plan pipeline.
 
 ## Commands
 
@@ -26,11 +27,54 @@ This is Next.js **16.2.10** with React **18.3.1**. When a Next API is
 uncertain, inspect `node_modules/next/dist/docs/` instead of relying on older
 training knowledge.
 
+## Structure
+
+The three large studio files were split by concern; each directory holds its
+own model/hook plus the views over it. Reach for the smallest file that owns
+the concern rather than growing the barrel component again.
+
+```text
+components/
+├── AppShell/
+│   ├── index.tsx            composition; useAppShell owns the state
+│   ├── useAppShell.ts       conversation, question, history, panels
+│   ├── useRunPolling.ts     the 1.5s poll, isolated from the shell
+│   ├── useShellTheme.ts     theme persistence
+│   └── commands.ts          composer command parsing (`/skill`, identifiers)
+├── AgentStudioPanel/
+│   ├── SpecialistStudio.tsx      create, edit, and enable specialists
+│   ├── packages/                 packageModel.ts + usePackageCatalog.ts
+│   │                             and PackageAgents/Fields/Schema views
+│   ├── planning/                 usePlanChat.ts, PlanChatView, overlays
+│   └── workflow/                 workflowModel.ts, canvasGraph.ts,
+│                                 useWorkflowEditor/useWorkflowCanvas,
+│                                 and the step/field/agent views
+└── SummaryWorkspace/
+    ├── Turn.tsx             one question+answer pair in the transcript
+    ├── AgentStatus.tsx      live "what the agent is doing" line
+    ├── AgentTrace.tsx       inspectable leader/worker trace
+    └── NextQuestions.tsx    suggested-question chips
+```
+
+`styles/globals.css` is now only an import list. Styles live in `shell.css`,
+`conversation.css`, `composer-map.css`, `settings.css`, `studio.css`, and
+`planning.css` — add a rule to the file that owns the surface, not to
+`globals.css`.
+
 ## State and API
 
-`components/AppShell/index.tsx` owns the active conversation, root string ID,
-question, run polling, history, theme, Settings, and Agent Studio visibility.
+`components/AppShell/index.tsx` composes the shell; `useAppShell.ts` owns the
+active conversation, root string ID, question, history, theme, Settings, and
+Agent Studio visibility, and `useRunPolling.ts` owns the poll on its own.
 `services/api.ts` is the browser's only backend boundary.
+
+Every backend call is traced to the console with the request body that caused
+it — the Hebrew message the UI shows is deliberately short, and a 4xx/5xx is
+only diagnosable next to what was actually sent. The run poll is exempt unless
+it fails or exceeds 3s, for the same reason the backend traces it at DEBUG.
+
+Evidence is paginated (`evidencePage(runId, evidenceId, offset, limit)`), so
+the drawer must not assume it holds every row for a source.
 
 An initial request posts `{root_id, question, skill_keys, boundaries}`, where
 `boundaries` is a GeoJSON `MultiPolygon` or `null`. The API returns a
@@ -55,7 +99,10 @@ ID/evidence, and reuse the conversation's stored boundaries.
   per workflow. Only the first turn keeps its `RunHeader`.
 - Evidence is one drawer for the whole thread (`EvidenceView`, held by the
   workspace and keyed by run id), so opening a turn's sources closes another's
-  instead of leaving drawers stacked down the page. Feedback stays per turn.
+  instead of leaving drawers stacked down the page. Feedback stays per turn:
+  a 1-5 star `radiogroup` (`TurnFooter` in `Turn.tsx`), not thumbs up/down —
+  the backend averages it per route and feeds it to the follow-up router as a
+  tie-breaking signal, so a graded rating carries more than a binary one did.
 - The thread auto-scrolls on the turn count and the last turn's status only.
   Scrolling on every 1.5s poll would fight a user reading an earlier answer.
 - **Progress reads as the agent talking, not as a job queue.** `AgentStatus`
@@ -66,6 +113,13 @@ ID/evidence, and reuse the conversation's stored boundaries.
   thing twice. A finished turn shows no status: the answer is the status.
   "ממתין בתור" is deliberately not surfaced; the user asked a question and is
   owed an answer about it, not about our scheduler.
+- **The agent trace is disclosure, not the answer.** When a run carries an
+  `agent_trace`, `AgentStatus` names the phase in progress (delegating,
+  questioning, synthesizing) and `AgentTrace` exposes which specialists were
+  asked what, on demand. It stays collapsed by default: the user asked a
+  question and is owed an answer, not our orchestration. `missing_data` the
+  leader reported is surfaced with the answer, since a gap the agent knows
+  about must not be silent.
 - **`suggested_questions` renders as clickable chips** (`NextQuestions`) under
   the newest turn only — chips under an older answer invite reopening a
   question the thread has moved past. Clicking asks immediately through
@@ -73,6 +127,24 @@ ID/evidence, and reuse the conversation's stored boundaries.
   question still passes identifier detection, `/skill` parsing, and the busy
   guard. These offer the user their next question; they never ask the user
   anything, and the composer stays the way to ask something else.
+- **The map picker accumulates parts into one `MultiPolygon`.** `geometry` is
+  a `GeoJSONPolygon[]`, and each finished shape is appended rather than
+  replacing the last: a scope is often several disjoint areas, and redrawing
+  from scratch to add one is the wrong cost. The draw tool therefore stays
+  armed after a shape closes (leaflet-draw disarms itself, so `MapGeoms`
+  re-enables it) and the mode is not reset on `onGeometryDrawn`. Removing a
+  part is explicit — "ביטול אזור אחרון" drops the last one, "ניקוי הכל"
+  empties the selection — since a click on the map adds and never deletes.
+  `toMultiPolygonParts` returns `null` for an empty selection, because
+  `GeoBoundaries` rejects an empty `coordinates` ("נדרש לפחות פוליגון אחד")
+  while the API contract sends `boundaries: null` when nothing was drawn.
+- **The drawn area is also the request's identifier.** A map request is sent
+  with `root_id: null` and comes back with the conversation's `root_id` set to
+  the area's `MULTIPOLYGON` WKT — the backend derives it, so the polygon has
+  one serializer instead of one per side of the wire. `send` adopts what came
+  back. Such an identifier is thousands of characters, so the topbar and the
+  history rows show it through `identifierLabel` with the full value on
+  `title`; they name a conversation and are not where the value is read.
 - Conversation history is titled by the opening question; the raw identifier
   is secondary. Conversations created before titles fall back to the
   identifier.
@@ -121,7 +193,17 @@ ID/evidence, and reuse the conversation's stored boundaries.
   "חדש" alone does not. It calls `startNew`, which is `reset` plus clearing
   the messages; `reset` on its own is what `save` calls after creating, where
   the success message still has to be visible.
-- All three tabs delete. A Skill or prompt has nothing pinning it, so the
+- `SpecialistStudio` follows the same shape as the other editors: `editingId`
+  chooses update over create, a specialist is deleted from its card, and
+  "פעיל לסוכן" is the switch. Workflow ownership is always exclusive; the
+  enabled-dependency checks apply only while the switch is on, which is what
+  makes an unfinished specialist savable.
+- The workflow form owns the primary assignment path: **סוכן אחראי** writes
+  `summary_workflows.agent_id` on the same save that creates, edits, or enables
+  the workflow. Once any specialists exist, an enabled workflow requires that
+  choice. The specialist form reads and writes the same relationship through
+  its derived `config.workflow_keys`; it is not a second source of truth.
+- All four tabs delete. A Skill or prompt has nothing pinning it, so the
   confirm warns about the one surprise instead: a **built-in comes back on
   the next restart**, because seeding recreates a missing key — deleting one
   resets it to the shipped text rather than removing it. A tool is refused
@@ -187,6 +269,11 @@ ID/evidence, and reuse the conversation's stored boundaries.
   the connection: it is seeded into every turn as fact, and the interview
   proposes only `name`, `description`, `agent_instructions`, `output_schema`,
   and the two examples, which the FDE then edits before saving.
+- The Skill and specialist forms expose the same full interview drawer. The
+  Skill interview writes a complete model instruction; the specialist
+  interview receives the real Workflow/Skill catalogs and may return only
+  assignable keys. Confirmation fills the current unsaved form and closes the
+  drawer — the FDE still reviews and saves it.
 - The interview drawer is portalled to `document.body`, but a portal still
   propagates events through the React tree — it must stop `submit` and `Enter`
   at its own boundary, or sending a message saves the editor's form.

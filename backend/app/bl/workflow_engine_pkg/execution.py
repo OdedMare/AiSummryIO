@@ -12,6 +12,10 @@ from app.dal.repository.validation import step_levels
 
 _log = trace("execution")
 
+# Routing and specialist follow-ups use a bounded digest. Section synthesis
+# uses the same size as a batch and analyzes every batch before reducing them.
+_SUMMARY_ROW_LIMIT = 100
+
 
 def geo_capable(workflow: dict) -> bool:
     """True when any step reads the drawn area.
@@ -50,6 +54,19 @@ def execute(
         service, run, root_id, workflows, progress_callback, boundaries
     )
     return service._final_summary(root_id, question, sections, skills or [])
+
+
+def execute_sections(
+    service, run, root_id, workflows, progress_callback, boundaries=None
+) -> List[dict]:
+    """Execute selected workflows without consuming them in final synthesis."""
+    workflows = select_workflows(workflows, root_id, boundaries)
+    if not workflows:
+        progress_callback(0, 0, [])
+        return []
+    return _execute_all(
+        service, run, root_id, workflows, progress_callback, boundaries
+    )
 
 
 def _execute_all(
@@ -140,7 +157,7 @@ def execute_workflow(
     warnings, evidence_ids = _run_steps(
         service, run, workflow, context, save_evidence
     )
-    facts = chunk_facts(context["steps"], context["summary_fields"])
+    facts = fact_chunks(context["steps"], context["summary_fields"])
     _add_summary_instructions(facts, workflow["steps"])
     generated = service._section_summary(workflow, facts, warnings)
     return _section(workflow, generated, warnings, evidence_ids)
@@ -361,7 +378,16 @@ def _step_identifiers(step: dict, context: dict, source: str) -> List[str]:
     field = step.get("input_field") or _source_field(source)
     if not field:
         raise ValueError("נדרש שדה פלט למיפוי")
-    return list(dict.fromkeys(str(value) for value in _values(records, field)))
+    return list(dict.fromkeys(
+        _identifier_value(value) for value in _values(records, field)
+    ))
+
+
+def _identifier_value(value) -> str:
+    """Keep mapped geometry values as one FLAPI-ready identifier."""
+    if isinstance(value, dict) and value.get("type") == "MultiPolygon":
+        return multipolygon_to_wkt(value)
+    return str(value)
 
 
 def _source_step(source: str) -> str:
@@ -388,41 +414,92 @@ def _values(records: List[dict], field: str):
 def chunk_facts(
     step_records: Dict[str, List[dict]], field_policies=None
 ) -> List[dict]:
+    """Build one bounded evidence digest per step.
+
+    This function used to create one item per 100 rows and then send every item
+    in a single LLM request. A 6,000-row result therefore still put all 6,000
+    rows in the prompt. The digest keeps exact whole-dataset statistics and a
+    representative row sample, so prompt size is bounded without pretending
+    the sample is the full coverage.
+    """
     field_policies = field_policies or {}
     return [
         _fact_chunk(
-            step_key, records, offset, field_policies.get(step_key)
+            step_key, records, field_policies.get(step_key)
         )
         for step_key, records in step_records.items()
-        for offset in range(0, len(records) or 1, 100)
     ]
 
 
+def fact_chunks(
+    step_records: Dict[str, List[dict]], field_policies=None
+) -> List[dict]:
+    """Split every summary-eligible row into bounded, lossless batches."""
+    field_policies = field_policies or {}
+    result = []
+    for step_key, records in step_records.items():
+        allowed_fields = field_policies.get(step_key)
+        available = {str(key) for row in records for key in row}
+        fields = sorted(
+            available if allowed_fields is None
+            else available.intersection(allowed_fields)
+        )
+        batches = [
+            records[index:index + _SUMMARY_ROW_LIMIT]
+            for index in range(0, len(records), _SUMMARY_ROW_LIMIT)
+        ] or [[]]
+        stats = _stats(records, fields)
+        samples = _samples(records, fields)
+        for index, batch in enumerate(batches):
+            result.append({
+                "step": step_key,
+                "chunk": index + 1,
+                "chunk_count": len(batches),
+                "row_count": len(records),
+                "chunk_row_count": len(batch),
+                "fields": fields,
+                "rows": _rows(batch, fields),
+                # Global arithmetic is needed once by the reducer, not in
+                # every map call over this step's disjoint row batches.
+                **({"stats": stats, "samples": samples} if index == 0 else {}),
+                "complete_rows": True,
+            })
+    return result
+
+
 def _fact_chunk(
-    step_key: str, records: List[dict], offset: int, allowed_fields=None
+    step_key: str, records: List[dict], allowed_fields=None
 ) -> dict:
-    rows = records[offset:offset + 100]
-    available = {str(key) for row in rows for key in row}
+    available = {str(key) for row in records for key in row}
     fields = sorted(
         available if allowed_fields is None
         else available.intersection(allowed_fields)
     )
+    rows = _representative_rows(records, _SUMMARY_ROW_LIMIT)
     return {
         "step": step_key,
-        "chunk": offset // 100 + 1,
-        "row_count": len(rows),
+        "chunk": 1,
+        "row_count": len(records),
+        "sampled_row_count": len(rows),
         "fields": fields,
-        # Whole rows, so the model can see which values co-occur. `samples`
-        # grouped values by field, which destroyed the row: five names and
-        # five dates gave no way to tell which name held which date.
+        # Whole representative rows, so the model can still see which values
+        # co-occur without receiving the entire DataFrame.
         "rows": _rows(rows, fields),
-        # Computed over every row in the chunk, not over `rows`. Frequency,
-        # ranges, and emptiness are arithmetic — deriving them in Python is
-        # exact and cannot be hallucinated, and it is what lets a summary say
-        # "263 of 412" instead of naming a handful of values.
-        "stats": _stats(rows, fields),
-        "samples": _samples(rows, fields),
+        # Arithmetic is computed over all records, never over the bounded
+        # sample. This is what makes counts and coverage exact.
+        "stats": _stats(records, fields),
+        "samples": _samples(records, fields),
     }
+
+
+def _representative_rows(rows: List[dict], limit: int) -> List[dict]:
+    """Evenly sample the full result, including its first and last rows."""
+    if len(rows) <= limit:
+        return rows
+    return [
+        rows[index * (len(rows) - 1) // (limit - 1)]
+        for index in range(limit)
+    ]
 
 
 def _rows(rows: List[dict], fields: List[str]) -> List[dict]:

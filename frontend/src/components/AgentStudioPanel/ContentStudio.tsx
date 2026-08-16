@@ -6,8 +6,9 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
-  AgentContent, SkillPreviewResult,
+  AgentContent, SkillPlanDraft, SkillPreviewResult,
 } from "@/types";
+import { SkillPlanChat } from "./ContentAgents";
 import { NewItemButton } from "./StudioCommon";
 
 const emptyContent = {
@@ -163,10 +164,13 @@ function ContentForm({
 }) {
   return (
     <form className="studio-form" onSubmit={save}>
-      <header><span><BookOpen size={19} /></span><div>
+      <header className="studio-form-header"><span><BookOpen size={19} /></span><div>
         <h3>{editing ? "עריכת Skill או הנחיה" : "Skill או הנחיה חדשים"}</h3>
         <p>Skill שמוצג למשתמש באמת משנה את תוצאת הסיכום.</p>
-      </div></header>
+      </div>
+        {form.kind === "skill" && <SkillPlanChat form={form}
+          onApply={(draft: SkillPlanDraft) => update(draft)} />}
+      </header>
       <div className="form-grid two">
         <label><span>סוג</span><select value={form.kind}
           onChange={(e) => update({ kind: e.target.value })}>

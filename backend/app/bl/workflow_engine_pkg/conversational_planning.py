@@ -1,4 +1,4 @@
-"""Multi-turn FDE planning for one tool or one workflow.
+"""Multi-turn FDE planning for tools, workflows, Skills, and specialists.
 
 ``planning.py`` answers a single prompt with a single draft. Here the agent
 interviews the FDE instead: one question per turn, each carrying a recommended
@@ -27,6 +27,7 @@ from app.common.errors import AgentError
 from app.bl import prompts
 from app.bl.workflow_engine_pkg.planning import tool_catalog, validated_plan
 from app.bl.workflow_engine_pkg.schemas import (
+    SKILL_PLAN_CHAT_SCHEMA, SPECIALIST_PLAN_CHAT_SCHEMA,
     TOOL_PLAN_CHAT_SCHEMA, WORKFLOW_PLAN_CHAT_SCHEMA,
 )
 
@@ -58,6 +59,22 @@ def plan_workflow_chat(
 ) -> dict:
     """One turn of workflow planning, validated like any other plan."""
     return _WorkflowPlanner(service).turn(messages, draft, focus_field)
+
+
+def plan_skill_chat(
+    service, messages: List[dict], draft: Optional[dict],
+    focus_field: str = "",
+) -> dict:
+    """One turn that authors a complete summary Skill draft."""
+    return _SkillPlanner(service).turn(messages, draft, focus_field)
+
+
+def plan_specialist_chat(
+    service, messages: List[dict], draft: Optional[dict],
+    focus_field: str = "",
+) -> dict:
+    """One turn that configures a catalog-bounded specialist draft."""
+    return _SpecialistPlanner(service).turn(messages, draft, focus_field)
 
 
 class _Planner:
@@ -422,6 +439,221 @@ class _WorkflowPlanner(_Planner):
             if not draft.get(field) and previous.get(field):
                 merged[field] = previous[field]
         return merged
+
+
+class _SkillPlanner(_Planner):
+    """Turns an FDE's intended analysis into an operational Skill."""
+
+    prompt = "skill_interview"
+    schema = SKILL_PLAN_CHAT_SCHEMA
+    focusable_fields = (
+        "name", "description", "content", "user_selectable",
+        "agent_enabled",
+    )
+
+    def _payload(self, messages, draft, focus_field="", *_extra) -> dict:
+        return self._focused(
+            _Planner._payload(self, messages, draft), focus_field
+        )
+
+    def _result(self, answer: dict, draft) -> dict:
+        merged = _merged_content_draft(
+            answer.get("draft"), draft,
+            text_fields=("name", "description", "content"),
+            bool_defaults={"user_selectable": True, "agent_enabled": True},
+        )
+        common = self._common(answer)
+        missing = []
+        if not merged["name"]:
+            missing.append("חסר שם ל-Skill.")
+        if not merged["content"]:
+            missing.append("חסרות הוראות ההפעלה של ה-Skill.")
+        common["open_points"] = common["open_points"] + missing
+        if missing:
+            common["awaiting_confirmation"] = False
+        return dict(
+            common,
+            ready=is_ready(answer, common) and not missing,
+            draft=merged,
+        )
+
+
+class _SpecialistPlanner(_Planner):
+    """Builds one specialist from existing Workflows and Skills only."""
+
+    prompt = "specialist_interview"
+    schema = SPECIALIST_PLAN_CHAT_SCHEMA
+    focusable_fields = (
+        "name", "description", "content", "agent_enabled",
+        "workflow_keys", "skill_keys",
+    )
+
+    def __init__(self, service):
+        _Planner.__init__(self, service)
+        self._workflows = service._repository.list_workflows()
+        self._content = service._repository.list_agent_content()
+        self._agents_by_id = {
+            item.get("id"): item for item in self._content
+            if item.get("kind") == "agent" and item.get("id")
+        }
+        self._skills = {
+            item.get("content_key"): item for item in self._content
+            if item.get("kind") == "skill" and item.get("content_key")
+        }
+        self._workflows_by_key = {
+            item.get("workflow_key"): item for item in self._workflows
+            if item.get("workflow_key")
+        }
+
+    def _before(self, *_extra) -> Optional[dict]:
+        if self._workflows:
+            return None
+        return {
+            "reply": (
+                "אין עדיין Workflows בקטלוג, ולמומחה נדרש לפחות Workflow "
+                "אחד. צרו תהליך ואז חזרו לכאן."
+            ),
+            "question": None,
+            "resolved": [],
+            "open_points": ["אין Workflows שאפשר להקצות למומחה."],
+            "awaiting_confirmation": False,
+            "ready": False,
+            "draft": _empty_specialist_draft(),
+        }
+
+    def _payload(self, messages, draft, focus_field="", *_extra) -> dict:
+        payload = dict(
+            _Planner._payload(self, messages, draft),
+            available_workflows=[self._workflow_option(item)
+                                 for item in self._workflows],
+            available_skills=[self._skill_option(item)
+                              for item in self._skills.values()],
+        )
+        return self._focused(payload, focus_field)
+
+    def _result(self, answer: dict, draft) -> dict:
+        merged = _merged_content_draft(
+            answer.get("draft"), draft,
+            text_fields=("name", "description", "content"),
+            bool_defaults={"agent_enabled": True},
+            list_fields=("workflow_keys", "skill_keys"),
+        )
+        current_agent_id = self._current_agent_id(draft)
+        merged, rejected = self._validated_capabilities(
+            merged, current_agent_id
+        )
+        common = self._common(answer)
+        missing = []
+        if not merged["name"]:
+            missing.append("חסר שם למומחה.")
+        if not merged["content"]:
+            missing.append("חסרות הנחיות העבודה של המומחה.")
+        if not merged["workflow_keys"]:
+            missing.append("נדרש לפחות Workflow אחד למומחה.")
+        common["open_points"] = common["open_points"] + rejected + missing
+        if rejected or missing:
+            common["awaiting_confirmation"] = False
+        return dict(
+            common,
+            ready=is_ready(answer, common) and not rejected and not missing,
+            draft=merged,
+        )
+
+    def _current_agent_id(self, draft) -> str:
+        key = bounded_text(as_dict(draft).get("content_key"))
+        for agent_id, item in self._agents_by_id.items():
+            if item.get("content_key") == key:
+                return agent_id
+        return ""
+
+    def _validated_capabilities(self, draft: dict, current_agent_id: str):
+        rejected = []
+        workflows = []
+        for key in draft["workflow_keys"]:
+            item = self._workflows_by_key.get(key)
+            if not item:
+                rejected.append("ה-Workflow %s אינו קיים בקטלוג." % key)
+                continue
+            owner_id = item.get("agent_id")
+            if owner_id and owner_id != current_agent_id:
+                owner = self._agents_by_id.get(owner_id, {})
+                rejected.append(
+                    "ה-Workflow %s כבר שייך למומחה %s."
+                    % (key, owner.get("name") or owner_id)
+                )
+                continue
+            if draft["agent_enabled"] and not item.get("agent_enabled", True):
+                rejected.append("ה-Workflow %s כבוי ולכן לא הוקצה." % key)
+                continue
+            workflows.append(key)
+
+        skills = []
+        for key in draft["skill_keys"]:
+            item = self._skills.get(key)
+            if not item:
+                rejected.append("ה-Skill %s אינו קיים בקטלוג." % key)
+                continue
+            if draft["agent_enabled"] and not item.get("agent_enabled", True):
+                rejected.append("ה-Skill %s כבוי ולכן לא הוקצה." % key)
+                continue
+            skills.append(key)
+        return dict(draft, workflow_keys=workflows, skill_keys=skills), rejected
+
+    def _workflow_option(self, item: dict) -> dict:
+        owner = self._agents_by_id.get(item.get("agent_id"), {})
+        return {
+            "workflow_key": item.get("workflow_key", ""),
+            "name": item.get("name", ""),
+            "description": item.get("description", ""),
+            "agent_enabled": bool(item.get("agent_enabled", True)),
+            "owned_by": owner.get("content_key", ""),
+        }
+
+    @staticmethod
+    def _skill_option(item: dict) -> dict:
+        return {
+            "skill_key": item.get("content_key", ""),
+            "name": item.get("name", ""),
+            "description": item.get("description", ""),
+            "agent_enabled": bool(item.get("agent_enabled", True)),
+        }
+
+
+def _merged_content_draft(
+    offered, previous, text_fields: tuple, bool_defaults: dict,
+    list_fields: tuple = (),
+) -> dict:
+    """Merge a content turn without dropping fields agreed earlier."""
+    offered, previous = as_dict(offered), as_dict(previous)
+    merged = {
+        field: bounded_text(offered.get(field), 20000)
+        or bounded_text(previous.get(field), 20000)
+        for field in text_fields
+    }
+    for field, default in bool_defaults.items():
+        value = offered.get(field)
+        if not isinstance(value, bool):
+            value = previous.get(field)
+        merged[field] = value if isinstance(value, bool) else default
+    for field in list_fields:
+        value = _string_list(offered.get(field))
+        merged[field] = value or _string_list(previous.get(field))
+    return merged
+
+
+def _string_list(value) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return list(dict.fromkeys(
+        bounded_text(item) for item in value if bounded_text(item)
+    ))
+
+
+def _empty_specialist_draft() -> dict:
+    return {
+        "name": "", "description": "", "content": "",
+        "agent_enabled": True, "workflow_keys": [], "skill_keys": [],
+    }
 
 
 def is_ready(answer: dict, common: dict) -> bool:

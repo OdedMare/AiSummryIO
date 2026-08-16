@@ -13,6 +13,7 @@ class RunRepository:
         self, conversation_id: str, question: str, kind: str, skill_keys=None
     ) -> dict:
         row_id = new_id()
+        idle_minutes = self._store.get().conversation_idle_minutes
         with connect(self._store) as connection:
             connection.execute(
                 _INSERT_RUN,
@@ -22,8 +23,11 @@ class RunRepository:
                 ),
             )
             connection.execute(
-                "UPDATE conversations SET updated_at=NOW() WHERE id=%s",
-                (conversation_id,),
+                """UPDATE conversations
+                   SET updated_at=NOW(),
+                       expires_at=NOW() + (%s * INTERVAL '1 minute')
+                   WHERE id=%s""",
+                (idle_minutes, conversation_id),
             )
             connection.commit()
         return self.get_run(row_id)
@@ -77,6 +81,44 @@ class RunRepository:
             SELECT id, workflow_id, step_key, records, created_at
             FROM summary_evidence WHERE run_id=%s ORDER BY created_at
         """, (run_id,))
+
+    def evidence_catalog(self, run_id: str) -> List[dict]:
+        """Lightweight evidence metadata for the drawer's collapsed rows."""
+        return self._all("""
+            SELECT id, workflow_id, step_key,
+                   jsonb_array_length(records) AS row_count, created_at
+            FROM summary_evidence WHERE run_id=%s ORDER BY created_at
+        """, (run_id,))
+
+    def evidence_page(
+        self, run_id: str, evidence_id: str, offset: int, limit: int
+    ) -> dict:
+        """Return only the requested JSONB array positions, in stable order."""
+        row = self._one("""
+            SELECT evidence.id, evidence.workflow_id, evidence.step_key,
+                   jsonb_array_length(evidence.records) AS row_count,
+                   evidence.created_at,
+                   (
+                       SELECT COALESCE(
+                           jsonb_agg(evidence.records -> position
+                                     ORDER BY position),
+                           '[]'::jsonb
+                       )
+                       FROM generate_series(
+                           %s,
+                           LEAST(
+                               %s,
+                               jsonb_array_length(evidence.records) - 1
+                           )
+                       ) AS position
+                   ) AS records
+            FROM summary_evidence AS evidence
+            WHERE evidence.run_id=%s AND evidence.id=%s
+        """, (offset, offset + limit - 1, run_id, evidence_id))
+        row["offset"] = offset
+        row["limit"] = limit
+        row["has_more"] = offset + len(row["records"]) < row["row_count"]
+        return row
 
 
 def _empty_progress() -> dict:

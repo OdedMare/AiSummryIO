@@ -70,7 +70,20 @@ def build(context) -> APIRouter:
         run_id: str, session_id: str = Depends(context.user_session)
     ):
         _authorized_run(context, run_id, session_id)
-        return context.repository.run_evidence(run_id)
+        return context.repository.evidence_catalog(run_id)
+
+    @router.get("/runs/{run_id}/evidence/{evidence_id}")
+    def evidence_page(
+        run_id: str,
+        evidence_id: str,
+        offset: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=500),
+        session_id: str = Depends(context.user_session),
+    ):
+        _authorized_run(context, run_id, session_id)
+        return context.repository.evidence_page(
+            run_id, evidence_id, offset, limit
+        )
 
     return router
 

@@ -1,8 +1,11 @@
 import type {
-  AgentContent, Conversation, ConversationTurn, Evidence, PackageInspection,
+  AgentContent, Conversation, ConversationTurn, Evidence, EvidencePage,
+  EvaluationBatch, EvaluationCaseDetail, EvaluationCasePage, EvaluationImport,
+  PackageInspection,
   PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
-  SummarySkill, ToolPlanChatTurn, ToolPlanDraft, WorkflowPlan,
-  WorkflowPlanChatTurn, WorkflowVersion,
+  SkillPlanChatTurn, SkillPlanDraft, SpecialistPlanChatTurn,
+  SpecialistPlanDraft, SummarySkill, ToolPlanChatTurn, ToolPlanDraft,
+  WorkflowPlan, WorkflowPlanChatTurn, WorkflowVersion,
 } from "@/types";
 import type { GeoJSONMultiPolygon } from "@/types/geo";
 
@@ -20,9 +23,9 @@ export async function request<T>(
   const method = options?.method ?? "GET";
   const started = performance.now();
   const label = `${method} ${path}`;
-  // The 1.5s run poll would drown the console, so it is logged only when it
-  // fails or turns slow.
-  const quiet = /^\/api\/runs\//.test(path);
+  // The 1.5s run/evaluation polls would drown the console, so they are logged
+  // only when they fail or turn slow.
+  const quiet = method === "GET" && /^\/api\/(?:runs|evaluations)(?:\/|\?|$)/.test(path);
   if (!quiet) console.debug(`[api] → ${label}`, requestBody(options));
 
   let response: Response;
@@ -96,13 +99,20 @@ export const api = {
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
+  deleteConversation: (id: string) =>
+    request<{ deleted: string; title: string }>(`/api/conversations/${id}`, {
+      method: "DELETE",
+    }),
   // The thread as question/answer turns, without the runs' evidence and
   // sections. `conversation` already carries the full runs the transcript
   // renders, so this is for a caller that wants the text alone.
   messages: (id: string) =>
     request<ConversationTurn[]>(`/api/conversations/${id}/messages`),
   // Either rootId or boundaries must be present; the backend rejects a
-  // request carrying neither.
+  // request carrying neither. A request sent from the map with no identifier
+  // typed comes back with `conversation.root_id` set to the drawn area's WKT
+  // MULTIPOLYGON — the backend derives it, so the polygon has one serializer
+  // rather than one per side of the wire.
   start: (
     rootId: string,
     question: string,
@@ -129,7 +139,12 @@ export const api = {
     }),
   run: (id: string) => request<SummaryRun>(`/api/runs/${id}`),
   evidence: (id: string) => request<Evidence[]>(`/api/runs/${id}/evidence`),
-  feedback: (runId: string, rating: -1 | 1, comment = "") =>
+  evidencePage: (runId: string, evidenceId: string, offset = 0, limit = 100) =>
+    request<EvidencePage>(
+      `/api/runs/${runId}/evidence/${evidenceId}` +
+      `?offset=${offset}&limit=${limit}`,
+    ),
+  feedback: (runId: string, rating: 1 | 2 | 3 | 4 | 5, comment = "") =>
     request<{ id: string }>("/api/feedback", {
       method: "POST",
       body: JSON.stringify({ run_id: runId, rating, comment }),
@@ -231,5 +246,87 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  planSkillChat: (
+    messages: PlanChatMessage[], draft: Partial<SkillPlanDraft>,
+    focusField = "",
+  ) => request<SkillPlanChatTurn>("/api/agent-content/plan-skill-chat", {
+    method: "POST",
+    body: JSON.stringify({ messages, draft, focus_field: focusField }),
+  }),
+  planSpecialistChat: (
+    messages: PlanChatMessage[],
+    draft: Partial<SpecialistPlanDraft> & { content_key?: string },
+    focusField = "",
+  ) => request<SpecialistPlanChatTurn>(
+    "/api/agent-content/plan-specialist-chat",
+    {
+      method: "POST",
+      body: JSON.stringify({ messages, draft, focus_field: focusField }),
+    },
+  ),
   reviewQueue: () => request<Array<Record<string, unknown>>>("/api/review-queue"),
+  evaluations: () => request<EvaluationBatch[]>("/api/evaluations"),
+  evaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}`),
+  evaluationCases: (
+    id: string, offset = 0, limit = 50, status = "", search = "",
+  ) => {
+    const query = new URLSearchParams({
+      offset: String(offset), limit: String(limit), status, search,
+    });
+    return request<EvaluationCasePage>(
+      `/api/evaluations/${id}/cases?${query.toString()}`,
+    );
+  },
+  evaluationCase: (batchId: string, caseId: string) =>
+    request<EvaluationCaseDetail>(
+      `/api/evaluations/${batchId}/cases/${caseId}`,
+    ),
+  createEvaluation: (data: {
+    label: string;
+    root_ids: string[];
+    question: string;
+    skill_keys: string[];
+    cooldown_seconds: number;
+  }) => request<EvaluationBatch>("/api/evaluations", {
+    method: "POST", body: JSON.stringify(data),
+  }),
+  importEvaluation: (file: File) =>
+    request<EvaluationImport>("/api/evaluations/import", {
+      method: "POST",
+      headers: { "Content-Type": file.type ||
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      body: file,
+    }),
+  pauseEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/pause`, { method: "POST" }),
+  resumeEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/resume`, { method: "POST" }),
+  stopEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/stop`, { method: "POST" }),
+  retryFailedEvaluation: (id: string) =>
+    request<EvaluationBatch>(`/api/evaluations/${id}/retry-failed`, {
+      method: "POST",
+    }),
+  reviewEvaluationCase: (
+    batchId: string, caseId: string,
+    rating: 1 | 2 | 3 | 4 | 5 | null, comment: string,
+  ) => request<EvaluationCaseDetail>(
+    `/api/evaluations/${batchId}/cases/${caseId}/review`,
+    { method: "PUT", body: JSON.stringify({ rating, comment }) },
+  ),
+  deleteEvaluation: (id: string) =>
+    request<{ deleted: string; label: string; conversations: number }>(
+      `/api/evaluations/${id}`, { method: "DELETE" },
+    ),
+  exportEvaluation: (id: string) => download(`/api/evaluations/${id}/export`),
 };
+
+async function download(path: string): Promise<Blob> {
+  const response = await fetch(path, { credentials: "same-origin" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(errorDetail(data, response.status));
+  }
+  return response.blob();
+}

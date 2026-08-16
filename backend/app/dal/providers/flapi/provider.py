@@ -7,6 +7,7 @@ to/from flunks models lives in `mapper`.
 
 import hashlib
 import logging
+import threading
 import time
 from typing import Any, Dict, List
 
@@ -20,6 +21,10 @@ from app.dal.providers.flapi.runner_config import (
 )
 
 _ATTEMPTS = 2
+
+# This is process-wide rather than per workflow. Nested run/workflow/step pools
+# must not turn max_parallel_workflows=4 into dozens of simultaneous FLAPI calls.
+_FLAPI_SLOTS = threading.BoundedSemaphore(4)
 
 
 class FlapiProvider:
@@ -75,7 +80,8 @@ class FlapiProvider:
             "a hang past this point leaks its worker thread", key, timeout,
         )
         started = time.time()
-        result = run_bounded(runner, timeout, key)
+        with _FLAPI_SLOTS:
+            result = run_bounded(runner, timeout, key)
         self._logger.info(
             "FLAPI [%s] flunks returned in %.2fs", key, time.time() - started,
         )

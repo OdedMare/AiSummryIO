@@ -36,6 +36,8 @@ a model, or a flunks wheel.
 | `plan_workflow` | FDE asks for a workflow | Proposes one from catalog tools; only the FDE saves it |
 | `plan_tool_chat` | FDE discusses a tool | One conversational turn; opens on a sample the FDE already ran and proposes only the summary-facing fields |
 | `plan_workflow_chat` | FDE discusses a workflow | One conversational turn; draft passes the same validation gate |
+| `plan_skill_chat` | FDE discusses a Skill | Authors a complete evidence-bound Skill and fills the form only after confirmation |
+| `plan_specialist_chat` | FDE discusses a specialist | Selects only real, assignable Workflows/Skills and fills the form after confirmation |
 | `inspect_tool` | FDE previews a package | One identifier, bounded preview, inferred schema, no persistence |
 | `dry_run` | FDE tests a workflow | Executes with `save_evidence=False` |
 | `preview_skill` | FDE tests Skill wording | Runs one Skill against sample sections; no packages, no persistence |
@@ -70,6 +72,22 @@ Two rules hold this together:
 `recent_turns` reaches the repository through `getattr`, so a fake or older
 repository without `conversation_history` degrades to no history rather than
 crashing a follow-up.
+
+### Feedback ratings in routing (`workflow_engine_pkg/routing.py`)
+
+A follow-up's router payload (`_router_payload`) also carries each
+`available_workflows`/`available_tools` entry's `avg_rating` (1-5) and
+`rating_count`, read once per call from `Repository.route_ratings()` through
+`getattr` — the same degrade-safe pattern `history.recent_turns` uses, so a
+fake or older repository without the method routes with no rating signal
+instead of crashing. A route with no feedback yet carries neither field
+rather than a neutral score, so the FDE-owned `tool-aware-router` prompt can
+tell "unrated" apart from "rated poorly." The prompt is told to use rating
+only as a tie-breaker between routes that would answer the question equally
+well, never to override the one route that actually fits, and to distrust a
+`rating_count` under about 3. `full_summary` runs every `agent_enabled`
+baseline workflow unconditionally, so this signal only ever changes a
+follow-up's routing choice, not which baseline workflows run.
 
 ### The execution path
 
@@ -184,6 +202,13 @@ never executed twice. `recover()` re-submits runs left `queued` by a restart.
 writes progress to the run row, and always finishes by marking the run
 `completed` / `partial` / `failed` — the `finally` block clears `_submitted`
 even on failure.
+
+`capacity()` exposes `_full_capacity` for `/api/health/live`, which compares
+it against `abandoned_workers()`. flunks cannot be cancelled, so a thread lost
+to a package timeout is never reclaimed; once as many have been abandoned as
+the pool holds, **no full run can ever start again** while the port stays open
+and the process looks healthy. The watchdog already logged that state — the
+liveness route is what makes something act on it.
 
 ## Rules
 

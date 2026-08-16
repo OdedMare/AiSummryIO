@@ -33,7 +33,9 @@ database content. A prompt read from the database may still keep its
 | `tool_metadata.md` | `_tool_metadata` — Fetch 1 ID suggestions |
 | `shared/untrusted.md` | every prompt that reads user data |
 | `shared/hebrew.md` | every FDE-facing prompt |
-| `shared/interview_method.md` | both interviews |
+| `skill_interview.md` | `_SkillPlanner` — the Skill interview |
+| `specialist_interview.md` | `_SpecialistPlanner` — the specialist interview |
+| `shared/interview_method.md` | all four interviews |
 
 ## Includes
 

@@ -61,6 +61,13 @@ function AgentSettings({ settings }: { settings: SettingsController }) {
         placeholder="http://localhost:11434/v1" />
       <Toggle settings={settings} name="llm_diet_mode"
         label="מצב חסכוני בטוקנים" optional="הנחיות קצרות ופלט מוגבל" />
+      <Field settings={settings} name="llm_repetition_penalty"
+        label="קנס חזרתיות" type="number" min="0" max="2" step="0.05"
+        optional="0 מכבה; נתמך בשרתים מקומיים בלבד (לא ב-OpenAI)"
+        placeholder="0" />
+      <Field settings={settings} name="agent_max_rounds"
+        label="מספר סבבי העמקה מרבי" type="number" min="0" max="5"
+        optional="0 מכבה את מערכת המומחים; ברירת מחדל 2" />
     </section>
   );
 }
@@ -157,9 +164,9 @@ function LimitSettings({ settings }: { settings: SettingsController }) {
       <Field settings={settings} name="llm_timeout_seconds"
         label="זמן מרבי לתשובת המודל" type="number" min="1" optional="שניות"
         placeholder="120" />
-      <Field settings={settings} name="conversation_retention_days"
-        label="שמירת שיחות וראיות" type="number" min="1" optional="ימים"
-        placeholder="30" />
+      <Field settings={settings} name="conversation_idle_minutes"
+        label="מחיקת שיחה ללא פעילות" type="number" min="1" optional="דקות"
+        placeholder="60" />
       <Field settings={settings} name="log_retention_days" label="שמירת לוגים"
         type="number" min="1" optional="ימים" placeholder="14" />
     </section>

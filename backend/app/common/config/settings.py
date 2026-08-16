@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     database_name: str = "spear"
     """Optional explicit database name. Overrides the database in the URL."""
 
-    database_schema: str = "mosaic_magen"
+    database_schema: str = "sumorai"
     """PostgreSQL schema owning every table. Empty means the server default
     (normally `public`). Also settable as `?currentSchema=` in the URL."""
 
@@ -46,7 +46,22 @@ class Settings(BaseSettings):
     """Use compact prompts, schema samples, and bounded completion output."""
 
     llm_timeout_seconds: int = 120
-    """Maximum wall time for one logical model call, including retries."""
+    """Maximum wall time for ONE HTTP completion to the model.
+
+    Not a budget for the whole logical call: the degradation ladder and the
+    parse retry above it each get their own, so a pathological call can take
+    a multiple of this. It exists to stop a hung model server from holding a
+    worker for the SDK's 600-second default."""
+
+    llm_repetition_penalty: float = 0.0
+    """Penalty applied to already-emitted tokens, discouraging loops.
+
+    NOT a standard OpenAI field — it is a vLLM/Ollama/TGI extension, so it is
+    sent inside `extra_body`. `0` means "do not send it at all" and is the
+    default, because OpenAI itself rejects the unknown key; `1.0` is neutral
+    on the servers that do implement it, and above that penalizes. Past ~1.2
+    it starts to fight JSON mode, since the syntax a JSON object must repeat
+    (braces, quotes, commas) is exactly what the penalty suppresses."""
 
     llm_base_url: Optional[str] = "http://localhost:11434/v1"
     """OpenAI-compatible endpoint. Default: local Ollama. From inside the
@@ -59,7 +74,9 @@ class Settings(BaseSettings):
     flapi_verify_tls: bool = True
 
     max_parallel_workflows: int = 4
+    agent_max_rounds: int = 1
     package_timeout_seconds: int = 120
+    conversation_idle_minutes: int = 60
     conversation_retention_days: int = 30
     log_retention_days: int = 90
 

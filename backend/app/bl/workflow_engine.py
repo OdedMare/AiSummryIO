@@ -3,7 +3,8 @@
 from typing import Dict, List
 
 from app.bl.workflow_engine_pkg import (
-    conversational_planning, execution, planning, routing, synthesis,
+    conversational_planning, execution, planning, routing, specialists,
+    synthesis,
 )
 from app.bl.workflow_engine_pkg.schemas import (
     FINAL_SCHEMA, SECTION_SCHEMA, SKILL_SCHEMA, WORKFLOW_PLAN_SCHEMA,
@@ -27,6 +28,11 @@ class SummaryService:
         self._store = settings_store
 
     def full_summary(self, run: dict, conversation: dict, progress) -> dict:
+        agents = specialists.available(self)
+        if agents:
+            return specialists.full_summary(
+                self, run, conversation, progress, agents
+            )
         workflows = self._repository.enabled_workflows(["baseline", "both"])
         keys = run.get("skill_keys", [])
         skills = self._repository.enabled_summary_skills(keys) if keys else []
@@ -36,6 +42,11 @@ class SummaryService:
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
+        agents = specialists.available(self)
+        if agents:
+            return specialists.follow_up(
+                self, run, conversation, progress, agents
+            )
         return routing.follow_up(self, run, conversation, progress)
 
     def plan_workflow(self, prompt: str) -> dict:
@@ -56,6 +67,20 @@ class SummaryService:
         self, messages: List[dict], draft: Dict, focus_field: str = "",
     ) -> dict:
         return conversational_planning.plan_workflow_chat(
+            self, messages, draft, focus_field
+        )
+
+    def plan_skill_chat(
+        self, messages: List[dict], draft: Dict, focus_field: str = "",
+    ) -> dict:
+        return conversational_planning.plan_skill_chat(
+            self, messages, draft, focus_field
+        )
+
+    def plan_specialist_chat(
+        self, messages: List[dict], draft: Dict, focus_field: str = "",
+    ) -> dict:
+        return conversational_planning.plan_specialist_chat(
             self, messages, draft, focus_field
         )
 
@@ -98,7 +123,7 @@ class SummaryService:
 
     @staticmethod
     def _chunk_facts(step_records: Dict[str, List[dict]]) -> List[dict]:
-        return execution.chunk_facts(step_records)
+        return execution.fact_chunks(step_records)
 
     @staticmethod
     def _merge_output_schema(output_schema) -> dict:
@@ -110,10 +135,12 @@ class SummaryService:
         return synthesis.section_summary(self, workflow, facts, warnings)
 
     def _final_summary(
-        self, root_id: str, question: str, sections: List[dict], skills=None
+        self, root_id: str, question: str, sections: List[dict], skills=None,
+        agent_context=None, leader_prompt="",
     ) -> dict:
         return synthesis.final_summary(
-            self, root_id, question, sections, skills
+            self, root_id, question, sections, skills,
+            agent_context, leader_prompt,
         )
 
     def _run_skills(

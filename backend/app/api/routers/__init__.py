@@ -9,13 +9,13 @@ same handlers.
 from fastapi import APIRouter
 
 from app.api.routers import (
-    admin, agent_content, conversations, feedback, health, packages,
+    admin, agent_content, conversations, evaluations, feedback, health, packages,
     summaries, workflows,
 )
 
 _BUILDERS = (
     health, summaries, conversations, feedback, admin, packages, workflows,
-    agent_content,
+    agent_content, evaluations,
 )
 
 API_PREFIX = "/api"

@@ -22,6 +22,7 @@ exception handler needs no mapping table.
 | `ProviderError` | 502 | A FLAPI package failed |
 | `NotFoundError` | 404 | |
 | `AuthError` | 401 | |
+| `UnavailableError` | 503 | Alive, but out of capacity to accept work |
 
 Messages are **Hebrew** and user-facing — they reach the UI directly. Several
 tests match on them, so rewording is a behavior change.
@@ -34,7 +35,8 @@ raising on any other geometry type.
 
 Why it exists: FLAPI cube parameters accept **opaque strings**, so an area
 drawn on the map travels into `PackageInputCube.values` exactly like an
-identifier does. See
+identifier does — which is also why `SummaryCreate` calls it to turn a
+map-only request's area into that request's `root_id`. See
 [dal/providers/flapi/CLAUDE.md](../dal/providers/flapi/CLAUDE.md).
 
 Deliberately **dependency-free** — shapely is not a backend dependency.

@@ -14,13 +14,16 @@ python -m pytest -q
 | FLAPI mapper | String identifiers survive; generic rows; duplicate columns rejected; empty frames |
 | FLAPI provider | Retries exactly once; `_package_query` provenance; timeout bounds the run |
 | `runner_config` | Timeout precedence; `FlapiConfig` built for both modern and legacy classes |
-| Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; missing area fails clearly; rings must be closed |
+| Geometry | Drawn area reaches the package as `MULTIPOLYGON` WKT; a map-only request carries that WKT as its `root_id` while a typed identifier survives; missing area fails clearly; rings must be closed |
 | Workflow validation | No forward step references; `depends_on` must be declared |
 | In-place editing | `agent_enabled` rides along with an ordinary save and no publish state remains; a workflow the agent uses saves without examples; a bad mapping is still refused; content deletes by row id and leaves the file-based prompt as the fallback |
 | Conversational planning | Draft carries forward between turns; sample data stays bounded and drops internals; a chat draft still passes the shared validation gate |
 | Conversation memory | An opening follow-up pays for no rewrite; a reference is resolved against the thread; the user's wording is what is persisted; every rewrite failure routes the original question; the router sees the thread only when there is one |
 | Identifier mapping | Fan-out over list values plus deduplication |
 | Settings | URL/schema normalization, JDBC translation, secret masking |
+| LLM client | `llm_timeout_seconds` reaches the SDK and is part of the client cache key, so a saved change takes effect |
+| Leader review | The review payload carries `fact_count`, not every fact, while the worker's own view keeps them |
+| Health | `/health/live` fails only once abandoned threads have eaten the pool; `/health` keeps reporting either way |
 | Auth | scrypt hashing and verification |
 
 ## Testing without `flunks`

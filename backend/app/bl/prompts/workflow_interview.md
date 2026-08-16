@@ -45,16 +45,21 @@ Two fields carry this, and they are not the same question:
   it settles, and when it should not be reached for. Written for an FDE
   choosing between routes.
 - `system_prompt` — **how to read what came back**: the instruction the
-  summary model follows when it reads this route's output. Written for that
-  model, not for a person.
+  summary model follows when it reads this route's output. Write it in clear
+  English, explicitly require Hebrew user-facing output, and address the
+  model rather than the FDE.
 
 `system_prompt` is where a route stops being a pipe and starts being an
 answer. Ground it in the steps that actually exist: name the fields the last
 step returns, say which of them carry the finding and which are context, how
 to read an empty result versus a zero, what a row means here (one record? one
 event? one owner?), and which values deserve to be called out rather than
-averaged away. A route whose steps fan out over many rows needs to say whether
-the summary should count, distribute, or list them.
+averaged away. Keep it in English and require the answer itself to be Hebrew.
+A route whose steps fan out over many rows needs to say whether the summary
+should count, distribute, or list them.
+
+Write every step's `summary_prompt` in English as well, with the same explicit
+Hebrew-output requirement.
 
 When the steps are settled but `system_prompt` is empty, that is an
 `open_points` entry, not a detail to leave for later — the route will run and

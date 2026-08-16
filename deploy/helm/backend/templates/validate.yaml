@@ -1,0 +1,18 @@
+{{/*
+The backend cannot start without a database, and a chart that renders a
+Deployment pointing at a Secret nobody created fails as an opaque
+CreateContainerConfigError minutes later. Fail the render instead, naming
+both ways to supply it.
+*/}}
+{{- if and (not .Values.database.url) (not .Values.database.existingSecret) }}
+{{- fail "aisummry-backend: a database is required. Set database.url, or database.existingSecret (with database.existingSecretKey) to reference a Secret you manage." }}
+{{- end }}
+
+{{- if and .Values.database.url .Values.database.existingSecret }}
+{{- fail "aisummry-backend: set either database.url or database.existingSecret, not both." }}
+{{- end }}
+
+{{/* The backend clamps agent rounds to 0..5; reject out-of-range early. */}}
+{{- if or (lt (int .Values.agent.maxRounds) 0) (gt (int .Values.agent.maxRounds) 5) }}
+{{- fail "aisummry-backend: agent.maxRounds must be between 0 and 5." }}
+{{- end }}

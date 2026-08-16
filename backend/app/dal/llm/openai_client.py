@@ -1,7 +1,7 @@
 """OpenAI-compatible JSON-mode LLM client.
 
-Model, API key, and base URL come from the runtime settings store on EVERY
-call, so changes saved in the UI settings panel apply immediately. Works
+Model, API key, base URL, and timeout come from the runtime settings store on
+EVERY call, so changes saved in the UI settings panel apply immediately. Works
 against OpenAI itself and OpenAI-compatible servers (Ollama, vLLM, Groq...)
 — the main model is Gemma 4 31B served through Ollama.
 
@@ -10,11 +10,17 @@ Robustness policy, matching LocatoAI:
 - asks for JSON mode when the server supports it, falls back if not
 - merges the system prompt into the user turn for servers/models that
   reject a system role (some Gemma deployments)
+- passes `repetition_penalty` through `extra_body` for the local servers that
+  implement it, and at its default 0 omits the key entirely, so OpenAI itself
+  never sees a field it would reject
 - strips markdown fences from the reply
 - retries once with the parse error appended before giving up
+- bounds each HTTP completion by `llm_timeout_seconds`, so a hung local
+  server cannot hold a job worker for the SDK's 600-second default
 """
 
 import json
+import threading
 
 import httpx
 from openai import BadRequestError, OpenAI
@@ -28,9 +34,17 @@ from app.dal.llm.model_id_extractor import extract_model_ids
 # One initial attempt + one retry with the parse error appended.
 _MAX_JSON_ATTEMPTS = 2
 _DIET_MAX_COMPLETION_TOKENS = 1200
+# 0 means "send no repetition_penalty at all", keeping the request byte-for-byte
+# what it was for OpenAI and any other server without the extension.
+_NEUTRAL_PENALTY = 0.0
 # The SDK requires a non-empty key; local servers/gateways ignore it.
 _LOCAL_SERVER_KEY_PLACEHOLDER = "null"
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+# A run may parallelize specialists and Skills, but the local model server is a
+# shared finite resource. Bound actual HTTP completions across every run in the
+# process instead of letting nested thread pools multiply them without limit.
+_LLM_SLOTS = threading.BoundedSemaphore(2)
 
 
 class OpenAIJsonClient:
@@ -43,7 +57,10 @@ class OpenAIJsonClient:
         settings = self._store.get()
         if not settings.openai_api_key and not settings.llm_base_url:
             raise AgentError("לא הוגדר מפתח API או שרת תואם OpenAI")
-        client = self._client_for(settings.openai_api_key, settings.llm_base_url)
+        client = self._client_for(
+            settings.openai_api_key, settings.llm_base_url,
+            settings.llm_timeout_seconds,
+        )
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -56,6 +73,7 @@ class OpenAIJsonClient:
         for _attempt in range(_MAX_JSON_ATTEMPTS):
             content, current = self._complete(
                 client, settings.llm_model, messages, max_tokens, schema,
+                settings.llm_repetition_penalty,
             )
             for key in usage:
                 usage[key] += current.get(key, 0)
@@ -91,39 +109,49 @@ class OpenAIJsonClient:
         except Exception as exc:
             raise AgentError("לא ניתן לטעון מודלים: " + str(exc))
 
-    def _client_for(self, api_key, base_url):
+    def _client_for(self, api_key, base_url, timeout):
         """Reuse one OpenAI client (and its underlying httpx connection pool)
         across calls — a fresh client per call paid a TCP/TLS handshake on
         every one of a workflow's LLM round-trips. Re-keyed automatically when
-        settings change mid-session, since the store is read per call."""
-        cache_key = (api_key, base_url)
+        settings change mid-session, since the store is read per call.
+
+        `timeout` is part of the cache key, not just a constructor argument:
+        without it a client built before the setting changed would keep
+        serving every later call, and the saved value would appear to do
+        nothing. It bounds ONE HTTP completion — the ladder and the parse
+        retry each get their own budget on top."""
+        cache_key = (api_key, base_url, timeout)
         if self._cached_client is None or self._cached_key != cache_key:
             self._cached_client = OpenAI(
                 api_key=api_key or _LOCAL_SERVER_KEY_PLACEHOLDER,
                 base_url=base_url or None,
+                timeout=timeout,
             )
             self._cached_key = cache_key
         return self._cached_client
 
     @staticmethod
-    def _complete(client, model, messages, max_tokens, schema):
+    def _complete(client, model, messages, max_tokens, schema, penalty):
         # Degradation ladder for OpenAI-compatible servers:
         # schema → JSON mode → plain → plain with the system prompt merged
         # into the user turn (some Gemma deployments reject a system role).
         last_bad_request = None
-        for kwargs in OpenAIJsonClient._attempts(messages, max_tokens, schema):
-            try:
-                response = create_with_retry(client, model, kwargs)
-            except BadRequestError as exc:
-                last_bad_request = exc
-                continue
-            except Exception as exc:
-                raise AgentError("שגיאת מודל: " + str(exc))
-            return OpenAIJsonClient._response_data(response)
+        with _LLM_SLOTS:
+            for kwargs in OpenAIJsonClient._attempts(
+                messages, max_tokens, schema, penalty,
+            ):
+                try:
+                    response = create_with_retry(client, model, kwargs)
+                except BadRequestError as exc:
+                    last_bad_request = exc
+                    continue
+                except Exception as exc:
+                    raise AgentError("שגיאת מודל: " + str(exc))
+                return OpenAIJsonClient._response_data(response)
         raise AgentError("שגיאת מודל: " + str(last_bad_request))
 
     @staticmethod
-    def _attempts(messages, max_tokens, schema) -> list:
+    def _attempts(messages, max_tokens, schema, penalty=_NEUTRAL_PENALTY) -> list:
         attempts = []
         if schema is not None:
             attempts.append({
@@ -141,9 +169,19 @@ class OpenAIJsonClient:
             {"messages": messages},
             {"messages": merge_system_into_user(messages)},
         ])
-        if max_tokens is None:
+        extras = {}
+        if max_tokens is not None:
+            extras["max_tokens"] = max_tokens
+        # `repetition_penalty` is not an OpenAI field, so the SDK has no
+        # named argument for it and it travels in `extra_body`. Sent only
+        # when it is off neutral: OpenAI itself 400s on the unknown key, and
+        # a 400 here is indistinguishable from the ones the ladder exists to
+        # step around — every rung would fail and the real cause be lost.
+        if abs(penalty - _NEUTRAL_PENALTY) > 1e-9:
+            extras["extra_body"] = {"repetition_penalty": penalty}
+        if not extras:
             return attempts
-        return [dict(kwargs, max_tokens=max_tokens) for kwargs in attempts]
+        return [dict(kwargs, **extras) for kwargs in attempts]
 
     @staticmethod
     def _response_data(response):

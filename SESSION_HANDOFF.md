@@ -19,7 +19,8 @@ Codex session.
 - Verified clean clone:
   `/Users/odedmarellie/Desktop/repos/AiSummryIO-clean-clone`
 - GitHub: `https://github.com/OdedMare/AiSummryIO`
-- Branch: `main`
+- Branch: `feat/real_agentic_system` (was `main`; the agent-mode work below
+  lives here and has not been merged)
 - LocatoAI reference:
   `/Users/odedmarellie/Desktop/repos/locatoAi`
 - LocatoAI source branch and commit:
@@ -320,6 +321,80 @@ a conversion that was never needed.
 No real end-to-end run happened. `flunks` remains uninstallable here
 (`pip download flunks` → "No matching distribution found"), and there are still
 no FLAPI/LLM credentials. P0 items 2-6 are untouched.
+
+## Agent-mode sessions (2026-08-03 → 2026-08-05, `feat/real_agentic_system`)
+
+Roughly 130 files and ~14k added lines across three days. Backend tests grew
+from 22 to well over a thousand added lines in `tests/test_core.py`.
+
+### Specialist orchestration (the headline change)
+
+`bl/workflow_engine_pkg/specialists.py` adds bounded leader/worker
+orchestration over published specialists. A leader delegates a focused task to
+at most **2** specialists; each worker plans only against the workflows and
+Skills assigned to it and answers only from evidence that belongs to it; the
+leader reviews and may ask follow-up questions for up to `agent_max_rounds`
+rounds before synthesis. Caps: 2 specialists, 3 workflows, rounds clamped 0–5.
+
+Two decisions worth preserving:
+
+- **`agent_max_rounds = 0` keeps the pre-agent path unchanged**, with a test
+  pinning it. Agent mode is additive, never a rewrite of the summary path.
+- **A leader routing failure fails small** — one specialist, not all of them.
+  Assigning every available specialist on a bad model response used to turn one
+  error into the most expensive path in the system.
+
+A new `agent` content type carries specialist definitions; `SpecialistStudio`
+is the FDE surface for them.
+
+### Conversation as a thread
+
+- `history.py`: recent turns plus a follow-up restated to stand alone before
+  routing. The user's original wording is always what is stored and shown; a
+  failed or declined rewrite routes the original question.
+- History is derived from `summary_runs` — never a second table — and only
+  finished runs become turns.
+- Conversation titles, deletion, `conversation_idle_minutes` (60) expiry with
+  automatic cleanup, and `conversation_history` for follow-up context.
+- Clarifications now carry `recommendation` and `options`; the main chat still
+  never asks the user a question back, rendering them as ordinary answers whose
+  `suggested_questions` become chips.
+
+### Operations, logging, and delivery
+
+- `common/logging_setup.py`, configured before any other logger exists. Full
+  tracebacks for unhandled exceptions, returned as JSON — Starlette's bare
+  non-JSON 500 left the client with nothing to parse.
+- `JobRunner` watchdog: reports in-flight runs every 15s, names anything past
+  180s stuck (a hang inside `flunks` emits nothing at all), purges expired
+  conversations every 5 minutes, and exposes `capacity()`.
+- `GET /api/health/live` as a **separate liveness probe**, failing only once
+  abandoned threads have eaten the pool — the state where a `tcpSocket` probe
+  stays green while no run can ever start again.
+- `llm_timeout_seconds` (120): bounds one HTTP completion, not a whole logical
+  call. It exists to stop a hung model server holding a worker for the SDK's
+  600s default.
+- Helm charts for both services under `deploy/helm/`, with the backend
+  refusing to render without `database.url`, and `.github/workflows/ci.yml`
+  building both images, importing `app.main` from the built backend image, and
+  linting/rendering both charts including that guard.
+- Evidence catalog and pagination; seed examples for a first package/workflow.
+
+### Frontend refactor
+
+`PackageCatalog`, `PlanChat`, `WorkflowCanvas`, and `WorkflowEditor` were split
+into `packages/`, `planning/`, and `workflow/` directories, each with its own
+model and hook; `useAppShell` split out `useRunPolling`, `useShellTheme`, and
+`commands.ts`. `globals.css` (3.9k lines) became an import list over six
+per-surface stylesheets. `AgentStatus`, `AgentTrace`, `NextQuestions`, and
+`Turn` are new. See `frontend/CLAUDE.md` for the structure map.
+
+### Still open from this work
+
+- No real end-to-end run yet; the environment blockers below are unchanged.
+- **`flapi_username` was committed with a real-looking default value**
+  (`backend/app/common/config/settings.py`, commit `bb6d746`). It should be
+  `None` and supplied through env/runtime settings. Fix before merging.
 
 ## Remaining work before calling the app fully production-ready
 

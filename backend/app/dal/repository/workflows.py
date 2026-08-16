@@ -37,6 +37,9 @@ class WorkflowRepository:
             )
         row_id = new_id()
         validate_steps(data.get("steps", []))
+        self._validate_agent(
+            data.get("agent_id"), data.get("agent_enabled", True)
+        )
         with connect(self._store) as connection:
             connection.execute(
                 _INSERT_WORKFLOW, _workflow_values(row_id, workflow_key, data)
@@ -61,6 +64,9 @@ class WorkflowRepository:
         self.get_workflow(workflow_id)
         steps = data.get("steps", [])
         validate_steps(steps)
+        self._validate_agent(
+            data.get("agent_id"), data.get("agent_enabled", True)
+        )
         with connect(self._store) as connection:
             connection.execute(
                 _UPDATE_WORKFLOW, _workflow_update_values(workflow_id, data)
@@ -102,6 +108,36 @@ class WorkflowRepository:
         """, (roles,))
         return self._with_steps(rows)
 
+    def enabled_workflows_by_keys(
+        self, keys: List[str], roles: List[str]
+    ) -> List[dict]:
+        """The workflows a specialist owns, in the order it lists them."""
+        if not keys:
+            return []
+        rows = self._all("""
+            SELECT * FROM summary_workflows
+            WHERE agent_enabled IS TRUE AND workflow_key = ANY(%s)
+              AND role = ANY(%s)
+        """, (keys, roles))
+        by_key = {row["workflow_key"]: row for row in self._with_steps(rows)}
+        return [by_key[key] for key in keys if key in by_key]
+
+    def _validate_agent(self, agent_id, agent_enabled: bool) -> None:
+        """Refuse an assignment to a missing row or to non-agent content."""
+        if not agent_id:
+            if agent_enabled and self._all("""
+                SELECT id FROM agent_content WHERE kind='agent' LIMIT 1
+            """):
+                raise ValueError(
+                    "כדי להפעיל Workflow יש לבחור סוכן אחראי"
+                )
+            return
+        if not self._all("""
+            SELECT id FROM agent_content
+            WHERE id=%s AND kind='agent' LIMIT 1
+        """, (agent_id,)):
+            raise ValueError("הסוכן שנבחר אינו קיים")
+
     def _with_steps(self, rows: List[dict]) -> List[dict]:
         for row in rows:
             row["steps"] = self._steps(row["id"])
@@ -122,7 +158,8 @@ def _workflow_fields(data):
     """Every editable column, in the order both statements below use."""
     return (
         data["name"], data.get("description", ""), data.get("role", "detail"),
-        data.get("agent_enabled", True), data.get("system_prompt", ""),
+        data.get("agent_enabled", True), data.get("agent_id") or None,
+        data.get("system_prompt", ""),
         Jsonb(data.get("output_schema", {})), Jsonb(data.get("examples", [])),
     )
 
@@ -155,14 +192,14 @@ def _step_values(workflow_id, position, step):
 _INSERT_WORKFLOW = """
     INSERT INTO summary_workflows (
         id, workflow_key, name, description, role,
-        agent_enabled, system_prompt, output_schema, examples
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        agent_enabled, agent_id, system_prompt, output_schema, examples
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
 _UPDATE_WORKFLOW = """
     UPDATE summary_workflows SET
         name=%s, description=%s, role=%s, agent_enabled=%s,
-        system_prompt=%s, output_schema=%s, examples=%s
+        agent_id=%s, system_prompt=%s, output_schema=%s, examples=%s
     WHERE id=%s
 """
 
@@ -172,5 +209,3 @@ _INSERT_STEP = """
         depends_on, input_source, input_field, input_value, summary_prompt
     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
-
-

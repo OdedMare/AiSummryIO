@@ -43,8 +43,9 @@ EXAMPLE_PACKAGE = {
     # a real follow-up would call a package that does not exist.
     "agent_enabled": False,
     "agent_instructions": (
-        "טול הדגמה בלבד. אין להשתמש בו לשאלות אמיתיות עד שפרטי החיבור "
-        "הוחלפו בחבילת FLAPI קיימת."
+        "This is a demonstration tool only. Do not use it for real questions "
+        "until its connection points to an existing FLAPI package. If it is "
+        "summarized, write the result in Hebrew."
     ),
     "output_schema": {
         "type": "object",
@@ -121,9 +122,10 @@ def example_workflow(package_version_id: str) -> dict:
         # `package_id` is illustrative and would fail against a live provider.
         "agent_enabled": False,
         "system_prompt": (
-            "סכם את רשומת הזיהוי שחזרה: מי הישות, מה הסטטוס שלה, ומתי נרשמה. "
-            "אל תסיק דבר שאינו כתוב ברשומה. אם שדה ריק, ציין זאת במפורש "
-            "במקום לנחש."
+            "Summarize the returned identity record: who the entity is, its "
+            "status, and when it was registered. Infer nothing absent from "
+            "the record. State empty fields explicitly instead of guessing. "
+            "Write the result in Hebrew."
         ),
         "output_schema": {},
         "examples": [],
@@ -138,7 +140,8 @@ def example_workflow(package_version_id: str) -> dict:
                 "input_source": "workflow.id",
                 "input_field": "",
                 "summary_prompt": (
-                    "תאר את רשומת הזיהוי בלשון עובדתית, ללא הערכות."
+                    "Describe the identity record factually, without "
+                    "judgments. Write the result in Hebrew."
                 ),
             },
         ],

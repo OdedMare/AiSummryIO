@@ -35,10 +35,11 @@ class RuntimeSettingsStore:
             database_port=env.database_port,
             database_name=env.database_name,
             database_schema=_safe_schema(
-                env.database_schema or extract_url_schema(env.database_url)
+                extract_url_schema(env.database_url) or env.database_schema
             ),
             llm_model=env.llm_model,
             llm_diet_mode=env.llm_diet_mode,
+            llm_repetition_penalty=_clamp_penalty(env.llm_repetition_penalty),
             llm_timeout_seconds=env.llm_timeout_seconds,
             llm_base_url=env.llm_base_url,
             openai_api_key=env.openai_api_key,
@@ -46,13 +47,20 @@ class RuntimeSettingsStore:
             flapi_token=env.flapi_token,
             flapi_verify_tls=env.flapi_verify_tls,
             max_parallel_workflows=env.max_parallel_workflows,
+            agent_max_rounds=min(5, max(0, env.agent_max_rounds)),
             package_timeout_seconds=env.package_timeout_seconds,
+            conversation_idle_minutes=env.conversation_idle_minutes,
             conversation_retention_days=env.conversation_retention_days,
             log_retention_days=env.log_retention_days,
             cookie_secret=env.cookie_secret,
         )
         if self._path.exists():
             self._apply(json.loads(self._path.read_text("utf-8")), False)
+        # A saved value overrides the environment default, so migrate the old
+        # project schema or upgraded installs would keep reading stale tables.
+        if self._settings.database_schema == "mosaic_magen":
+            self._settings.database_schema = "sumorai"
+            self._persist()
         if not self._settings.cookie_secret:
             self._settings.cookie_secret = os.urandom(32).hex()
             self._persist()
@@ -102,10 +110,17 @@ class RuntimeSettingsStore:
                     value = normalize_database_schema(value)
                 elif key == "llm_base_url":
                     value = normalize_llm_base_url(value)
+                elif key == "agent_max_rounds":
+                    value = min(5, max(0, int(value)))
+                elif key == "llm_repetition_penalty":
+                    # Float, and 0 is meaningful ("do not send it"), so it
+                    # cannot join the max(1, int(...)) group below.
+                    value = _clamp_penalty(value)
                 elif key in (
                     "llm_timeout_seconds", "max_parallel_workflows",
                     "package_timeout_seconds",
-                    "conversation_retention_days", "log_retention_days",
+                    "conversation_idle_minutes", "conversation_retention_days",
+                    "log_retention_days",
                 ):
                     value = max(1, int(value))
             except (TypeError, ValueError):
@@ -125,6 +140,15 @@ def _safe_database_url(value: str) -> str:
         return normalize_database_url(value)
     except (TypeError, ValueError):
         return value
+
+
+def _clamp_penalty(value) -> float:
+    """0 means "do not send the parameter at all" — the off switch, and the
+    default, since OpenAI rejects the key outright. 2.0 is the top of the
+    range the servers implementing it accept. Values between 0 and 1 reward
+    repetition rather than penalizing it; unusual, but a legitimate ask, so
+    they pass through rather than being floored to neutral."""
+    return min(2.0, max(0.0, float(value)))
 
 
 def _safe_schema(value: str) -> str:

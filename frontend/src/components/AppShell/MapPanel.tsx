@@ -1,6 +1,5 @@
 import { Send } from "lucide-react";
 import MapWorkspace from "@/components/MapWorkspace";
-import type { GeoJSONPolygon } from "@/types/geo";
 import type { AppShellController } from "./useAppShell";
 import { isActive } from "./useAppShell";
 
@@ -10,10 +9,9 @@ import { isActive } from "./useAppShell";
  * bottom row, which squeezed and clipped the conversation above it.
  */
 export default function MapPanel({ app }: { app: AppShellController }) {
-  const clear = () => { app.setGeometry(null); app.setGeoMode("none"); };
-  const drawn = (geometry: GeoJSONPolygon) => {
-    app.setGeometry(geometry); app.setGeoMode("none");
-  };
+  // The mode deliberately survives a finished shape: several parts make one
+  // MultiPolygon, and dropping back to "none" after each would force the user
+  // to reselect the tool between the areas of a single scope.
   return (
     <aside className="map-panel" aria-label="אזור על המפה">
       <div className="map-panel-head">
@@ -21,26 +19,26 @@ export default function MapPanel({ app }: { app: AppShellController }) {
         <span>לא חובה</span>
       </div>
       <MapWorkspace mode={app.geoMode} geometry={app.geometry}
-        onModeChange={app.setGeoMode} onGeometryDrawn={drawn}
-        onClear={clear} disabled={app.submitting} />
+        onModeChange={app.setGeoMode} onGeometryDrawn={app.addGeometry}
+        onUndo={app.undoGeometry} onClear={app.clearGeometry}
+        disabled={app.submitting} />
       <SendAreaButton app={app} />
     </aside>
   );
 }
 
 /**
- * Submits straight from the map: drawing an area is usually the last step
+ * Submits straight from the map: drawing the last area is usually the step
  * before asking, and without this the user has to scroll back down to the
- * composer's Send button to submit the polygon they just drew. It reuses
+ * composer's Send button to submit the parts they just drew. It reuses
  * `app.ask`, the same path `submit` and the suggested-question chips use, so
  * it still passes identifier detection and the busy guard — this is a
- * shortcut into that path, not a second one. `MapPanel` only renders before
- * a conversation exists, so the disabled check mirrors the composer's
- * new-conversation branch, plus a drawn area is what this button is for.
+ * shortcut into that path, not a second one. `MapPanel` only renders before a
+ * conversation exists. The drawn area is valid scope by itself, so only an
+ * empty selection or an in-flight request disables this shortcut.
  */
 function SendAreaButton({ app }: { app: AppShellController }) {
-  const disabled = app.submitting || isActive(app.run) || !app.geometry ||
-    (!app.rootId.trim() && !app.message.trim());
+  const disabled = app.submitting || isActive(app.run) || !app.geometry.length;
   return (
     <button type="button" className="primary-button map-panel-send"
       disabled={disabled} onClick={() => app.ask(app.message)}>

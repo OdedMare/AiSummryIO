@@ -129,10 +129,12 @@ def select_detail(
     tools = tools or []
     if not workflows and not tools:
         return _no_options(evidence)
-    payload = _router_payload(question, workflows, tools, evidence, turns)
+    ratings = _route_ratings(service)
+    payload = _router_payload(question, workflows, tools, evidence, turns, ratings)
     prompt = service._repository.enabled_content(
         "tool-aware-router",
-        "בחר ראיות קיימות, workflow, טול עצמאי או clarification.",
+        "Choose existing evidence, a Workflow, an approved standalone tool, "
+        "or clarification. Write any user-facing text in Hebrew.",
     )
     try:
         selected = service._llm.complete_json(
@@ -149,17 +151,33 @@ def _no_options(evidence) -> dict:
     return _clarify("אין עדיין תהליך פעיל שיכול לענות על השאלה.")
 
 
-def _router_payload(question, workflows, tools, evidence, turns=None) -> dict:
+def _route_ratings(service) -> dict:
+    """Per-route star ratings, or empty when the repository predates them.
+
+    Mirrors `history.recent_turns`: reached through `getattr` so a fake or
+    older repository without `route_ratings` degrades to no signal rather
+    than crashing routing.
+    """
+    reader = getattr(service._repository, "route_ratings", None)
+    return reader() if reader else {}
+
+
+def _router_payload(
+    question, workflows, tools, evidence, turns=None, ratings=None
+) -> dict:
     """What the router selects on.
 
     `history` is what separates "run this workflow again" from "the user is
     asking about something already answered". Omitted entirely when empty so
     an opening request sends the payload it always did.
     """
+    ratings = ratings or {}
     payload = {
         "question": question,
-        "available_workflows": [_workflow_option(item) for item in workflows],
-        "available_tools": [_tool_option(item) for item in tools],
+        "available_workflows": [
+            _workflow_option(item, ratings) for item in workflows
+        ],
+        "available_tools": [_tool_option(item, ratings) for item in tools],
         "existing_evidence": _evidence_summary(evidence),
     }
     if turns:
@@ -167,20 +185,39 @@ def _router_payload(question, workflows, tools, evidence, turns=None) -> dict:
     return payload
 
 
-def _workflow_option(item: dict) -> dict:
-    return {
+def _workflow_option(item: dict, ratings: dict) -> dict:
+    option = {
         "workflow_key": item["workflow_key"],
         "name": item["name"],
         "description": item["description"],
     }
+    option.update(_rating_fields(ratings.get(item.get("id"))))
+    return option
 
 
-def _tool_option(item: dict) -> dict:
-    return {
+def _tool_option(item: dict, ratings: dict) -> dict:
+    option = {
         "tool_version_id": item["id"],
         "name": item["name"],
         "description": item.get("description", ""),
         "agent_instructions": item.get("agent_instructions", ""),
+    }
+    option.update(_rating_fields(ratings.get("tool:" + item["id"])))
+    return option
+
+
+def _rating_fields(row) -> dict:
+    """`avg_rating`/`rating_count`, present only behind real feedback.
+
+    Omitted rather than defaulted to a neutral score: a route no one has
+    rated yet is unproven, not average, and the router prompt is told to
+    read a missing rating that way.
+    """
+    if not row or not row.get("rating_count"):
+        return {}
+    return {
+        "avg_rating": float(row["avg_rating"]),
+        "rating_count": int(row["rating_count"]),
     }
 
 
@@ -265,7 +302,7 @@ def _clarify(message="לאיזה נושא תרצו להעמיק?", options=None)
 def tool_workflow(tool: dict) -> dict:
     instructions = (
         tool.get("agent_instructions") or tool.get("description")
-        or "סכם בעברית רק את עובדות הטול."
+        or "Summarize only the tool's facts. Write the result in Hebrew."
     )
     return {
         "id": "tool:" + tool["id"],

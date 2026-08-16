@@ -1,0 +1,21 @@
+# Values used only to render the chart in CI. Never deployed — the DSN is a
+# placeholder so `helm template` exercises the real Secret and env wiring.
+database:
+  url: postgresql://ci:ci@postgres.ci.svc.cluster.local:5432/summaries
+  schema: sumorai
+
+llm:
+  apiKey: ci-placeholder-key
+
+auth:
+  adminPassword: ci-placeholder-admin
+  cookieSecret: ci-placeholder-cookie
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: aisummry.ci.local
+      paths:
+        - path: /api
+          pathType: Prefix

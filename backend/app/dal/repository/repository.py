@@ -5,6 +5,7 @@ from app.dal.repository.base import RepositoryBase
 from app.dal.repository.content import ContentRepository
 from app.dal.repository.conversations import ConversationRepository
 from app.dal.repository.feedback import FeedbackRepository
+from app.dal.repository.evaluations import EvaluationRepository
 from app.dal.repository.packages import PackageRepository
 from app.dal.repository.runs import RunRepository
 from app.dal.repository.schema import SCHEMA
@@ -24,6 +25,7 @@ class Repository(
     ConversationRepository,
     RunRepository,
     FeedbackRepository,
+    EvaluationRepository,
 ):
     """Stable façade; each parent owns one persistence concern."""
 
@@ -33,10 +35,8 @@ class Repository(
             # Sent as one script: splitting on ";" would cut inside comments
             # and string literals, which is not something SQL text guarantees.
             connection.execute(SCHEMA)
-            connection.execute(
-                "DELETE FROM conversations WHERE expires_at <= NOW()"
-            )
             connection.commit()
+        self.purge_expired_conversations()
         self._seed_agent_content(SEED_CONTENT)
         self._seed_examples()
 

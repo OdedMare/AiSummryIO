@@ -8,6 +8,7 @@ type FieldProps = {
   list?: string;
   min?: string;
   max?: string;
+  step?: string;
 };
 
 export function SettingsField({
@@ -28,7 +29,7 @@ export function SettingsField({
       </label>
       <input id={`set-${name}`} className="settings-input"
         type={props.type ?? "text"} dir={props.ltr === false ? "auto" : "ltr"}
-        list={props.list} min={props.min} max={props.max}
+        list={props.list} min={props.min} max={props.max} step={props.step}
         placeholder={saved ? "השאירו ריק כדי לשמור את הערך הנוכחי" :
           props.placeholder}
         value={saved ? "" : settings.text(name)}
