@@ -96,6 +96,7 @@ export interface SummaryRun {
   kind: "full" | "follow_up";
   question: string;
   skill_keys: string[];
+  agent_keys: string[];
   status: RunStatus;
   progress: {
     completed: number;
@@ -110,6 +111,12 @@ export interface SummaryRun {
 }
 
 export interface SummarySkill {
+  content_key: string;
+  name: string;
+  description: string;
+}
+
+export interface SummaryAgent {
   content_key: string;
   name: string;
   description: string;
@@ -368,6 +375,7 @@ export interface EvaluationBatch {
   label: string;
   question: string;
   skill_keys: string[];
+  agent_keys: string[];
   cooldown_seconds: number;
   status: EvaluationStatus;
   total: number;
@@ -405,6 +413,7 @@ export interface EvaluationCaseDetail extends EvaluationCase {
   kind: "full" | null;
   question: string | null;
   skill_keys: string[] | null;
+  agent_keys: string[] | null;
   run_status: RunStatus | null;
   progress: SummaryRun["progress"] | null;
   result: SummaryResult | null;

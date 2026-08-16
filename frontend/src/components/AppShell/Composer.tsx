@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Send } from "lucide-react";
+import { Send, UsersRound } from "lucide-react";
 import type { SummarySkill } from "@/types";
 import type { AppShellController } from "./useAppShell";
 import { isActive, parseCommands } from "./useAppShell";
@@ -11,6 +11,7 @@ export default function Composer({ app }: { app: AppShellController }) {
       {!app.conversation && <IdentifierField app={app} />}
       <MessageField app={app} />
       <ActiveSkills app={app} />
+      <AgentPicker app={app} />
       {app.error && <p className="composer-error" role="alert">{app.error}</p>}
       {app.notice &&
         <p className="composer-notice" role="status">{app.notice}</p>}
@@ -201,6 +202,28 @@ function ActiveSkills({ app }: { app: AppShellController }) {
   }, [app.message, app.skills]);
   if (!names) return null;
   return <p className="active-skills">Skills שיופעלו: {names}</p>;
+}
+
+function AgentPicker({ app }: { app: AppShellController }) {
+  if (!app.agents.length) return null;
+  const selected = app.selectedAgentKeys.length;
+  return <details className="summary-agent-picker">
+    <summary><UsersRound size={16} aria-hidden="true" />
+      <span>סוכנים להרצה</span>
+      <small>{selected ? `${selected} נבחרו` : "בחירה אוטומטית"}</small>
+    </summary>
+    <fieldset><legend className="visually-hidden">בחירת סוכנים להרצה</legend>
+      <p>ללא בחירה המערכת מנתבת אוטומטית. בחירה ידנית מריצה את כל הסוכנים שסומנו.</p>
+      <div>{app.agents.map((agent) => <label key={agent.content_key}
+        className={app.selectedAgentKeys.includes(agent.content_key)
+          ? "selected" : ""}>
+        <input type="checkbox"
+          checked={app.selectedAgentKeys.includes(agent.content_key)}
+          onChange={() => app.toggleAgent(agent.content_key)} />
+        <span><strong>{agent.name}</strong><small>{agent.description}</small></span>
+      </label>)}</div>
+    </fieldset>
+  </details>;
 }
 
 function SubmitButton({ app }: { app: AppShellController }) {

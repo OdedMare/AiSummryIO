@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect } from "react";
 import { api } from "@/services/api";
-import type { SummarySkill } from "@/types";
+import type { SummaryAgent, SummarySkill } from "@/types";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
@@ -9,6 +9,7 @@ export function useInitialData(
   loadHistory: () => void,
   setDark: Setter<boolean>,
   setSkills: Setter<SummarySkill[]>,
+  setAgents: Setter<SummaryAgent[]>,
 ) {
   useEffect(() => {
     const saved = window.localStorage.getItem("aisummry-theme");
@@ -19,7 +20,8 @@ export function useInitialData(
     window.setTimeout(() => setDark(dark), 0);
     loadHistory();
     api.skills().then(setSkills).catch(() => undefined);
-  }, [loadHistory, setDark, setSkills]);
+    api.specialists().then(setAgents).catch(() => undefined);
+  }, [loadHistory, setAgents, setDark, setSkills]);
 }
 
 export function useTheme(dark: boolean) {

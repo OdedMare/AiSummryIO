@@ -3,7 +3,7 @@ import type {
   EvaluationBatch, EvaluationCaseDetail, EvaluationCasePage, EvaluationImport,
   PackageInspection,
   PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
-  SkillPlanChatTurn, SkillPlanDraft, SpecialistPlanChatTurn,
+  SkillPlanChatTurn, SkillPlanDraft, SpecialistPlanChatTurn, SummaryAgent,
   SpecialistPlanDraft, SummarySkill, ToolPlanChatTurn, ToolPlanDraft,
   WorkflowPlan, WorkflowPlanChatTurn, WorkflowVersion,
 } from "@/types";
@@ -108,6 +108,7 @@ export const api = {
   // renders, so this is for a caller that wants the text alone.
   messages: (id: string) =>
     request<ConversationTurn[]>(`/api/conversations/${id}/messages`),
+  specialists: () => request<SummaryAgent[]>("/api/specialists"),
   // Either rootId or boundaries must be present; the backend rejects a
   // request carrying neither. A request sent from the map with no identifier
   // typed comes back with `conversation.root_id` set to the drawn area's WKT
@@ -118,6 +119,7 @@ export const api = {
     question: string,
     skillKeys: string[],
     boundaries: GeoJSONMultiPolygon | null = null,
+    agentKeys: string[] = [],
   ) =>
     request<{ conversation: Conversation; run: SummaryRun }>("/api/summaries", {
       method: "POST",
@@ -125,6 +127,7 @@ export const api = {
         root_id: rootId || null,
         question,
         skill_keys: skillKeys,
+        agent_keys: agentKeys,
         boundaries,
       }),
     }),
@@ -132,10 +135,13 @@ export const api = {
     conversationId: string,
     question: string,
     skillKeys: string[],
+    agentKeys: string[] = [],
   ) =>
     request<SummaryRun>(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ question, skill_keys: skillKeys }),
+      body: JSON.stringify({
+        question, skill_keys: skillKeys, agent_keys: agentKeys,
+      }),
     }),
   run: (id: string) => request<SummaryRun>(`/api/runs/${id}`),
   evidence: (id: string) => request<Evidence[]>(`/api/runs/${id}/evidence`),
@@ -287,6 +293,7 @@ export const api = {
     root_ids: string[];
     question: string;
     skill_keys: string[];
+    agent_keys: string[];
     cooldown_seconds: number;
   }) => request<EvaluationBatch>("/api/evaluations", {
     method: "POST", body: JSON.stringify(data),

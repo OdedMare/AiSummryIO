@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
   CircleStop, Download, Layers3, LoaderCircle, Pause, Play, RefreshCw,
-  Search, Star, Timer, Trash2,
+  Search, Star, Timer, Trash2, UsersRound,
 } from "lucide-react";
 import { SummaryContent } from "@/components/SummaryWorkspace/RunContent";
 import { api } from "@/services/api";
@@ -82,6 +82,8 @@ function BatchHeader({
           <span><Timer size={14} /> Cooldown: {batch.cooldown_seconds} שנ׳</span>
           {!!batch.skill_keys.length && <span><Layers3 size={14} />
             {batch.skill_keys.join(" · ")}</span>}
+          {!!batch.agent_keys.length && <span><UsersRound size={14} />
+            {batch.agent_keys.join(" · ")}</span>}
         </div>
       </div>
       <nav aria-label="פעולות ריצה">
@@ -277,6 +279,7 @@ function toRun(detail: EvaluationCaseDetail): SummaryRun | null {
     id: detail.run_id, conversation_id: detail.conversation_id ?? "",
     kind: "full", question: detail.question ?? "",
     skill_keys: detail.skill_keys ?? [], status: detail.run_status,
+    agent_keys: detail.agent_keys ?? [],
     progress: detail.progress ?? { completed: 0, total: 0, sections: [] },
     result: detail.result, error: detail.error,
     created_at: detail.run_created_at ?? "",

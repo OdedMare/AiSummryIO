@@ -19,7 +19,7 @@ export default function AppShell() {
     return <AgentStudioPanel onClose={() => app.setStudioOpen(false)} />;
   }
   if (app.evaluationOpen) {
-    return <EvaluationPanel skills={app.skills}
+    return <EvaluationPanel skills={app.skills} agents={app.agents}
       onClose={() => app.setEvaluationOpen(false)} />;
   }
   return (

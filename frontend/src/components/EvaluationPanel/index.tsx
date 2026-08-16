@@ -3,15 +3,16 @@
 import {
   AlertTriangle, ArrowRight, Beaker, LoaderCircle, Plus, RefreshCw,
 } from "lucide-react";
-import type { EvaluationBatch, SummarySkill } from "@/types";
+import type { EvaluationBatch, SummaryAgent, SummarySkill } from "@/types";
 import EvaluationResults from "./EvaluationResults";
 import EvaluationSetup from "./EvaluationSetup";
 import { useEvaluation } from "./useEvaluation";
 
 export default function EvaluationPanel({
-  skills, onClose,
+  skills, agents, onClose,
 }: {
   skills: SummarySkill[];
+  agents: SummaryAgent[];
   onClose: () => void;
 }) {
   const evaluation = useEvaluation();
@@ -37,7 +38,8 @@ export default function EvaluationPanel({
               : <>
                 {evaluation.error && <p className="form-error evaluation-load-error"
                   role="alert"><AlertTriangle size={17} /> {evaluation.error}</p>}
-                <EvaluationSetup skills={skills} activeBatch={evaluation.activeBatch}
+                <EvaluationSetup skills={skills} agents={agents}
+                  activeBatch={evaluation.activeBatch}
                   onCreated={evaluation.created} />
               </>}
         </section>

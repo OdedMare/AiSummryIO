@@ -3,7 +3,9 @@
 import type { FormEvent } from "react";
 import { useCallback, useState } from "react";
 import { api } from "@/services/api";
-import type { Conversation, SummaryRun, SummarySkill } from "@/types";
+import type {
+  Conversation, SummaryAgent, SummaryRun, SummarySkill,
+} from "@/types";
 import type { GeographyMode, GeoJSONPolygon } from "@/types/geo";
 import { toMultiPolygonParts } from "@/types/geo";
 import {
@@ -27,6 +29,8 @@ export function useAppShell() {
   const [geometry, setGeometry] = useState<GeoJSONPolygon[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [skills, setSkills] = useState<SummarySkill[]>([]);
+  const [agents, setAgents] = useState<SummaryAgent[]>([]);
+  const [selectedAgentKeys, setSelectedAgentKeys] = useState<string[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [runs, setRuns] = useState<SummaryRun[]>([]);
   const [run, setRun] = useState<SummaryRun | null>(null);
@@ -43,7 +47,7 @@ export function useAppShell() {
     api.conversations().then(setConversations).catch(() => undefined);
   }, []);
 
-  useInitialData(loadHistory, setDark, setSkills);
+  useInitialData(loadHistory, setDark, setSkills, setAgents);
   useTheme(dark);
   useRunPolling(run, setRun, setRuns, setError, loadHistory);
 
@@ -126,6 +130,7 @@ export function useAppShell() {
         parsed.text,
         parsed.keys,
         geometry,
+        selectedAgentKeys,
       );
       setConversation(next.conversation);
       // A map request is sent without an identifier and comes back carrying
@@ -163,6 +168,12 @@ export function useAppShell() {
     clearGeometry,
     conversations,
     skills,
+    agents,
+    selectedAgentKeys,
+    toggleAgent: (key: string) => setSelectedAgentKeys((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]),
     conversation,
     run,
     runs,
@@ -195,10 +206,13 @@ async function submitRequest(
   message: string,
   skillKeys: string[],
   geometry: GeoJSONPolygon[],
+  agentKeys: string[],
 ) {
   if (conversation) {
     if (!message.trim()) throw new Error("יש לכתוב שאלת המשך");
-    const run = await api.followUp(conversation.id, message.trim(), skillKeys);
+    const run = await api.followUp(
+      conversation.id, message.trim(), skillKeys, agentKeys,
+    );
     return { conversation, run };
   }
   return api.start(
@@ -206,6 +220,7 @@ async function submitRequest(
     message.trim(),
     skillKeys,
     toMultiPolygonParts(geometry),
+    agentKeys,
   );
 }
 

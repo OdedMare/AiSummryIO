@@ -6,12 +6,13 @@ import {
   FileSpreadsheet, Layers3, LoaderCircle, Play, Server, Upload,
 } from "lucide-react";
 import { api } from "@/services/api";
-import type { EvaluationBatch, SummarySkill } from "@/types";
+import type { EvaluationBatch, SummaryAgent, SummarySkill } from "@/types";
 
 export default function EvaluationSetup({
-  skills, activeBatch, onCreated,
+  skills, agents, activeBatch, onCreated,
 }: {
   skills: SummarySkill[];
+  agents: SummaryAgent[];
   activeBatch: EvaluationBatch | null;
   onCreated: (batch: EvaluationBatch) => Promise<void>;
 }) {
@@ -19,6 +20,7 @@ export default function EvaluationSetup({
   const [question, setQuestion] = useState("");
   const [rootIds, setRootIds] = useState("");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [cooldown, setCooldown] = useState(0);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [importNote, setImportNote] = useState("");
@@ -66,7 +68,8 @@ export default function EvaluationSetup({
     try {
       const created = await api.createEvaluation({
         label: label.trim(), root_ids: ids, question: question.trim(),
-        skill_keys: selectedSkills, cooldown_seconds: cooldown,
+        skill_keys: selectedSkills, agent_keys: selectedAgents,
+        cooldown_seconds: cooldown,
       });
       await onCreated(created);
     } catch (reason) {
@@ -136,6 +139,20 @@ export default function EvaluationSetup({
                 selectedSkills.length >= 3}
               onChange={() => toggleSkill(skill.content_key)} />
             <span><strong>{skill.name}</strong><small>{skill.description}</small></span>
+          </label>)}</div>
+        </fieldset>}
+        {!!agents.length && <fieldset className="evaluation-skills evaluation-agents">
+          <legend>Agents להרצה <small>ללא הגבלה</small></legend>
+          <p>ללא בחירה המערכת מנתבת אוטומטית. בחירה ידנית מריצה את כל הסוכנים שסומנו.</p>
+          <div>{agents.map((agent) => <label key={agent.content_key}
+            className={selectedAgents.includes(agent.content_key) ? "selected" : ""}>
+            <input type="checkbox"
+              checked={selectedAgents.includes(agent.content_key)}
+              onChange={() => setSelectedAgents((current) =>
+                current.includes(agent.content_key)
+                  ? current.filter((item) => item !== agent.content_key)
+                  : [...current, agent.content_key])} />
+            <span><strong>{agent.name}</strong><small>{agent.description}</small></span>
           </label>)}</div>
         </fieldset>}
         <fieldset className="evaluation-cooldown">
