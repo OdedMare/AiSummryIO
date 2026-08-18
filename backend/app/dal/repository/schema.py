@@ -138,9 +138,16 @@ CREATE TABLE IF NOT EXISTS projects (
     workflow_keys JSONB NOT NULL DEFAULT '[]',
     skill_keys JSONB NOT NULL DEFAULT '[]',
     agent_keys JSONB NOT NULL DEFAULT '[]',
+    is_system BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Existing installations already have the table. The default leaves every
+-- user-created project untouched; the repository lazily creates the one
+-- system workspace after the catalog seeds have finished loading.
+ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT FALSE;
 
 COMMIT;
 
@@ -165,6 +172,12 @@ ALTER TABLE conversations ALTER COLUMN root_id DROP NOT NULL;
 -- to rendering as it did before.
 ALTER TABLE conversations
     ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+
+-- Nullable keeps every legacy row valid. When the session first loads its
+-- projects, those rows are attached to its Hunger Games system workspace.
+ALTER TABLE conversations
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id)
+        ON DELETE SET NULL;
 
 COMMIT;
 
@@ -523,6 +536,8 @@ CREATE INDEX IF NOT EXISTS summary_workflows_agent_idx
     ON summary_workflows(agent_id);
 CREATE INDEX IF NOT EXISTS projects_session_idx
     ON projects(session_id, updated_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS projects_one_system_idx
+    ON projects(session_id) WHERE is_system IS TRUE;
 
 CREATE INDEX IF NOT EXISTS conversations_session_idx
     ON conversations(session_id, updated_at DESC);

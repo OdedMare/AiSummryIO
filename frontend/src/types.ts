@@ -139,6 +139,7 @@ export interface SkillPreviewResult {
 
 export interface Conversation {
   id: string;
+  project_id?: string | null;
   root_id: string;
   /** The opening question. Empty on conversations created before titles. */
   title?: string;
@@ -350,6 +351,7 @@ export interface ProjectWorkspace {
   workflow_keys: string[];
   skill_keys: string[];
   agent_keys: string[];
+  is_system: boolean;
   created_at: string;
   updated_at: string;
 }

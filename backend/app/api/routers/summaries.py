@@ -32,10 +32,16 @@ def build(context) -> APIRouter:
         ),
         session_id: str = Depends(context.user_session),
     ):
+        project = (
+            context.repository.get_project(payload.project_id, session_id)
+            if payload.project_id
+            else context.repository.system_project(session_id)
+        )
         conversation = context.repository.create_conversation(
             session_id, payload.root_id,
             payload.boundaries.model_dump() if payload.boundaries else None,
             payload.question,
+            project["id"],
         )
         run = context.repository.create_run(
             conversation["id"], payload.question, "full", payload.skill_keys,

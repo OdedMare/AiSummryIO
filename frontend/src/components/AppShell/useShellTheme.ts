@@ -6,7 +6,6 @@ import type { SummaryAgent, SummarySkill } from "@/types";
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
 export function useInitialData(
-  loadHistory: () => void,
   setDark: Setter<boolean>,
   setSkills: Setter<SummarySkill[]>,
   setAgents: Setter<SummaryAgent[]>,
@@ -18,10 +17,9 @@ export function useInitialData(
       : window.matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     window.setTimeout(() => setDark(dark), 0);
-    loadHistory();
     api.skills().then(setSkills).catch(() => undefined);
     api.specialists().then(setAgents).catch(() => undefined);
-  }, [loadHistory, setAgents, setDark, setSkills]);
+  }, [setAgents, setDark, setSkills]);
 }
 
 export function useTheme(dark: boolean) {

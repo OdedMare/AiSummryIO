@@ -297,6 +297,7 @@ class SummaryCreate(BaseModel):
     """
 
     root_id: Optional[str] = None
+    project_id: Optional[str] = None
     question: str = ""
     skill_keys: List[str] = Field(default_factory=list)
     agent_keys: List[str] = Field(default_factory=list)

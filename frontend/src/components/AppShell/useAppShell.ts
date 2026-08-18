@@ -1,10 +1,10 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/services/api";
 import type {
-  Conversation, SummaryAgent, SummaryRun, SummarySkill,
+  Conversation, ProjectWorkspace, SummaryAgent, SummaryRun, SummarySkill,
 } from "@/types";
 import type { GeographyMode, GeoJSONPolygon } from "@/types/geo";
 import { toMultiPolygonParts } from "@/types/geo";
@@ -30,6 +30,10 @@ export function useAppShell() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [skills, setSkills] = useState<SummarySkill[]>([]);
   const [agents, setAgents] = useState<SummaryAgent[]>([]);
+  const [projects, setProjects] = useState<ProjectWorkspace[]>([]);
+  const [activeProject, setActiveProject] = useState<ProjectWorkspace | null>(null);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectError, setProjectError] = useState("");
   const [selectedAgentKeys, setSelectedAgentKeys] = useState<string[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [runs, setRuns] = useState<SummaryRun[]>([]);
@@ -43,11 +47,45 @@ export function useAppShell() {
   const [dark, setDark] = useState(true);
   const [notice, setNotice] = useState("");
 
-  const loadHistory = useCallback(() => {
-    api.conversations().then(setConversations).catch(() => undefined);
+  const visibleSkills = useMemo(() => {
+    if (!activeProject) return [];
+    const keys = new Set(activeProject.skill_keys);
+    return skills.filter((item) => keys.has(item.content_key));
+  }, [activeProject, skills]);
+  const visibleAgents = useMemo(() => {
+    if (!activeProject) return [];
+    const keys = new Set(activeProject.agent_keys);
+    return agents.filter((item) => keys.has(item.content_key));
+  }, [activeProject, agents]);
+
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true);
+    setProjectError("");
+    try {
+      const items = await api.projects();
+      setProjects(items);
+      setActiveProject((current) => current
+        ? items.find((item) => item.id === current.id) ?? null
+        : null);
+    } catch (reason) {
+      setProjectError(errorMessage(reason, "לא ניתן לטעון את הפרויקטים"));
+    } finally {
+      setProjectsLoading(false);
+    }
   }, []);
 
-  useInitialData(loadHistory, setDark, setSkills, setAgents);
+  const loadHistory = useCallback(() => {
+    if (!activeProject) {
+      setConversations([]);
+      return;
+    }
+    api.conversations(activeProject.id)
+      .then(setConversations).catch(() => undefined);
+  }, [activeProject]);
+
+  useInitialData(setDark, setSkills, setAgents);
+  useEffect(() => { void loadProjects(); }, [loadProjects]);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
   useTheme(dark);
   useRunPolling(run, setRun, setRuns, setError, loadHistory);
 
@@ -70,6 +108,27 @@ export function useAppShell() {
   };
   const undoGeometry = () => setGeometry((parts) => parts.slice(0, -1));
   const clearGeometry = () => { setGeometry([]); setGeoMode("none"); };
+
+  const selectProject = (project: ProjectWorkspace) => {
+    startNew();
+    setSelectedAgentKeys([]);
+    setActiveProject(project);
+  };
+
+  const switchProject = () => {
+    if (isActive(run) && !window.confirm(
+      "הסיכום ימשיך לרוץ בשרת. לעבור עכשיו לבחירת פרויקט?",
+    )) return;
+    startNew();
+    setSelectedAgentKeys([]);
+    setConversations([]);
+    setActiveProject(null);
+  };
+
+  const closeStudio = () => {
+    setStudioOpen(false);
+    void loadProjects();
+  };
 
   const endConversation = async () => {
     if (!conversation || submitting || isActive(run)) return;
@@ -111,7 +170,8 @@ export function useAppShell() {
     setError("");
     setNotice("");
     try {
-      const parsed = parseCommands(text, skills);
+      if (!activeProject) throw new Error("יש לבחור פרויקט לפני יצירת סיכום");
+      const parsed = parseCommands(text, visibleSkills);
       const detected = detectIdentifier(
         rootId,
         parsed.text,
@@ -131,6 +191,7 @@ export function useAppShell() {
         parsed.keys,
         geometry,
         selectedAgentKeys,
+        activeProject.id,
       );
       setConversation(next.conversation);
       // A map request is sent without an identifier and comes back carrying
@@ -167,8 +228,15 @@ export function useAppShell() {
     undoGeometry,
     clearGeometry,
     conversations,
-    skills,
-    agents,
+    skills: visibleSkills,
+    agents: visibleAgents,
+    projects,
+    projectsLoading,
+    projectError,
+    activeProject,
+    selectProject,
+    switchProject,
+    loadProjects,
     selectedAgentKeys,
     toggleAgent: (key: string) => setSelectedAgentKeys((current) =>
       current.includes(key)
@@ -185,6 +253,7 @@ export function useAppShell() {
     setSettingsOpen,
     studioOpen,
     setStudioOpen,
+    closeStudio,
     evaluationOpen,
     setEvaluationOpen,
     dark,
@@ -207,6 +276,7 @@ async function submitRequest(
   skillKeys: string[],
   geometry: GeoJSONPolygon[],
   agentKeys: string[],
+  projectId: string,
 ) {
   if (conversation) {
     if (!message.trim()) throw new Error("יש לכתוב שאלת המשך");
@@ -221,6 +291,7 @@ async function submitRequest(
     skillKeys,
     toMultiPolygonParts(geometry),
     agentKeys,
+    projectId,
   );
 }
 

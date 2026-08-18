@@ -111,7 +111,10 @@ export const api = {
     request<{ deleted: string; name: string }>(`/api/projects/${id}`, {
       method: "DELETE",
     }),
-  conversations: () => request<Conversation[]>("/api/conversations"),
+  conversations: (projectId?: string) => request<Conversation[]>(
+    `/api/conversations${projectId
+      ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
+  ),
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
@@ -136,11 +139,13 @@ export const api = {
     skillKeys: string[],
     boundaries: GeoJSONMultiPolygon | null = null,
     agentKeys: string[] = [],
+    projectId?: string,
   ) =>
     request<{ conversation: Conversation; run: SummaryRun }>("/api/summaries", {
       method: "POST",
       body: JSON.stringify({
         root_id: rootId || null,
+        project_id: projectId || null,
         question,
         skill_keys: skillKeys,
         agent_keys: agentKeys,

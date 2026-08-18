@@ -25,6 +25,17 @@ class PackageRepository:
             ORDER BY name
         """)
 
+    def agent_tools_by_keys(self, keys: List[str]) -> List[dict]:
+        """Enabled standalone tools assigned to one project, in its order."""
+        if not keys:
+            return []
+        rows = self._all("""
+            SELECT * FROM summary_packages
+            WHERE agent_enabled IS TRUE AND package_key = ANY(%s)
+        """, (keys,))
+        by_key = {row["package_key"]: row for row in rows}
+        return [by_key[key] for key in keys if key in by_key]
+
     def get_package(self, package_id: str) -> dict:
         return self._one(
             "SELECT * FROM summary_packages WHERE id=%s", (package_id,)

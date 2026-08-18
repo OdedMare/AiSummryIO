@@ -4,17 +4,28 @@ from typing import List
 
 from psycopg.types.json import Jsonb
 
-from app.common.errors import NotFoundError
+from app.common.errors import ConflictError, NotFoundError
 from app.dal.database.postgres import connect
 from app.dal.repository.base import new_id
 
 
 class ProjectRepository:
     def list_projects(self, session_id: str) -> List[dict]:
+        self._ensure_system_project(session_id)
         return self._all("""
             SELECT * FROM projects
-            WHERE session_id=%s ORDER BY updated_at DESC, created_at DESC
+            WHERE session_id=%s
+            ORDER BY is_system DESC, updated_at DESC, created_at DESC
         """, (session_id,))
+
+    def system_project(self, session_id: str) -> dict:
+        """The compatibility workspace that owns the pre-project catalog."""
+        self._ensure_system_project(session_id)
+        return self._all("""
+            SELECT * FROM projects
+            WHERE session_id=%s AND is_system IS TRUE
+            LIMIT 1
+        """, (session_id,))[0]
 
     def get_project(self, project_id: str, session_id: str) -> dict:
         rows = self._all("""
@@ -37,7 +48,9 @@ class ProjectRepository:
     def update_project(
         self, project_id: str, session_id: str, data: dict
     ) -> dict:
-        self.get_project(project_id, session_id)
+        current = self.get_project(project_id, session_id)
+        if current.get("is_system"):
+            data = dict(data, name=_SYSTEM_PROJECT_NAME)
         self._validate_capabilities(data)
         with connect(self._store) as connection:
             connection.execute(
@@ -50,6 +63,8 @@ class ProjectRepository:
 
     def delete_project(self, project_id: str, session_id: str) -> dict:
         project = self.get_project(project_id, session_id)
+        if project.get("is_system"):
+            raise ConflictError("לא ניתן למחוק את פרויקט המערכת Hunger Games")
         with connect(self._store) as connection:
             connection.execute(
                 "DELETE FROM projects WHERE id=%s AND session_id=%s",
@@ -57,6 +72,29 @@ class ProjectRepository:
             )
             connection.commit()
         return {"deleted": project_id, "name": project["name"]}
+
+    def _ensure_system_project(self, session_id: str) -> None:
+        """Create the legacy-data workspace once and attach old threads.
+
+        This runs after startup seeding, so its key lists are a snapshot of
+        every capability the installation had before project selection was
+        introduced. The partial unique index makes concurrent first loads
+        idempotent without rewriting any catalog row.
+        """
+        with connect(self._store) as connection:
+            connection.execute(_INSERT_SYSTEM_PROJECT, (
+                new_id(), session_id, _SYSTEM_PROJECT_NAME,
+                _SYSTEM_PROJECT_MISSION, session_id,
+            ))
+            connection.execute("""
+                UPDATE conversations AS conversation
+                SET project_id = project.id
+                FROM projects AS project
+                WHERE project.session_id=%s AND project.is_system IS TRUE
+                  AND conversation.session_id=%s
+                  AND conversation.project_id IS NULL
+            """, (session_id, session_id))
+            connection.commit()
 
     def _validate_capabilities(self, data: dict) -> None:
         checks = (
@@ -121,4 +159,41 @@ _UPDATE_PROJECT = """
         name=%s, mission=%s, tool_keys=%s, workflow_keys=%s,
         skill_keys=%s, agent_keys=%s, updated_at=NOW()
     WHERE id=%s AND session_id=%s
+"""
+
+
+_SYSTEM_PROJECT_NAME = "Hunger Games"
+_SYSTEM_PROJECT_MISSION = (
+    "סביבת העבודה הקיימת, עם כל הטולים, ה-Workflows, ה-Skills והסוכנים "
+    "שהיו במערכת לפני הוספת פרויקטים."
+)
+
+_INSERT_SYSTEM_PROJECT = """
+    INSERT INTO projects (
+        id, session_id, name, mission, tool_keys, workflow_keys,
+        skill_keys, agent_keys, is_system
+    )
+    SELECT
+        %s, %s, %s, %s,
+        COALESCE((
+            SELECT jsonb_agg(package_key ORDER BY name)
+            FROM summary_packages
+        ), '[]'::jsonb),
+        COALESCE((
+            SELECT jsonb_agg(workflow_key ORDER BY name)
+            FROM summary_workflows
+        ), '[]'::jsonb),
+        COALESCE((
+            SELECT jsonb_agg(content_key ORDER BY name)
+            FROM agent_content WHERE kind='skill'
+        ), '[]'::jsonb),
+        COALESCE((
+            SELECT jsonb_agg(content_key ORDER BY name)
+            FROM agent_content WHERE kind='agent'
+        ), '[]'::jsonb),
+        TRUE
+    WHERE NOT EXISTS (
+        SELECT 1 FROM projects WHERE session_id=%s AND is_system IS TRUE
+    )
+    ON CONFLICT DO NOTHING
 """

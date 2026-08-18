@@ -1,5 +1,7 @@
 """Conversation history and the user-selectable Skill catalog."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query, Response
 
 
@@ -8,10 +10,14 @@ def build(context) -> APIRouter:
 
     @router.get("/conversations")
     def conversations(
-        response: Response, session_id: str = Depends(context.user_session)
+        response: Response,
+        project_id: Optional[str] = Query(None),
+        session_id: str = Depends(context.user_session),
     ):
         context.set_session_cookie(response, session_id)
-        return context.repository.list_conversations(session_id)
+        if project_id:
+            context.repository.get_project(project_id, session_id)
+        return context.repository.list_conversations(session_id, project_id)
 
     @router.get("/conversations/{conversation_id}")
     def conversation(

@@ -8,7 +8,7 @@ from app.bl.workflow_engine_pkg import history
 from app.bl.workflow_engine_pkg.schemas import ROUTER_SCHEMA
 
 
-def follow_up(service, run, conversation, progress) -> dict:
+def follow_up(service, run, conversation, progress, project=None) -> dict:
     """Answer a follow-up in the context of the thread it belongs to.
 
     The question is resolved against prior turns before anything selects on
@@ -16,8 +16,8 @@ def follow_up(service, run, conversation, progress) -> dict:
     its own subject. `run["question"]` keeps the user's original wording;
     only what the model reads downstream is the resolved form.
     """
-    prior, workflows, tools = _available(service, conversation)
-    skills = _skills(service, run)
+    prior, workflows, tools = _available(service, conversation, project)
+    skills = service._project_skills(run, project)
     turns = history.recent_turns(service, conversation)
     question = history.standalone_question(service, run["question"], turns)
     selected = service._select_detail(
@@ -34,19 +34,22 @@ def follow_up(service, run, conversation, progress) -> dict:
     return service._synthesize_cached(question, prior, skills)
 
 
-def _available(service, conversation):
+def _available(service, conversation, project=None):
     prior = [
         item for run in conversation.get("runs", [])
         if run.get("status") in ("completed", "partial")
         for item in service._repository.run_evidence(run["id"])
     ]
+    if project:
+        workflows = service._repository.enabled_workflows_by_keys(
+            project.get("workflow_keys", []), ["detail", "both"]
+        )
+        tools = service._repository.agent_tools_by_keys(
+            project.get("tool_keys", [])
+        )
+        return prior, workflows, tools
     workflows = service._repository.enabled_workflows(["detail", "both"])
     return prior, workflows, service._repository.agent_tools()
-
-
-def _skills(service, run):
-    keys = run.get("skill_keys", [])
-    return service._repository.enabled_summary_skills(keys) if keys else []
 
 
 def _clarification_result(selected, workflows, tools) -> dict:

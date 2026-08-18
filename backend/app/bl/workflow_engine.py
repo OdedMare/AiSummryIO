@@ -28,28 +28,100 @@ class SummaryService:
         self._store = settings_store
 
     def full_summary(self, run: dict, conversation: dict, progress) -> dict:
+        project = self._project(conversation)
         agent_keys = run.get("agent_keys", [])
+        self._validate_project_keys(
+            agent_keys, project, "agent_keys", "הסוכנים"
+        )
+        self._validate_project_keys(
+            run.get("skill_keys", []), project, "skill_keys", "ה-Skills"
+        )
         agents = specialists.available(self, agent_keys)
+        if project:
+            agents = self._project_agents(agents, project)
         if agents:
             return specialists.full_summary(
                 self, run, conversation, progress, agents, bool(agent_keys)
             )
-        workflows = self._repository.enabled_workflows(["baseline", "both"])
-        keys = run.get("skill_keys", [])
-        skills = self._repository.enabled_summary_skills(keys) if keys else []
+        workflows = (
+            self._repository.enabled_workflows_by_keys(
+                project.get("workflow_keys", []), ["baseline", "both"]
+            )
+            if project else
+            self._repository.enabled_workflows(["baseline", "both"])
+        )
+        skills = self._project_skills(run, project)
         return self._execute(
             run, conversation["root_id"], run["question"], workflows, progress,
             skills, conversation.get("boundaries"),
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
+        project = self._project(conversation)
         agent_keys = run.get("agent_keys", [])
+        self._validate_project_keys(
+            agent_keys, project, "agent_keys", "הסוכנים"
+        )
+        self._validate_project_keys(
+            run.get("skill_keys", []), project, "skill_keys", "ה-Skills"
+        )
         agents = specialists.available(self, agent_keys)
+        if project:
+            agents = self._project_agents(agents, project)
         if agents:
             return specialists.follow_up(
                 self, run, conversation, progress, agents, bool(agent_keys)
             )
-        return routing.follow_up(self, run, conversation, progress)
+        return routing.follow_up(self, run, conversation, progress, project)
+
+    def _project(self, conversation: dict):
+        project_id = conversation.get("project_id")
+        if not project_id:
+            return None
+        return self._repository.get_project(
+            project_id, conversation.get("session_id")
+        )
+
+    def _project_skills(self, run: dict, project=None) -> List[dict]:
+        keys = run.get("skill_keys", [])
+        self._validate_project_keys(keys, project, "skill_keys", "ה-Skills")
+        return self._repository.enabled_summary_skills(keys) if keys else []
+
+    @staticmethod
+    def _validate_project_keys(keys, project, field, label) -> None:
+        if not project or not keys:
+            return
+        allowed = set(project.get(field, []))
+        missing = [key for key in keys if key not in allowed]
+        if missing:
+            raise ValueError(
+                "%s אינם משויכים לפרויקט: %s" % (label, ", ".join(missing))
+            )
+
+    @staticmethod
+    def _project_agents(agents, project) -> List[dict]:
+        """Limit both specialists and their dependencies to the workspace."""
+        agent_keys = set(project.get("agent_keys", []))
+        workflow_keys = set(project.get("workflow_keys", []))
+        skill_keys = set(project.get("skill_keys", []))
+        scoped = []
+        for item in agents:
+            if item.get("content_key") not in agent_keys:
+                continue
+            agent = dict(item)
+            config = dict(agent.get("config") or {})
+            config["workflow_keys"] = [
+                key for key in config.get("workflow_keys", [])
+                if key in workflow_keys
+            ]
+            config["skill_keys"] = [
+                key for key in config.get("skill_keys", [])
+                if key in skill_keys
+            ]
+            if config["workflow_keys"]:
+                agent["config"] = config
+                scoped.append(agent)
+        return scoped
 
     def specialist_options(self) -> List[dict]:
         return [

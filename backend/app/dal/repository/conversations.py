@@ -12,7 +12,8 @@ from app.dal.repository.base import new_id
 
 class ConversationRepository:
     def create_conversation(
-        self, session_id: str, root_id: str, boundaries=None, title: str = ""
+        self, session_id: str, root_id: str, boundaries=None, title: str = "",
+        project_id=None,
     ) -> dict:
         row_id = new_id()
         idle_minutes = self._store.get().conversation_idle_minutes
@@ -23,7 +24,7 @@ class ConversationRepository:
                 (
                     row_id, session_id, root_id,
                     Jsonb(boundaries) if boundaries else None, expires,
-                    conversation_title(title),
+                    conversation_title(title), project_id,
                 ),
             )
             connection.commit()
@@ -66,8 +67,15 @@ class ConversationRepository:
         """, (conversation_id, max(1, limit)))
         return [_turn(row) for row in reversed(rows)]
 
-    def list_conversations(self, session_id: str) -> List[dict]:
+    def list_conversations(
+        self, session_id: str, project_id=None
+    ) -> List[dict]:
         self.purge_expired_conversations()
+        project_filter = ""
+        params = [session_id]
+        if project_id:
+            project_filter = " AND project_id=%s"
+            params.append(project_id)
         return self._all("""
             SELECT c.*, (
                 SELECT status FROM summary_runs r
@@ -76,12 +84,13 @@ class ConversationRepository:
             ) AS last_status
             FROM conversations c
             WHERE session_id=%s AND expires_at > NOW()
+            """ + project_filter + """
               AND NOT EXISTS (
                   SELECT 1 FROM evaluation_cases evaluation
                   WHERE evaluation.conversation_id=c.id
               )
             ORDER BY updated_at DESC LIMIT 30
-        """, (session_id,))
+        """, tuple(params))
 
     def purge_expired_conversations(self) -> int:
         """Remove idle conversations, except work that is still executing."""
@@ -190,6 +199,6 @@ def _conversation_filter(conversation_id: str, session_id):
 
 _INSERT_CONVERSATION = """
     INSERT INTO conversations
-        (id, session_id, root_id, boundaries, expires_at, title)
-    VALUES (%s,%s,%s,%s,%s,%s)
+        (id, session_id, root_id, boundaries, expires_at, title, project_id)
+    VALUES (%s,%s,%s,%s,%s,%s,%s)
 """
