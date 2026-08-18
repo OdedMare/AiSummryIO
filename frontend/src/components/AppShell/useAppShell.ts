@@ -84,8 +84,14 @@ export function useAppShell() {
   }, [activeProject]);
 
   useInitialData(setDark, setSkills, setAgents);
-  useEffect(() => { void loadProjects(); }, [loadProjects]);
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadProjects(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadProjects]);
+  useEffect(() => {
+    const timer = window.setTimeout(loadHistory, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadHistory]);
   useTheme(dark);
   useRunPolling(run, setRun, setRuns, setError, loadHistory);
 

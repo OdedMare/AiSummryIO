@@ -213,6 +213,9 @@ liveness route is what makes something act on it.
 ## Rules
 
 - Only `agent_enabled` workflows and tools may be selected.
+- A conversation with `project_id` may select only that project's workflows,
+  standalone tools, Skills, and agents. Specialist dependencies are
+  intersected with the same project assignments before planning.
 - Package failures stay visible as warnings and never discard successful
   sections.
 - Claims require evidence references.

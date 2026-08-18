@@ -77,7 +77,8 @@ it fails or exceeds 3s, for the same reason the backend traces it at DEBUG.
 Evidence is paginated (`evidencePage(runId, evidenceId, offset, limit)`), so
 the drawer must not assume it holds every row for a source.
 
-An initial request posts `{root_id, question, skill_keys, boundaries}`, where
+An initial request posts
+`{project_id, root_id, question, skill_keys, agent_keys, boundaries}`, where
 `boundaries` is a GeoJSON `MultiPolygon` or `null`. The API returns a
 persistent run ID; poll it until complete while rendering progressive workflow
 sections. Follow-ups post to the same conversation and retain the original
@@ -181,6 +182,11 @@ ID/evidence, and reuse the conversation's stored boundaries.
   with FDE” first saves the owned workspace, then reuses the Skill interview
   to author one mission-specific Skill; the Skill is persisted and attached
   only after confirmation.
+- **Project selection is the first screen on every page load.** The selection
+  stays in memory, filters the visible Skills, agents, and conversation
+  history, and is sent when a conversation or Evaluation is created. The
+  sidebar names the active project and provides the route back to selection.
+  `Hunger Games` is the protected system workspace for pre-project data.
 - **Studio editors edit one row, they do not append versions.** Each of
   `WorkflowEditor`, `PackageCatalog`, and `ContentStudio` holds an `editingId`:
   set, the form saves through `api.update*`; empty, through `api.create*`.

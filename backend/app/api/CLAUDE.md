@@ -32,3 +32,6 @@ decisions stay under `bl/`; SQL stays under `dal/repository/`.
 - `ProjectCreate` stores a mission plus exact keys from the shared catalog.
   Project routes use the signed anonymous session and never expose another
   session's workspace.
+- `SummaryCreate.project_id` is optional for wire compatibility. The route
+  resolves an omitted value to the caller's protected `Hunger Games` system
+  project and stores the resolved id on the conversation.

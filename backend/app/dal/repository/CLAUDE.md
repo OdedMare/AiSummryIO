@@ -116,3 +116,7 @@ migration after its own `COMMIT;` so a failure there stays contained to it.
 - Projects own only their mission and exact catalog keys. They do not copy
   tools, Workflows, Skills, or agents, so editing a capability still has one
   source of truth. Every project read and write is scoped to `session_id`.
+- `list_projects` lazily creates one `is_system` project named `Hunger Games`
+  per session after catalog seeding, snapshots all existing capability keys,
+  and attaches legacy conversations with a null `project_id`. A partial unique
+  index makes that migration idempotent; the system project cannot be deleted.

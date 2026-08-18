@@ -15,6 +15,9 @@ examples; users provide one identifier and receive a progressive full summary.
   exact tools, workflows, Skills, and specialist agents assigned to it. A
   project can be curated manually or use the FDE interview to author and attach
   a mission-specific Skill after explicit confirmation.
+- Project selection is the application entry screen. Existing installations
+  receive one protected `Hunger Games` workspace containing their current
+  catalog; old conversations are attached to it without rewriting evidence.
 - Workflows chain version-pinned FLAPI Flow Packages through `flunks`.
 - Identifiers are opaque strings, including numeric-looking values such as
   `00123`; they are never converted to integers.
