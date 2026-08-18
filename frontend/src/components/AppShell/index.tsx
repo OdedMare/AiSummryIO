@@ -22,6 +22,7 @@ export default function AppShell() {
   }
   if (app.evaluationOpen) {
     return <EvaluationPanel skills={app.skills} agents={app.agents}
+      projectId={app.activeProject?.id ?? ""}
       onClose={() => app.setEvaluationOpen(false)} />;
   }
   if (!app.activeProject) {

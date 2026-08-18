@@ -2136,6 +2136,33 @@
 }
 
 @media (max-width: 680px) {
+  .project-selector-content {
+    width: min(100% - 24px, 1120px);
+    padding-top: 34px;
+  }
+
+  .project-selector-intro {
+    margin-bottom: 26px;
+  }
+
+  .project-selector-intro p {
+    font-size: 14px;
+  }
+
+  .project-choice-card {
+    min-height: 290px;
+    padding: 20px;
+  }
+
+  .project-selector-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .project-selector-footer .secondary-button {
+    justify-content: center;
+  }
+
   .conversation-shell {
     grid-template-rows: 64px minmax(0, 1fr) auto;
   }

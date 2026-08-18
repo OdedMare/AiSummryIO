@@ -396,6 +396,7 @@ export type EvaluationCaseStatus =
 
 export interface EvaluationBatch {
   id: string;
+  project_id?: string | null;
   label: string;
   question: string;
   skill_keys: string[];

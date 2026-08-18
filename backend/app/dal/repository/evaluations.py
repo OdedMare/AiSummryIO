@@ -30,11 +30,13 @@ class EvaluationRepository:
                 raise ConflictError("כבר קיימת ריצת Evaluation פעילה")
             connection.execute(
                 """INSERT INTO evaluation_batches (
-                       id, session_id, label, question, skill_keys, agent_keys,
+                       id, session_id, project_id, label, question,
+                       skill_keys, agent_keys,
                        cooldown_seconds, status, next_start_at
-                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,'running',NOW())""",
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'running',NOW())""",
                 (
-                    batch_id, session_id, data["label"], data["question"],
+                    batch_id, session_id, data.get("project_id"),
+                    data["label"], data["question"],
                     Jsonb(data.get("skill_keys") or []),
                     Jsonb(data.get("agent_keys") or []),
                     data.get("cooldown_seconds", 0),
@@ -191,11 +193,13 @@ class EvaluationRepository:
             expires = now + timedelta(minutes=idle_minutes)
             connection.execute(
                 """INSERT INTO conversations
-                       (id, session_id, root_id, boundaries, expires_at, title)
-                   VALUES (%s,%s,%s,NULL,%s,%s)""",
+                       (id, session_id, root_id, boundaries, expires_at, title,
+                        project_id)
+                   VALUES (%s,%s,%s,NULL,%s,%s,%s)""",
                 (
                     conversation_id, batch["session_id"], case["root_id"],
                     expires, conversation_title(batch["question"]),
+                    batch.get("project_id"),
                 ),
             )
             connection.execute(

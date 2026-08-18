@@ -310,6 +310,7 @@ export const api = {
       `/api/evaluations/${batchId}/cases/${caseId}`,
     ),
   createEvaluation: (data: {
+    project_id: string;
     label: string;
     root_ids: string[];
     question: string;

@@ -231,6 +231,7 @@ COMMIT;
 CREATE TABLE IF NOT EXISTS evaluation_batches (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
+    project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
     label TEXT NOT NULL,
     question TEXT NOT NULL,
     skill_keys JSONB NOT NULL DEFAULT '[]',
@@ -250,6 +251,9 @@ CREATE TABLE IF NOT EXISTS evaluation_batches (
 
 ALTER TABLE evaluation_batches
     ADD COLUMN IF NOT EXISTS agent_keys JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE evaluation_batches
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id)
+        ON DELETE SET NULL;
 
 COMMIT;
 

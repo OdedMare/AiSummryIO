@@ -9,10 +9,11 @@ import { api } from "@/services/api";
 import type { EvaluationBatch, SummaryAgent, SummarySkill } from "@/types";
 
 export default function EvaluationSetup({
-  skills, agents, activeBatch, onCreated,
+  skills, agents, projectId, activeBatch, onCreated,
 }: {
   skills: SummarySkill[];
   agents: SummaryAgent[];
+  projectId: string;
   activeBatch: EvaluationBatch | null;
   onCreated: (batch: EvaluationBatch) => Promise<void>;
 }) {
@@ -67,6 +68,7 @@ export default function EvaluationSetup({
     setSubmitting(true);
     try {
       const created = await api.createEvaluation({
+        project_id: projectId,
         label: label.trim(), root_ids: ids, question: question.trim(),
         skill_keys: selectedSkills, agent_keys: selectedAgents,
         cooldown_seconds: cooldown,

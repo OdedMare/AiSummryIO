@@ -9,10 +9,11 @@ import EvaluationSetup from "./EvaluationSetup";
 import { useEvaluation } from "./useEvaluation";
 
 export default function EvaluationPanel({
-  skills, agents, onClose,
+  skills, agents, projectId, onClose,
 }: {
   skills: SummarySkill[];
   agents: SummaryAgent[];
+  projectId: string;
   onClose: () => void;
 }) {
   const evaluation = useEvaluation();
@@ -39,6 +40,7 @@ export default function EvaluationPanel({
                 {evaluation.error && <p className="form-error evaluation-load-error"
                   role="alert"><AlertTriangle size={17} /> {evaluation.error}</p>}
                 <EvaluationSetup skills={skills} agents={agents}
+                  projectId={projectId}
                   activeBatch={evaluation.activeBatch}
                   onCreated={evaluation.created} />
               </>}

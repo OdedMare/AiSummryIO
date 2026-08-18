@@ -23,6 +23,8 @@ def build(context) -> APIRouter:
         response: Response,
         session_id: str = Depends(context.user_session),
     ):
+        if payload.project_id:
+            context.repository.get_project(payload.project_id, session_id)
         batch = context.repository.create_evaluation_batch(
             session_id, payload.model_dump(), payload.root_ids
         )
@@ -103,6 +105,7 @@ def build(context) -> APIRouter:
             session_id,
             {
                 "label": source["label"] + " · ניסיון חוזר",
+                "project_id": source.get("project_id"),
                 "question": source["question"],
                 "skill_keys": source["skill_keys"],
                 "agent_keys": source["agent_keys"],

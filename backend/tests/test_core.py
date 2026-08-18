@@ -9,7 +9,9 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from app.common.errors import AgentError, ProviderError, UnavailableError
+from app.common.errors import (
+    AgentError, ConflictError, ProviderError, UnavailableError,
+)
 from app.api.models import EvaluationCreate, GeoBoundaries, ProjectCreate
 from app.api.evaluation_excel import evaluation_workbook, read_root_ids
 from app.bl.evaluations import EvaluationRunner
@@ -102,6 +104,99 @@ def test_schema_scopes_project_workspaces_to_the_user_session():
     assert "CREATE TABLE IF NOT EXISTS projects" in SCHEMA
     assert "session_id TEXT NOT NULL" in SCHEMA
     assert "projects_session_idx" in SCHEMA
+    assert "is_system BOOLEAN NOT NULL DEFAULT FALSE" in SCHEMA
+    assert "projects_one_system_idx" in SCHEMA
+    assert "ADD COLUMN IF NOT EXISTS project_id" in SCHEMA
+
+
+def test_the_system_project_cannot_be_deleted_or_renamed():
+    repository = ProjectRepository()
+    repository.get_project = lambda *_args: {
+        "id": "legacy", "name": "Hunger Games", "is_system": True,
+    }
+
+    with pytest.raises(ConflictError, match="Hunger Games"):
+        repository.delete_project("legacy", "session-1")
+
+
+def test_project_scope_limits_workflows_skills_and_agents_at_execution():
+    project = {
+        "id": "project-1", "workflow_keys": ["ownership"],
+        "skill_keys": ["risk"], "agent_keys": [], "tool_keys": [],
+    }
+    workflow = {"workflow_key": "ownership"}
+    skill = {"content_key": "risk"}
+
+    class FakeRepository:
+        @staticmethod
+        def get_project(project_id, session_id):
+            assert (project_id, session_id) == ("project-1", "session-1")
+            return project
+
+        @staticmethod
+        def enabled_workflows_by_keys(keys, roles):
+            assert keys == ["ownership"]
+            assert roles == ["baseline", "both"]
+            return [workflow]
+
+        @staticmethod
+        def enabled_workflows(_roles):
+            raise AssertionError("the global workflow catalog must stay closed")
+
+        @staticmethod
+        def enabled_summary_skills(keys):
+            assert keys == ["risk"]
+            return [skill]
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                agent_max_rounds = 0
+            return Values()
+
+    service = SummaryService(FakeRepository(), None, None, FakeStore())
+    captured = {}
+    service._execute = lambda _run, _root, _question, workflows, _progress, skills, _boundaries: (
+        captured.update(workflows=workflows, skills=skills) or {"summary": "ok"}
+    )
+
+    result = service.full_summary(
+        {"id": "run-1", "question": "סכם", "skill_keys": ["risk"]},
+        {
+            "root_id": "001", "project_id": "project-1",
+            "session_id": "session-1", "boundaries": None,
+        },
+        lambda *_args: None,
+    )
+
+    assert result == {"summary": "ok"}
+    assert captured == {"workflows": [workflow], "skills": [skill]}
+
+
+def test_project_scope_rejects_a_forged_skill_selection():
+    class FakeRepository:
+        @staticmethod
+        def get_project(_project_id, _session_id):
+            return {
+                "workflow_keys": [], "skill_keys": ["allowed"],
+                "agent_keys": [], "tool_keys": [],
+            }
+
+    class FakeStore:
+        @staticmethod
+        def get():
+            class Values:
+                agent_max_rounds = 0
+            return Values()
+
+    service = SummaryService(FakeRepository(), None, None, FakeStore())
+    with pytest.raises(ValueError, match="forged"):
+        service.full_summary(
+            {"id": "run-1", "question": "", "skill_keys": ["forged"]},
+            {"project_id": "project-1", "session_id": "session-1"},
+            lambda *_args: None,
+        )
 
 
 def test_flunks_mapper_preserves_string_identifiers_and_generic_rows():

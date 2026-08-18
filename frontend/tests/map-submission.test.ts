@@ -54,6 +54,7 @@ test("map submission sends every drawn part as one MultiPolygon", async (t) => {
   // boundaries, so the WKT has one serializer rather than one per side.
   assert.deepEqual(JSON.parse(String(sentOptions?.body)), {
     root_id: null,
+    project_id: null,
     question: "",
     skill_keys: [],
     agent_keys: [],
@@ -77,8 +78,11 @@ test("manual agents are sent to summaries and evaluations", async (t) => {
     });
   };
 
-  await api.start("ROOT-1", "סכם", [], null, ["geo", "web", "risk"]);
+  await api.start(
+    "ROOT-1", "סכם", [], null, ["geo", "web", "risk"], "project-1",
+  );
   await api.createEvaluation({
+    project_id: "project-1",
     label: "agents", root_ids: ["ROOT-1"], question: "סכם",
     skill_keys: [], agent_keys: ["geo", "web", "risk"],
     cooldown_seconds: 0,
@@ -86,6 +90,9 @@ test("manual agents are sent to summaries and evaluations", async (t) => {
 
   assert.deepEqual(bodies.map((body) => body.agent_keys), [
     ["geo", "web", "risk"], ["geo", "web", "risk"],
+  ]);
+  assert.deepEqual(bodies.map((body) => body.project_id), [
+    "project-1", "project-1",
   ]);
 });
 

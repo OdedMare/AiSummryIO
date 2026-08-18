@@ -389,6 +389,7 @@ class EvaluationCreate(BaseModel):
     """One shared batch over opaque identifiers."""
 
     label: str
+    project_id: Optional[str] = None
     root_ids: List[str]
     question: str
     skill_keys: List[str] = Field(default_factory=list)
