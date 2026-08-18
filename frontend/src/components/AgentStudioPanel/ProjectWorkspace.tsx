@@ -267,7 +267,7 @@ function ProjectList({
           <button type="button" className="project-card-main"
             onClick={() => onEdit(item)}>
             <span className="catalog-icon"><FolderKanban size={17} /></span>
-            <span><strong>{item.name}</strong>
+            <span><strong title={item.name}>{item.name}</strong>
               <small>{count} יכולות · עודכן {new Date(item.updated_at).toLocaleDateString("he-IL")}</small>
             </span>
           </button>
@@ -286,6 +286,7 @@ interface CapabilityOption {
   name: string;
   description: string;
   enabled: boolean;
+  missing?: boolean;
 }
 
 function CapabilitySection({
@@ -305,6 +306,17 @@ function CapabilitySection({
       ? selected.filter((item) => item !== key)
       : [...selected, key],
   );
+  const known = new Set(options.map((option) => option.key));
+  const visibleOptions = [
+    ...options,
+    ...selected.filter((key) => !known.has(key)).map((key) => ({
+      key,
+      name: key,
+      description: "הפריט כבר לא קיים בקטלוג",
+      enabled: false,
+      missing: true,
+    })),
+  ];
   return (
     <fieldset className="project-capability">
       <legend><Icon size={17} aria-hidden="true" /> {title}</legend>
@@ -314,18 +326,23 @@ function CapabilitySection({
       </div>
       {!options.length && <p className="capability-empty">אין עדיין פריטים בקטלוג.</p>}
       <div className="project-options">
-        {options.map((option) => {
+        {visibleOptions.map((option) => {
           const active = selected.includes(option.key);
-          return <label key={option.key} className={active ? "selected" : ""}>
+          return <label key={option.key}
+            className={`${active ? "selected" : ""}${option.missing ? " missing" : ""}`}>
             <input type="checkbox" checked={active}
               onChange={() => toggle(option.key)} />
             <span className="capability-check" aria-hidden="true">
               {active && <Check size={14} />}
             </span>
-            <span><strong>{option.name}</strong>
-              <small>{option.description || option.key}</small>
+            <span><strong title={option.name}>{option.name}</strong>
+              <small title={option.description || option.key}>
+                {option.description || option.key}
+              </small>
               <small className={option.enabled ? "capability-live" : "capability-off"}>
-                {option.enabled ? "פעיל לסוכן" : "כבוי — נשמר בפרויקט בלבד"}
+                {option.missing
+                  ? "לא קיים בקטלוג — הסירו לפני שמירה"
+                  : option.enabled ? "פעיל לסוכן" : "כבוי — נשמר בפרויקט בלבד"}
               </small>
             </span>
           </label>;
@@ -371,7 +388,9 @@ function MissionSkillAssistant({
 
   return (
     <PlanChatDrawer open={open} onOpen={onOpen} onClose={onClose}
-      label="FDE להתאמת Skill" busy={chat.pending || applying}>
+      label="FDE להתאמת Skill" busy={chat.pending || applying}
+      disabled={!project.name.trim() || !project.mission.trim()}
+      disabledHint="יש למלא שם ומשימה לפני פתיחת שיחת FDE">
       <PlanChat chat={chat} title={`FDE · ${project.name}`}
         hint="הסוכן מתחיל מהמשימה, שואל שאלה אחת בכל פעם, ומציע Skill מלא. רק אחרי האישור הוא יישמר וישויך לפרויקט.">
         {!chat.messages.length && !chat.pending && <button type="button"

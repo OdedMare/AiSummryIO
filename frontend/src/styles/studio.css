@@ -317,6 +317,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
 }
 
@@ -372,6 +373,11 @@
   border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
 }
 
+.project-options > label:active,
+.project-card-main:active {
+  background: color-mix(in srgb, var(--primary-soft) 72%, var(--surface));
+}
+
 .project-options > label.selected {
   background: var(--primary-soft);
 }
@@ -396,9 +402,7 @@
 
 .project-options strong,
 .project-options small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .project-options small {
@@ -414,6 +418,11 @@
 
 .project-options .capability-off {
   color: var(--warning);
+}
+
+.project-options > label.missing {
+  border-style: dashed;
+  border-color: var(--warning);
 }
 
 .project-notice {
