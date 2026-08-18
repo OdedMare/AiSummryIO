@@ -2,20 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, BookOpen, Bot, LoaderCircle, RefreshCw, Workflow,
-  Wrench,
+  AlertTriangle, ArrowRight, BookOpen, Bot, FolderKanban, LoaderCircle,
+  RefreshCw, Workflow, Wrench,
 } from "lucide-react";
 import { api } from "@/services/api";
 import type {
-  AgentContent, PackageVersion, WorkflowVersion,
+  AgentContent, PackageVersion, ProjectWorkspace, WorkflowVersion,
 } from "@/types";
 import ContentStudio from "./ContentStudio";
 import PackageCatalog from "./PackageCatalog";
+import ProjectWorkspacePanel from "./ProjectWorkspace";
 import { ReviewQueue } from "./StudioCommon";
 import SpecialistStudio from "./SpecialistStudio";
 import WorkflowEditor from "./WorkflowEditor";
 
-type Tab = "packages" | "workflows" | "specialists" | "content" | "review";
+type Tab = "projects" | "packages" | "workflows" | "specialists" | "content" | "review";
 
 export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
   const studio = useStudio();
@@ -29,7 +30,8 @@ export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
 
 function useStudio() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<Tab>("workflows");
+  const [tab, setTab] = useState<Tab>("projects");
+  const [projects, setProjects] = useState<ProjectWorkspace[]>([]);
   const [packages, setPackages] = useState<PackageVersion[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowVersion[]>([]);
   const [content, setContent] = useState<AgentContent[]>([]);
@@ -39,10 +41,11 @@ function useStudio() {
     setError("");
     try {
       const values = await Promise.all([
-        api.packages(), api.workflows(), api.content(), api.reviewQueue(),
+        api.projects(), api.packages(), api.workflows(), api.content(),
+        api.reviewQueue(),
       ]);
-      setPackages(values[0]); setWorkflows(values[1]);
-      setContent(values[2]); setReview(values[3]);
+      setProjects(values[0]); setPackages(values[1]); setWorkflows(values[2]);
+      setContent(values[3]); setReview(values[4]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "טעינת הסטודיו נכשלה");
     }
@@ -53,13 +56,14 @@ function useStudio() {
       .catch(() => setAuthorized(false));
   }, [refresh]);
   const counts = useMemo(() => ({
+    projects: projects.length,
     packages: packages.length, workflows: workflows.length,
     specialists: content.filter((item) => item.kind === "agent").length,
     content: content.filter((item) => item.kind !== "agent").length,
     review: review.length,
-  }), [packages, workflows, content, review]);
+  }), [projects, packages, workflows, content, review]);
   return {
-    authorized, tab, setTab, packages, workflows, content, review, error,
+    authorized, tab, setTab, projects, packages, workflows, content, review, error,
     refresh, counts,
   };
 }
@@ -114,6 +118,7 @@ function StudioContent({ studio }: { studio: Studio }) {
 }
 
 const TABS = [
+  ["projects", "פרויקטים", "Mission workspaces", FolderKanban],
   ["packages", "מקורות מידע", "חבילות FLAPI", Wrench],
   ["workflows", "תהליכי סיכום", "Workflows", Workflow],
   ["specialists", "מומחים", "Agents ועובדים", Bot],
@@ -138,6 +143,12 @@ function StudioNav({ studio }: { studio: Studio }) {
 }
 
 function StudioBody({ studio }: { studio: Studio }) {
+  if (studio.tab === "projects") {
+    return <ProjectWorkspacePanel items={studio.projects}
+      packages={studio.packages} workflows={studio.workflows}
+      content={studio.content} onRefresh={studio.refresh}
+      onNavigate={(tab) => studio.setTab(tab)} />;
+  }
   if (studio.tab === "packages") {
     return <PackageCatalog items={studio.packages} onRefresh={studio.refresh} />;
   }

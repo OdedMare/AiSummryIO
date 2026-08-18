@@ -11,6 +11,7 @@ modules. It opens a connection per operation through
 | `repository.py` | Public façade and initialization only |
 | `base.py` | Shared connection/query primitives and IDs |
 | `packages.py` | FLAPI package (tool) catalog |
+| `projects.py` | Session-owned mission workspaces and catalog assignments |
 | `workflows.py` | Workflows and their steps |
 | `content.py` | Skills and prompts |
 | `conversations.py` | Conversations, retention, and thread history |
@@ -112,3 +113,6 @@ migration after its own `COMMIT;` so a failure there stays contained to it.
   `enabled_content` falls back to the prompt under `bl/prompts/` meanwhile —
   and permanent for anything an FDE created.
 - Secrets, raw request bodies, and full identifiers are never logged.
+- Projects own only their mission and exact catalog keys. They do not copy
+  tools, Workflows, Skills, or agents, so editing a capability still has one
+  source of truth. Every project read and write is scoped to `session_id`.

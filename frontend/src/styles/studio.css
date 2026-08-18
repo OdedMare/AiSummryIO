@@ -131,6 +131,316 @@
   min-height: 0;
 }
 
+/* Project Workspace: the project is a thin mission-and-assignment layer over
+   the existing catalogs. The list keeps project switching cheap; the right
+   side is one continuous workspace rather than four separate editors. */
+.project-studio {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.project-list {
+  border-inline-end: 1px solid var(--studio-rail-border);
+  border-left: 0;
+}
+
+.project-card {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 9px;
+  overflow: hidden;
+  color: var(--studio-rail-text);
+  background: var(--studio-rail-hover);
+  border: 1px solid var(--studio-rail-border);
+  border-radius: 14px;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.project-card:hover,
+.project-card.selected {
+  border-color: color-mix(in srgb, #a94f32 42%, var(--studio-rail-border));
+}
+
+.project-card.selected {
+  background: #f7ebe4;
+}
+
+.project-card-main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 68px;
+  padding: 9px 10px;
+  color: inherit;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.project-card-main > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.project-card-main strong,
+.project-card-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card-main small {
+  margin-top: 4px;
+  color: var(--studio-rail-muted);
+  font-size: 10px;
+}
+
+.project-workspace {
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(20px, 3vw, 36px);
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.project-workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-workspace-header > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 12px;
+}
+
+.project-workspace-header h2,
+.project-workspace-header p,
+.project-brief h3,
+.project-brief p {
+  margin: 0;
+}
+
+.project-workspace-header h2 {
+  font-size: 20px;
+}
+
+.project-workspace-header p,
+.project-brief > div:first-child > p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.project-brief {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(300px, 1.3fr);
+  gap: 24px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-brief h3 {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.project-brief-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.project-brief-fields textarea {
+  min-height: 112px;
+}
+
+.project-setup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  grid-column: 2;
+  gap: 8px;
+}
+
+.project-setup-actions .agent-chat-launch {
+  margin: 0;
+}
+
+.project-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 22px 0;
+}
+
+.project-capability {
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.project-capability legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.project-capability legend svg {
+  color: var(--primary);
+}
+
+.project-capability-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.project-capability-head p,
+.project-capability .capability-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.project-capability-head button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  color: var(--primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.project-capability-head button:hover {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+}
+
+.project-options {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.project-options > label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 64px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.project-options > label:hover,
+.project-options > label.selected {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.project-options > label.selected {
+  background: var(--primary-soft);
+}
+
+.project-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.project-options > label:focus-within {
+  box-shadow: var(--focus);
+}
+
+.project-options > label > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.project-options strong,
+.project-options small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-options small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.project-options .capability-live {
+  color: var(--success);
+}
+
+.project-options .capability-off {
+  color: var(--warning);
+}
+
+.project-notice {
+  margin: 0;
+  color: var(--success);
+  font-size: 12px;
+}
+
+.project-form-actions {
+  position: sticky;
+  bottom: -1px;
+  padding: 12px 0 2px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.project-agent-start {
+  margin: 0 auto 12px;
+}
+
+.project-skill-preview > p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .studio-kicker {
   display: block;
   margin-bottom: 2px;
@@ -1803,6 +2113,17 @@
     border-left: 0;
     border-bottom: 1px solid var(--border);
   }
+
+  .project-studio {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 30%) minmax(0, 1fr);
+  }
+
+  .project-list {
+    max-height: none;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--border);
+  }
 }
 
 @media (max-width: 680px) {
@@ -1914,6 +2235,23 @@
   .form-grid.two,
   .capability-options {
     grid-template-columns: 1fr;
+  }
+
+  .project-brief,
+  .project-capability-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-setup-actions {
+    grid-column: 1;
+  }
+
+  .project-workspace {
+    padding: 18px 14px;
+  }
+
+  .project-capability-head {
+    align-items: flex-start;
   }
 
   .studio-nav-label small {
@@ -2028,4 +2366,3 @@
     padding-left: 12px;
   }
 }
-

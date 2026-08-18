@@ -45,10 +45,16 @@ def execute(
 ) -> dict:
     workflows = select_workflows(workflows, root_id, boundaries)
     if not workflows:
+        _log.warning(
+            "summary skipped before LLM: no active baseline/both workflow"
+        )
         return empty_result(
             "אין תהליך עבודה פעיל שמקבל אזור על המפה."
             if boundaries and not root_id
-            else "אין תהליכי עבודה פעילים מתאימים."
+            else (
+                "אין תהליך עבודה פעיל מסוג baseline או both, ולכן מודל "
+                "השפה לא הופעל."
+            )
         )
     sections = _execute_all(
         service, run, root_id, workflows, progress_callback, boundaries

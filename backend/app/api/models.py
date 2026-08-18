@@ -163,6 +163,49 @@ class AgentContentCreate(BaseModel):
     agent_enabled: bool = True
 
 
+class ProjectCreate(BaseModel):
+    """One user's mission and the catalog capabilities assigned to it."""
+
+    name: str
+    mission: str
+    tool_keys: List[str] = Field(default_factory=list)
+    workflow_keys: List[str] = Field(default_factory=list)
+    skill_keys: List[str] = Field(default_factory=list)
+    agent_keys: List[str] = Field(default_factory=list)
+
+    @field_validator("name")
+    @classmethod
+    def project_name_required(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("נדרש שם לפרויקט")
+        if len(cleaned) > 120:
+            raise ValueError("שם הפרויקט ארוך מדי")
+        return cleaned
+
+    @field_validator("mission")
+    @classmethod
+    def project_mission_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("נדרשת משימה לפרויקט")
+        if len(cleaned) > 5000:
+            raise ValueError("משימת הפרויקט ארוכה מדי")
+        return cleaned
+
+    @field_validator(
+        "tool_keys", "workflow_keys", "skill_keys", "agent_keys"
+    )
+    @classmethod
+    def project_keys(cls, values: List[str]) -> List[str]:
+        cleaned = list(dict.fromkeys(
+            value.strip() for value in values if value.strip()
+        ))
+        if len(cleaned) > 100:
+            raise ValueError("אפשר לשייך עד 100 פריטים מכל סוג")
+        return cleaned
+
+
 class SkillPreviewSection(BaseModel):
     """One sample summary section fed to a Skill under test."""
 

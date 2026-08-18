@@ -2,7 +2,8 @@ import type {
   AgentContent, Conversation, ConversationTurn, Evidence, EvidencePage,
   EvaluationBatch, EvaluationCaseDetail, EvaluationCasePage, EvaluationImport,
   PackageInspection,
-  PackageVersion, PlanChatMessage, SkillPreviewResult, SummaryRun,
+  PackageVersion, PlanChatMessage, ProjectDraft, ProjectWorkspace,
+  SkillPreviewResult, SummaryRun,
   SkillPlanChatTurn, SkillPlanDraft, SpecialistPlanChatTurn, SummaryAgent,
   SpecialistPlanDraft, SummarySkill, ToolPlanChatTurn, ToolPlanDraft,
   WorkflowPlan, WorkflowPlanChatTurn, WorkflowVersion,
@@ -95,6 +96,21 @@ function detailEntry(entry: unknown): string {
 }
 
 export const api = {
+  projects: () => request<ProjectWorkspace[]>("/api/projects"),
+  createProject: (data: ProjectDraft) =>
+    request<ProjectWorkspace>("/api/projects", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateProject: (id: string, data: ProjectDraft) =>
+    request<ProjectWorkspace>(`/api/projects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteProject: (id: string) =>
+    request<{ deleted: string; name: string }>(`/api/projects/${id}`, {
+      method: "DELETE",
+    }),
   conversations: () => request<Conversation[]>("/api/conversations"),
   skills: () => request<SummarySkill[]>("/api/skills"),
   conversation: (id: string) =>

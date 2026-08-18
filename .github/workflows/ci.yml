@@ -27,7 +27,7 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
           push: false
           load: true
           tags: aisummry-backend:${{ github.sha }}

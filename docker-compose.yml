@@ -14,7 +14,9 @@ services:
       retries: 20
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       AISUMMRY_DATABASE_URL: ${AISUMMRY_DATABASE_URL:-postgresql://summaries:summaries@db:5432/summaries}
       AISUMMRY_DATABASE_SCHEMA: ${AISUMMRY_DATABASE_SCHEMA:-sumorai}

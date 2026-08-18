@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.common.errors import AgentError, ProviderError, UnavailableError
-from app.api.models import EvaluationCreate, GeoBoundaries
+from app.api.models import EvaluationCreate, GeoBoundaries, ProjectCreate
 from app.api.evaluation_excel import evaluation_workbook, read_root_ids
 from app.bl.evaluations import EvaluationRunner
 from app.api.routers import conversations as conversation_routes
@@ -38,6 +38,7 @@ from app.dal.repository.evaluations import EvaluationRepository
 from app.dal.repository.content import _set_agent_workflows
 from app.dal.repository.schema import SCHEMA
 from app.dal.repository.conversations import conversation_title
+from app.dal.repository.projects import ProjectRepository
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
@@ -57,6 +58,50 @@ _MULTIPOLYGON_IDENTIFIER = "MULTIPOLYGON (((%s)))" % ", ".join(
     ["34.%07d 32.%07d" % (index, index) for index in range(40)]
     + ["34.0000000 32.0000000"]
 )
+
+
+def test_project_contract_requires_a_mission_and_deduplicates_catalog_keys():
+    project = ProjectCreate(
+        name="  בדיקת   חריגים  ", mission="  מציאת עסקאות חריגות  ",
+        tool_keys=["transactions", "transactions", ""],
+        workflow_keys=["risk"], skill_keys=["red-flags", "red-flags"],
+    )
+
+    assert project.name == "בדיקת חריגים"
+    assert project.mission == "מציאת עסקאות חריגות"
+    assert project.tool_keys == ["transactions"]
+    assert project.skill_keys == ["red-flags"]
+    with pytest.raises(ValidationError, match="משימה"):
+        ProjectCreate(name="פרויקט", mission="   ")
+
+
+def test_project_refuses_capability_keys_outside_the_real_catalog():
+    repository = ProjectRepository()
+
+    def catalog(query, params=()):
+        if "summary_packages" in query:
+            return [{"key": "transactions"}]
+        if "summary_workflows" in query:
+            return [{"key": "risk"}]
+        if params and params[-1] == "skill":
+            return [{"key": "red-flags"}]
+        if params and params[-1] == "agent":
+            return [{"key": "risk-agent"}]
+        return []
+
+    repository._all = catalog
+    repository._validate_capabilities({
+        "tool_keys": ["transactions"], "workflow_keys": ["risk"],
+        "skill_keys": ["red-flags"], "agent_keys": ["risk-agent"],
+    })
+    with pytest.raises(ValueError, match="missing-tool"):
+        repository._validate_capabilities({"tool_keys": ["missing-tool"]})
+
+
+def test_schema_scopes_project_workspaces_to_the_user_session():
+    assert "CREATE TABLE IF NOT EXISTS projects" in SCHEMA
+    assert "session_id TEXT NOT NULL" in SCHEMA
+    assert "projects_session_idx" in SCHEMA
 
 
 def test_flunks_mapper_preserves_string_identifiers_and_generic_rows():
@@ -281,7 +326,9 @@ def test_schema_persists_one_shared_evaluation_and_cascades_its_cases():
     assert "CREATE TABLE IF NOT EXISTS evaluation_cases" in SCHEMA
     assert "evaluation_one_active_idx" in SCHEMA
     assert "REFERENCES evaluation_batches(id) ON DELETE CASCADE" in SCHEMA
-    assert SCHEMA.count("agent_keys JSONB NOT NULL DEFAULT '[]'") == 4
+    # Runs, evaluations, migrations, and project capability assignments all
+    # retain an explicit agent allow-list.
+    assert SCHEMA.count("agent_keys JSONB NOT NULL DEFAULT '[]'") == 5
 
 
 def test_normalized_records_are_json_serializable(monkeypatch):
@@ -3122,7 +3169,21 @@ def test_a_section_falling_back_is_marked_degraded_rather_than_looking_thin():
     )
 
     assert section["degraded"] is True
-    assert section["warnings"]
+    assert "model unavailable" in section["warnings"][0]
+
+
+def test_a_final_summary_fallback_exposes_the_model_failure():
+    class FailingLlm:
+        @staticmethod
+        def complete_json(_system, _user, _schema):
+            raise AgentError("gateway rejected the summary")
+
+    service = SummaryService(_SkillRepository(), None, FailingLlm(), None)
+    section = dict(_OWNERSHIP_SECTION, suggested_questions=[])
+    result = service._final_summary("001", "מה נמצא?", [section])
+
+    assert result["degraded"] is True
+    assert "gateway rejected the summary" in result["missing_data"][-1]
 
 
 def _history_service(llm, turns, **repository_extras):

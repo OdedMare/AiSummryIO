@@ -7,6 +7,7 @@ from app.dal.repository.conversations import ConversationRepository
 from app.dal.repository.feedback import FeedbackRepository
 from app.dal.repository.evaluations import EvaluationRepository
 from app.dal.repository.packages import PackageRepository
+from app.dal.repository.projects import ProjectRepository
 from app.dal.repository.runs import RunRepository
 from app.dal.repository.schema import SCHEMA
 from app.dal.repository.seed_content import SEED_CONTENT
@@ -26,6 +27,7 @@ class Repository(
     RunRepository,
     FeedbackRepository,
     EvaluationRepository,
+    ProjectRepository,
 ):
     """Stable façade; each parent owns one persistence concern."""
 

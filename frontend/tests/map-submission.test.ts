@@ -90,6 +90,41 @@ test("manual agents are sent to summaries and evaluations", async (t) => {
 });
 
 
+test("a project keeps the mission and exact capability keys", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let sentPath = "";
+  let sentBody: Record<string, unknown> = {};
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (path, options) => {
+    sentPath = String(path);
+    sentBody = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ id: "project-1", ...sentBody }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await api.createProject({
+    name: "בדיקת חריגים",
+    mission: "להסביר עסקאות חריגות רק מראיות זמינות",
+    tool_keys: ["transactions"],
+    workflow_keys: ["risk-review"],
+    skill_keys: ["red-flags"],
+    agent_keys: ["risk-agent"],
+  });
+
+  assert.equal(sentPath, "/api/projects");
+  assert.deepEqual(sentBody, {
+    name: "בדיקת חריגים",
+    mission: "להסביר עסקאות חריגות רק מראיות זמינות",
+    tool_keys: ["transactions"],
+    workflow_keys: ["risk-review"],
+    skill_keys: ["red-flags"],
+    agent_keys: ["risk-agent"],
+  });
+});
+
+
 test("a multipolygon identifier is clipped where it is only a label", () => {
   const wkt = "MULTIPOLYGON (((34.75 32.05, 34.8 32.05, 34.8 32.1, "
     + "34.75 32.05)), ((35.1 31.9, 35.2 31.9, 35.2 32, 35.1 31.9)))";

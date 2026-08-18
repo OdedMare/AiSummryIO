@@ -342,6 +342,28 @@ export interface AgentContent {
   agent_enabled: boolean;
 }
 
+export interface ProjectWorkspace {
+  id: string;
+  name: string;
+  mission: string;
+  tool_keys: string[];
+  workflow_keys: string[];
+  skill_keys: string[];
+  agent_keys: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectDraft = Pick<
+  ProjectWorkspace,
+  | "name"
+  | "mission"
+  | "tool_keys"
+  | "workflow_keys"
+  | "skill_keys"
+  | "agent_keys"
+>;
+
 export interface Evidence {
   id: string;
   workflow_id: string;

@@ -129,6 +129,21 @@ ALTER TABLE summary_workflows
 
 COMMIT;
 
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mission TEXT NOT NULL,
+    tool_keys JSONB NOT NULL DEFAULT '[]',
+    workflow_keys JSONB NOT NULL DEFAULT '[]',
+    skill_keys JSONB NOT NULL DEFAULT '[]',
+    agent_keys JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -506,6 +521,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_content_key_idx
     ON agent_content(content_key);
 CREATE INDEX IF NOT EXISTS summary_workflows_agent_idx
     ON summary_workflows(agent_id);
+CREATE INDEX IF NOT EXISTS projects_session_idx
+    ON projects(session_id, updated_at DESC);
 
 CREATE INDEX IF NOT EXISTS conversations_session_idx
     ON conversations(session_id, updated_at DESC);

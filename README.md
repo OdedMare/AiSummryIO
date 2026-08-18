@@ -11,6 +11,10 @@ examples; users provide one identifier and receive a progressive full summary.
   or one FDE-approved standalone tool only when more data is needed.
 - An FDE can describe a goal in plain language; the planner builds a reviewable
   workflow draft from existing tools or specifies the missing tool contract.
+- Each browser session can keep project workspaces: a named mission plus the
+  exact tools, workflows, Skills, and specialist agents assigned to it. A
+  project can be curated manually or use the FDE interview to author and attach
+  a mission-specific Skill after explicit confirmation.
 - Workflows chain version-pinned FLAPI Flow Packages through `flunks`.
 - Identifiers are opaque strings, including numeric-looking values such as
   `00123`; they are never converted to integers.
@@ -53,195 +57,87 @@ The bounds are deliberate — agentic means selective, not unlimited:
 The run's progress carries an `agent_trace`, which the UI renders as live
 agent activity (`AgentStatus`) and an inspectable trace (`AgentTrace`).
 
-## Run with Docker
+## Backend deployment: Docker and OpenShift
 
-### Full stack (Compose)
-
-Builds the backend and frontend images and starts them with a local
-PostgreSQL container:
+The root [Dockerfile](Dockerfile) builds the backend only. PostgreSQL, FLAPI,
+and the OpenAI-compatible model endpoint stay external:
 
 ```bash
-export AISUMMRY_ADMIN_PASSWORD='your-fde-password'
-docker compose up --build
-```
-
-- UI: http://localhost:3000
-- API: http://localhost:8000
-- API docs: http://localhost:8000/docs
-
-The password is hashed on first start and persisted in the settings volume; it
-is never committed. In an air-gapped environment, make the internal `flunks`
-package available through the network's Python package source before building.
-
-Everyday Compose commands:
-
-```bash
-docker compose up --build -d          # rebuild and run detached
-docker compose up --build -d backend  # rebuild one service only
-docker compose logs -f backend        # tail a service
-docker compose ps                     # what is running
-docker compose down                   # stop, keep the data volumes
-docker compose down -v                # stop and DELETE the database volume
-```
-
-`down -v` destroys the `summaries-db` volume and every conversation, workflow,
-and piece of evidence in it. Use plain `down` unless a clean database is the
-goal.
-
-### Nginx reverse proxy
-
-[nginx/nginx.conf](nginx/nginx.conf) puts the whole system behind a single
-port: `/api/` goes to `backend:8000` and everything else to `frontend:3000`.
-Add it to `docker-compose.yml` as a fourth service:
-
-```yaml
-  nginx:
-    image: nginx:1.27-alpine
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-      - frontend
-```
-
-The whole app is then on http://localhost, and the `3000`/`8000` port mappings
-on the other services become optional — drop them to expose only the proxy.
-
-Two settings in that config are load-bearing:
-
-- `proxy_buffering off` on `/api/` — summaries render progressively, and
-  buffering would withhold the response until the run finished.
-- 300s read/send timeouts — a package run is bounded backend-side by
-  `run_bounded` (120s default, per-package overrides) and the provider retries
-  once, so a shorter proxy timeout would cut off a run that is still valid.
-
-### Exporting the images as a tar
-
-For transfer into an air-gapped environment:
-
-```bash
-docker compose build
-docker compose images          # confirm the generated image names first
-docker save -o aisummryio-full.tar \
-  aisummryio-backend aisummryio-frontend nginx:1.27-alpine postgres:16
-```
-
-Load it on the target host with `docker load -i aisummryio-full.tar`.
-
-Compose prefixes image names with the project directory, so check
-`docker compose images` rather than assuming the names above. The archive runs
-roughly 1.5–2.5 GB, which is over GitHub's 100 MB per-file limit — keep it out
-of git and move it out of band. Confirm no FLAPI credentials from `.env` were
-captured into a layer before the file leaves the build machine.
-
-### Backend image on its own
-
-Compose runs its own throwaway PostgreSQL. To point the backend at a different
-database, build and run the image directly. This follows the same pattern as
-LocatoAI:
-
-```bash
-cd backend
 docker build --platform linux/amd64 -t aisummryio-backend:latest .
-```
-
-Build for `linux/amd64` on Apple Silicon: Python 3.8 has no arm64 wheels for
-part of the dependency set, and it matches the deployment target. Rebuild after
-any code or dependency change.
-
-**Against the shared server:**
-
-```bash
-docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
-  -e AISUMMRY_DATABASE_URL='postgresql://spear:spear@rnd619-nv-prd01:5432/spear' \
+docker run --rm -p 8000:8000 \
+  -e AISUMMRY_DATABASE_URL='postgresql://user:pass@db:5432/summaries' \
   -e AISUMMRY_DATABASE_SCHEMA=sumorai \
-  -v "$PWD/runtime-settings.json:/srv/backend/runtime-settings.json" \
+  -e AISUMMRY_LLM_BASE_URL='http://llm-gateway:11434/v1' \
+  -e AISUMMRY_LLM_MODEL='gemma4:31b-cloud' \
+  -e AISUMMRY_LLM_DIET_MODE=false \
+  -e OPENAI_API_KEY='replace-if-required' \
+  -e AISUMMRY_FLAPI_USERNAME='replace' \
+  -e AISUMMRY_FLAPI_TOKEN='replace' \
   aisummryio-backend:latest
 ```
 
-**Against PostgreSQL on the host machine:**
+Build from the repository root. The internal `flunks` package must be
+available from the Python package index visible during the build. On Apple
+Silicon, keep `--platform linux/amd64`: Python 3.8 has no ARM wheel for part of
+this dependency set.
+
+### OpenShift
+
+Push the same image to the registry available to the cluster, then create one
+application from it:
 
 ```bash
-docker run -d --name aisummry-backend --platform linux/amd64 -p 8000:8000 \
-  --add-host=pghost:host-gateway \
-  -e AISUMMRY_DATABASE_URL="postgresql://$(whoami)@pghost:5432/summaries" \
-  -v "$PWD/runtime-settings.json:/srv/backend/runtime-settings.json" \
-  aisummryio-backend:latest
+docker tag aisummryio-backend:latest \
+  <registry>/<project>/aisummryio-backend:latest
+docker push <registry>/<project>/aisummryio-backend:latest
+
+oc new-app --name aisummryio-backend \
+  --image=<registry>/<project>/aisummryio-backend:latest
+oc set env deployment/aisummryio-backend --from=secret/aisummryio-backend
+oc expose service/aisummryio-backend
+oc logs -f deployment/aisummryio-backend
 ```
 
-`pghost` is mapped to the host gateway by `--add-host`. Use it rather than
-`host.docker.internal`, which resolves to an unreachable IPv6 address, and
-never `localhost`, which is the container's own loopback — both fail as
-`network is unreachable` on `::1`. The URL also needs an explicit user, since
-the container user is not the host user.
+Create `secret/aisummryio-backend` through the organization's secret manager
+with these keys:
 
-Managing the container and running tests:
+- `AISUMMRY_DATABASE_URL`, `AISUMMRY_FLAPI_TOKEN`, and optionally
+  `AISUMMRY_DATABASE_PASSWORD`;
+- `OPENAI_API_KEY` exactly as written — not `AISUMMRY_OPENAI_API_KEY`;
+- `AISUMMRY_ADMIN_PASSWORD` and `AISUMMRY_COOKIE_SECRET`.
+
+Set the non-secret values on the Deployment: `AISUMMRY_DATABASE_SCHEMA`,
+`AISUMMRY_LLM_BASE_URL`, `AISUMMRY_LLM_MODEL`,
+`AISUMMRY_LLM_DIET_MODE=false`, and `AISUMMRY_FLAPI_USERNAME`. The model URL
+must be reachable from the pod; `localhost` means the backend container itself.
+The image listens on port 8000 and supports OpenShift's arbitrary non-root UID.
+
+`/data/runtime-settings.json` stores settings saved from the UI and overrides
+environment variables. Mount `/data` only if those UI changes should survive a
+pod replacement. If a PVC already contains this file, check it first when an
+environment change seems ignored.
+
+### Why plan-chat can work while summaries do not
+
+Both paths use the same model client. A new database, however, has no active
+summary workflow: the seeded example is intentionally disabled. `/summaries`
+calls the model only after at least one enabled workflow with role `baseline`
+or `both` collects evidence. Create such a workflow in Agent Studio and verify
+its dry run before testing the summary route.
+
+If a workflow is active but the model rejects a section or final-summary call,
+the result now has `degraded: true`, includes the model error under warnings or
+`missing_data`, and logs `section synthesis degraded` or
+`final synthesis degraded`. Start with:
 
 ```bash
-docker logs -f aisummry-backend
-docker stop aisummry-backend && docker rm aisummry-backend
-
-docker run --rm --platform linux/amd64 aisummryio-backend:latest python -m pytest -q
+oc logs deployment/aisummryio-backend | grep -E \
+  'summary skipped|synthesis degraded|FAILED run'
 ```
 
-Add `-v "$PWD/app:/srv/backend/app"` to the run command to iterate on source
-without rebuilding.
-
-### Settings precedence
-
-`runtime-settings.json` holds UI-saved settings and **overrides environment
-variables**, so a stale file silently defeats an `-e` change. It is mounted
-above so settings and the hashed admin password survive container restarts.
-When mounted, its `database_url` must use `pghost` — not `localhost` — for a
-host database.
-
-`backend/.dockerignore` excludes the file, so an unmounted container starts
-from environment variables alone.
-
-The URL carries host, port, user, password, and database in one value; the
-schema is separate. A password containing `@`, `:`, `/`, or `#` must be
-percent-encoded.
-
-### Frontend image
-
-```bash
-cd frontend
-docker build -t aisummryio-frontend:latest .
-
-docker run --rm -p 3000:3000 \
-  --add-host=apihost:host-gateway \
-  -e BACKEND_URL=http://apihost:8000 \
-  aisummryio-frontend:latest
-```
-
-The same hostname rule applies: reach the backend through a `--add-host` alias,
-not `localhost` or `host.docker.internal`.
-
-## Kubernetes (Helm)
-
-Charts for both services live under [deploy/helm/](deploy/helm/):
-
-```bash
-helm install aisummry-backend deploy/helm/backend \
-  --set database.url='postgresql://user:pass@host:5432/db' \
-  --set database.schema=sumorai
-
-helm install aisummry-frontend deploy/helm/frontend \
-  --set backendUrl=http://aisummry-backend:8000
-```
-
-The backend chart **refuses to render without `database.url`** rather than
-deploying a pod that points at a Secret nobody created; CI asserts that guard
-fires. Credentials go into a chart-managed Secret, and `runtime-settings.json`
-is held on a PVC so UI-saved settings and the hashed admin password survive a
-restart — the same precedence rule as Docker applies, so a stale file on that
-volume still overrides the chart's environment values.
-
-Chart timeouts are aligned with the backend's own bounds (package runs and
-model calls are both 120s by default), so a probe or ingress timeout cannot
-cut off a run that is still valid.
+Compose and the Helm charts remain available for local or existing installs,
+but they are not part of this OpenShift path. The frontend remains a separate
+image built from `frontend/`.
 
 ## CI
 

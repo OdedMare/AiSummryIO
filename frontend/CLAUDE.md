@@ -42,6 +42,7 @@ components/
 │   ├── useShellTheme.ts     theme persistence
 │   └── commands.ts          composer command parsing (`/skill`, identifiers)
 ├── AgentStudioPanel/
+│   ├── ProjectWorkspace.tsx     session-owned mission + capability selection
 │   ├── SpecialistStudio.tsx      create, edit, and enable specialists
 │   ├── packages/                 packageModel.ts + usePackageCatalog.ts
 │   │                             and PackageAgents/Fields/Schema views
@@ -174,6 +175,12 @@ ID/evidence, and reuse the conversation's stored boundaries.
   ordinary answer whose `suggested_questions` become the chips.
 - FDE language is concrete: “טול”, “חבילת FLAPI”, “קלט”, “פלט”, “שלב”,
   “פעיל לסוכן”, “כבוי”. “טיוטה” and “פורסם” are gone with publishing.
+- **A project is a mission-scoped view over the shared catalog, not a copy of
+  it.** It stores exact tool, Workflow, Skill, and agent keys. The user can
+  curate those assignments manually and jump to each catalog editor. “Create
+  with FDE” first saves the owned workspace, then reuses the Skill interview
+  to author one mission-specific Skill; the Skill is persisted and attached
+  only after confirmation.
 - **Studio editors edit one row, they do not append versions.** Each of
   `WorkflowEditor`, `PackageCatalog`, and `ContentStudio` holds an `editingId`:
   set, the form saves through `api.update*`; empty, through `api.create*`.

@@ -29,3 +29,6 @@ decisions stay under `bl/`; SQL stays under `dal/repository/`.
 - `SkillPreviewSection` mirrors the section contract (`coverage`, `patterns`,
   `outliers`), so previewing a Skill exercises the same shape a real run
   produces. Adding a field to the section schema means adding it here too.
+- `ProjectCreate` stores a mission plus exact keys from the shared catalog.
+  Project routes use the signed anonymous session and never expose another
+  session's workspace.

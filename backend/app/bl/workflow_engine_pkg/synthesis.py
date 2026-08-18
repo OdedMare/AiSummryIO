@@ -5,9 +5,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
 from app.common.errors import AgentError
+from app.common.logging_setup import trace
 from app.bl.workflow_engine_pkg.schemas import (
     FINAL_SCHEMA, SECTION_SCHEMA, SKILL_SCHEMA, merge_output_schema,
 )
+
+_log = trace("synthesis")
 
 
 # A reducer never receives more than this many prior analyses in one call.
@@ -88,8 +91,13 @@ def section_summary(service, workflow, facts, warnings) -> dict:
             base_system + _TABULAR_GUIDANCE,
             json.dumps(payload, ensure_ascii=False), schema,
         ))
-    except AgentError:
-        return _section_fallback(workflow, facts)
+    except AgentError as exc:
+        _log.warning(
+            "section synthesis degraded workflow=%s: %s",
+            workflow.get("workflow_key", workflow.get("name", "unknown")),
+            exc,
+        )
+        return _section_fallback(workflow, facts, str(exc))
 
 
 def _map_fact_chunks(service, workflow, facts, base_system) -> List[dict]:
@@ -192,7 +200,9 @@ def _section_result(result: dict) -> dict:
     }
 
 
-def _section_fallback(workflow: dict, facts: List[dict]) -> dict:
+def _section_fallback(
+    workflow: dict, facts: List[dict], reason: str = ""
+) -> dict:
     """Stated coverage, and `degraded` so the caller can say the model failed.
 
     Without the flag a reader cannot tell a thin section from a fallback, and
@@ -207,7 +217,10 @@ def _section_fallback(workflow: dict, facts: List[dict]) -> dict:
                   for item in datasets],
         "patterns": [],
         "outliers": [],
-        "warnings": ["הסיכום הופק ללא מודל השפה; מוצגות ספירות בלבד."],
+        "warnings": [
+            "הסיכום הופק ללא מודל השפה; מוצגות ספירות בלבד"
+            + (": " + reason if reason else ".")
+        ],
         "suggested_questions": [],
         "fields": {},
         "degraded": True,
@@ -299,11 +312,12 @@ def _shared_summary(
     payload = json.dumps(data, ensure_ascii=False)
     try:
         return service._llm.complete_json(prompt, payload, FINAL_SCHEMA)
-    except AgentError:
-        return _final_fallback(sections)
+    except AgentError as exc:
+        _log.warning("final synthesis degraded: %s", exc)
+        return _final_fallback(sections, str(exc))
 
 
-def _final_fallback(sections: List[dict]) -> dict:
+def _final_fallback(sections: List[dict], reason: str = "") -> dict:
     completed = [item for item in sections if item["status"] == "completed"]
     return {
         "headline": "סיכום חלקי: %d מתוך %d חלקים הושלמו." % (
@@ -316,9 +330,11 @@ def _final_fallback(sections: List[dict]) -> dict:
         ),
         "key_findings": [fact for item in sections for fact in item["facts"]],
         "risks": [],
-        "missing_data": [
-            warning for item in sections for warning in item["warnings"]
-        ],
+        "missing_data": (
+            [warning for item in sections for warning in item["warnings"]]
+            + (["מודל השפה לא השלים את הסיכום הסופי: " + reason]
+               if reason else [])
+        ),
         "suggested_questions": [
             question for item in sections
             for question in item["suggested_questions"]

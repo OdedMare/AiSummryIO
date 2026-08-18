@@ -10,12 +10,12 @@ from fastapi import APIRouter
 
 from app.api.routers import (
     admin, agent_content, conversations, evaluations, feedback, health, packages,
-    summaries, workflows,
+    projects, summaries, workflows,
 )
 
 _BUILDERS = (
     health, summaries, conversations, feedback, admin, packages, workflows,
-    agent_content, evaluations,
+    agent_content, projects, evaluations,
 )
 
 API_PREFIX = "/api"
