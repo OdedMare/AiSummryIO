@@ -18,11 +18,16 @@ import WorkflowEditor from "./WorkflowEditor";
 
 type Tab = "projects" | "packages" | "workflows" | "specialists" | "content" | "review";
 
-export default function AgentStudioPanel({ onClose }: { onClose: () => void }) {
+export default function AgentStudioPanel({
+  onClose, backLabel = "חזרה לשיחה",
+}: {
+  onClose: () => void;
+  backLabel?: string;
+}) {
   const studio = useStudio();
   return (
     <div className="studio-page">
-      <StudioHeader onClose={onClose} studio={studio} />
+      <StudioHeader onClose={onClose} backLabel={backLabel} studio={studio} />
       <StudioContent studio={studio} />
     </div>
   );
@@ -71,15 +76,16 @@ function useStudio() {
 type Studio = ReturnType<typeof useStudio>;
 
 function StudioHeader({
-  onClose, studio,
+  onClose, backLabel, studio,
 }: {
   onClose: () => void;
+  backLabel: string;
   studio: Studio;
 }) {
   return (
     <header className="studio-page-header">
       <button type="button" className="studio-back" onClick={onClose}>
-        <ArrowRight size={17} aria-hidden="true" /> חזרה לשיחה
+        <ArrowRight size={17} aria-hidden="true" /> {backLabel}
       </button>
       <span className="modal-icon"><Workflow size={20} /></span>
       <div><span className="studio-kicker">SumOrAI Workspace</span>

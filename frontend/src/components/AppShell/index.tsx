@@ -6,6 +6,7 @@ import SettingsPanel from "@/components/SettingsPanel";
 import SummaryWorkspace from "@/components/SummaryWorkspace";
 import Composer from "./Composer";
 import MapPanel from "./MapPanel";
+import ProjectSelector from "./ProjectSelector";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { useAppShell } from "./useAppShell";
@@ -16,11 +17,19 @@ export default function AppShell() {
   // its forms and interviews need the height, and a dialog could only ever
   // lend them a fraction of it.
   if (app.studioOpen) {
-    return <AgentStudioPanel onClose={() => app.setStudioOpen(false)} />;
+    return <AgentStudioPanel onClose={app.closeStudio}
+      backLabel={app.activeProject ? "חזרה לשיחה" : "בחירת פרויקט"} />;
   }
   if (app.evaluationOpen) {
     return <EvaluationPanel skills={app.skills} agents={app.agents}
       onClose={() => app.setEvaluationOpen(false)} />;
+  }
+  if (!app.activeProject) {
+    return <ProjectSelector projects={app.projects}
+      loading={app.projectsLoading} error={app.projectError} dark={app.dark}
+      onSelect={app.selectProject} onManage={() => app.setStudioOpen(true)}
+      onRetry={() => void app.loadProjects()}
+      onToggleTheme={() => app.setDark((value) => !value)} />;
   }
   return (
     <div className={`app-shell${app.conversation ? "" : " has-map"}`}>
