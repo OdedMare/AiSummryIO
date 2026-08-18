@@ -270,7 +270,6 @@ button:disabled {
 .project-choice-card:hover,
 .project-choice-card:focus-within {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow);
 }
 
 .project-choice-card.is-system {
@@ -393,6 +392,14 @@ button:disabled {
 
 .project-selector-error p {
   margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-choice-card,
+  .project-selector button,
+  .current-project {
+    transition: none;
+  }
 }
 
 .app-shell {
