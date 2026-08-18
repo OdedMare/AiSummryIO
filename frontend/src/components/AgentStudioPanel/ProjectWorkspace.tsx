@@ -133,7 +133,7 @@ export default function ProjectWorkspace({
       <ProjectList items={items} selectedId={editingId} onEdit={edit}
         onRemove={remove} onNew={startNew} />
       <form className="project-workspace" onSubmit={save}>
-        <ProjectHeader editing={!!editingId} />
+        <ProjectHeader editing={!!editingId} system={!!selected?.is_system} />
         <section className="project-brief" aria-labelledby="project-brief-title">
           <div>
             <span className="studio-kicker">Project brief</span>
@@ -144,6 +144,7 @@ export default function ProjectWorkspace({
             <label><span>שם הפרויקט *</span>
               <input value={form.name} maxLength={120}
                 placeholder="לדוגמה: בדיקת עסקאות חריגות"
+                readOnly={!!selected?.is_system}
                 onChange={(event) => update({ name: event.target.value })} />
             </label>
             <label><span>משימת הפרויקט *</span>
@@ -225,13 +226,13 @@ export default function ProjectWorkspace({
   );
 }
 
-function ProjectHeader({ editing }: { editing: boolean }) {
+function ProjectHeader({ editing, system }: { editing: boolean; system: boolean }) {
   return (
     <header className="project-workspace-header">
       <span><FolderKanban size={20} aria-hidden="true" /></span>
       <div>
         <span className="studio-kicker">Mission workspace</span>
-        <h2>{editing ? "סביבת הפרויקט" : "פרויקט חדש"}</h2>
+        <h2>{system ? "פרויקט המערכת" : editing ? "סביבת הפרויקט" : "פרויקט חדש"}</h2>
         <p>בחרו את היכולות בעצמכם, או תנו לסוכן FDE לנסח Skill לפי המשימה.</p>
       </div>
     </header>
@@ -268,13 +269,13 @@ function ProjectList({
             onClick={() => onEdit(item)}>
             <span className="catalog-icon"><FolderKanban size={17} /></span>
             <span><strong title={item.name}>{item.name}</strong>
-              <small>{count} יכולות · עודכן {new Date(item.updated_at).toLocaleDateString("he-IL")}</small>
+              <small>{item.is_system ? "הפרויקט הקיים · " : ""}{count} יכולות · עודכן {new Date(item.updated_at).toLocaleDateString("he-IL")}</small>
             </span>
           </button>
-          <button type="button" className="catalog-card-delete"
+          {!item.is_system && <button type="button" className="catalog-card-delete"
             onClick={() => onRemove(item)} aria-label={`מחיקת ${item.name}`}>
             <Trash2 size={15} aria-hidden="true" />
-          </button>
+          </button>}
         </article>;
       })}
     </section>

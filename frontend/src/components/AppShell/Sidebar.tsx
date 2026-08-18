@@ -1,5 +1,6 @@
 import {
-  Beaker, Bot, History, Moon, PanelRightClose, Plus, Settings, Sun, Workflow,
+  Beaker, Bot, FolderKanban, History, Moon, PanelRightClose, Plus, Settings,
+  Sun, Workflow,
 } from "lucide-react";
 import BrandMark from "./BrandMark";
 import { identifierLabel } from "./commands";
@@ -9,6 +10,15 @@ export default function Sidebar({ app }: { app: AppShellController }) {
   return (
     <aside className={`sidebar ${app.sidebarOpen ? "open" : ""}`}>
       <Brand onClose={() => app.setSidebarOpen(false)} />
+      {app.activeProject && <button className="current-project" type="button"
+        onClick={app.switchProject}>
+        <FolderKanban size={18} aria-hidden="true" />
+        <span><small>פרויקט פעיל</small>
+          <strong dir={app.activeProject.name === "Hunger Games" ? "ltr" : undefined}>
+            {app.activeProject.name}
+          </strong></span>
+        <span className="current-project-switch">החלפה</span>
+      </button>}
       <button className="new-summary" type="button"
         onClick={app.conversation
           ? () => void app.endConversation()
