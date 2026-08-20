@@ -34,7 +34,11 @@ backend:
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000     # the `node` user in node:20-alpine
-  runAsGroup: 1000
+  # Group 0, not the node user's own 1000: the entrypoint rewrites the
+  # compiled backend URL into the build artifacts at start, and the image
+  # makes those group-0 writable so an arbitrary non-root UID (OpenShift
+  # assigns one) can still do it. Any other group makes the pod fail to start.
+  runAsGroup: 0
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:

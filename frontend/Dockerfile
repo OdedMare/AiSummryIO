@@ -48,8 +48,11 @@ RUN chmod 755 docker-entrypoint.sh \
     && chgrp -R 0 .next .backend-url-files .backend-url-sentinel \
     && chmod -R g=u .next .backend-url-files .backend-url-sentinel
 
-# The `node` user in node:20-alpine.
-USER 1000
+# The `node` user in node:20-alpine, with group 0 — the group the writable
+# paths above were opened up for. Its own group (1000) would fall through to
+# the "other" bits and leave the entrypoint unable to rewrite the artifacts,
+# so the group here and `runAsGroup` in the chart must both stay 0.
+USER 1000:0
 
 EXPOSE 3000
 

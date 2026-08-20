@@ -55,6 +55,14 @@ while IFS= read -r artifact; do
         echo "docker-entrypoint: $artifact.template is missing" >&2
         exit 1
     fi
+    # The image opens these up to group 0 so an arbitrary non-root UID can
+    # rewrite them. Running under any other group lands on the "other" bits,
+    # which are read-only — worth naming outright, since the bare redirect
+    # failure below says nothing about why.
+    if [ ! -w "$artifact" ]; then
+        echo "docker-entrypoint: $artifact is not writable as uid $(id -u) gid $(id -g); the container must run with group 0 (check runAsGroup)" >&2
+        exit 1
+    fi
     sed "s|$sentinel|$target|g" "$artifact.template" > "$artifact"
 done < "$FILE_LIST"
 
