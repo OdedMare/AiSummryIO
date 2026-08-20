@@ -63,6 +63,30 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 
+      # The /api/* proxy target is compiled into the build, so the entrypoint
+      # substitutes it at container start. A regression here is invisible until
+      # a deployed pod proxies to itself, so assert it directly: the runtime
+      # value must be present and the build-time sentinel gone.
+      - name: Backend URL resolves at container start
+        run: |
+          docker run --rm -e BACKEND_URL=http://ci-backend.test:9000 \
+            aisummry-frontend:${{ github.sha }} \
+            sh -c '
+              set -eu
+              sentinel=$(cat /app/.backend-url-sentinel)
+              while IFS= read -r artifact; do
+                ! grep -q "$sentinel" "/app/$artifact" || {
+                  echo "$artifact: build-time sentinel survived" >&2
+                  exit 1
+                }
+                grep -q "http://ci-backend.test:9000" "/app/$artifact" || {
+                  echo "$artifact: runtime BACKEND_URL was not applied" >&2
+                  exit 1
+                }
+              done < /app/.backend-url-files
+              echo "entrypoint applied the runtime backend URL"
+            '
+
   helm:
     name: Lint charts
     runs-on: ubuntu-latest

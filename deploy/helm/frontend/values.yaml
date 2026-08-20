@@ -18,9 +18,10 @@ service:
   type: ClusterIP
   port: 3000
 
-# next.config.ts rewrites /api/* to this URL server-side, so the browser
-# stays same-origin and no CORS setup is needed. It must be reachable from
-# the frontend pod — a cluster-internal Service name, not a public host.
+# The frontend proxies /api/* to this URL server-side, so the browser stays
+# same-origin and no CORS setup is needed. The image entrypoint applies it at
+# container start. It must be reachable from the frontend pod — a
+# cluster-internal Service name, not a public host.
 #
 # `backend.fullnameOverride` is unset by default, so the backend Service is
 # named "<release>-aisummry-backend". Set `url` outright if the backend was
@@ -33,7 +34,11 @@ backend:
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000     # the `node` user in node:20-alpine
-  runAsGroup: 1000
+  # Group 0, not the node user's own 1000: the entrypoint rewrites the
+  # compiled backend URL into the build artifacts at start, and the image
+  # makes those group-0 writable so an arbitrary non-root UID (OpenShift
+  # assigns one) can still do it. Any other group makes the pod fail to start.
+  runAsGroup: 0
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:

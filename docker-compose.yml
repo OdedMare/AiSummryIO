@@ -33,6 +33,9 @@ services:
   frontend:
     build: ./frontend
     environment:
+      # Applied by the image entrypoint at container start, which rewrites the
+      # compiled /api/* proxy target. `docker compose up` after changing it is
+      # enough — no rebuild.
       BACKEND_URL: http://backend:8000
     ports:
       - "3000:3000"

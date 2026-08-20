@@ -45,8 +45,9 @@ spec:
               value: production
             - name: PORT
               value: "3000"
-            # Consumed by next.config.ts at server start to build the
-            # /api/* rewrite. Changing it needs a pod restart.
+            # Applied by the image entrypoint at container start, which
+            # rewrites the compiled /api/* proxy target. Changing it needs a
+            # pod restart, not a rebuilt image.
             - name: BACKEND_URL
               value: {{ include "aisummry-frontend.backendUrl" . | quote }}
             {{- with .Values.extraEnv }}

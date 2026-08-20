@@ -87,13 +87,12 @@ services:
         condition: service_completed_successfully
 
   frontend:
+    # The same image the real stack builds. It used to need a sandbox-specific
+    # Dockerfile because the rewrite target was baked in at build time; the
+    # entrypoint now applies BACKEND_URL at container start, so the plain
+    # environment variable below is all this needs.
     build:
       context: ../frontend
-      dockerfile: ../devsandbox/frontend.sandbox.Dockerfile
-      args:
-        # Must be a build arg: next.config.ts bakes the rewrite target into
-        # the build, so a runtime-only value never reaches the compiled app.
-        BACKEND_URL: http://backend:8000
     environment:
       BACKEND_URL: http://backend:8000
     ports:
