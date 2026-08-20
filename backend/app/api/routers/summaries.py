@@ -66,6 +66,13 @@ def build(context) -> APIRouter:
         run = context.repository.create_run(
             conversation_id, payload.question, "follow_up", payload.skill_keys,
             payload.agent_keys,
+            # Carried on the run because the worker re-reads the row rather
+            # than the request body. Empty for a follow-up asked with nothing
+            # selected, which is the ordinary case.
+            {
+                "citation_id": payload.citation_id,
+                "referenced_citation_ids": payload.referenced_citation_ids,
+            },
         )
         context.jobs.submit(run["id"])
         context.set_session_cookie(response, session_id)

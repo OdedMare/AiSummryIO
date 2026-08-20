@@ -11,7 +11,7 @@ from app.dal.repository.base import new_id
 class RunRepository:
     def create_run(
         self, conversation_id: str, question: str, kind: str, skill_keys=None,
-        agent_keys=None,
+        agent_keys=None, citation_context=None,
     ) -> dict:
         row_id = new_id()
         idle_minutes = self._store.get().conversation_idle_minutes
@@ -21,6 +21,7 @@ class RunRepository:
                 (
                     row_id, conversation_id, kind, question,
                     Jsonb(skill_keys or []), Jsonb(agent_keys or []),
+                    Jsonb(citation_context or {}),
                     Jsonb(_empty_progress()),
                 ),
             )
@@ -167,8 +168,8 @@ def _run_changes(changes: dict):
 _INSERT_RUN = """
     INSERT INTO summary_runs (
         id, conversation_id, kind, question, skill_keys, agent_keys,
-        status, progress
-    ) VALUES (%s,%s,%s,%s,%s,%s,'queued',%s)
+        citation_context, status, progress
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,'queued',%s)
 """
 
 _INSERT_EVIDENCE = """

@@ -4,7 +4,7 @@ import json
 from typing import List
 
 from app.common.errors import AgentError
-from app.bl.workflow_engine_pkg import history
+from app.bl.workflow_engine_pkg import citation_context, history
 from app.bl.workflow_engine_pkg.schemas import ROUTER_SCHEMA
 
 
@@ -16,6 +16,9 @@ def follow_up(service, run, conversation, progress, project=None) -> dict:
     its own subject. `run["question"]` keeps the user's original wording;
     only what the model reads downstream is the resolved form.
     """
+    cited = _cited_answer(service, run, conversation)
+    if cited is not None:
+        return cited
     prior, workflows, tools = _available(service, conversation, project)
     skills = service._project_skills(run, project)
     turns = history.recent_turns(service, conversation)
@@ -32,6 +35,35 @@ def follow_up(service, run, conversation, progress, project=None) -> dict:
             skills, conversation.get("boundaries"),
         )
     return service._synthesize_cached(question, prior, skills)
+
+
+def _cited_answer(service, run, conversation):
+    """The answer to a follow-up that is about an already-cited record.
+
+    Returns None for an ordinary follow-up, so the routing below is untouched
+    for every question that does not reference a citation.
+
+    An explicit `citation_id` wins outright: the user asked while looking at
+    that source, so there is nothing to infer and nothing to search. Only
+    without one is the question matched against the thread's citations, and
+    only a clear match answers — an ambiguous one asks which record was meant
+    rather than showing the wrong one.
+    """
+    resolved = citation_context.resolve_explicit(service, conversation, run)
+    if resolved:
+        return citation_context.record_answer(run["question"], resolved)
+    if citation_context.explicit_ids(run):
+        # The request named ids, but none of them exist in this thread. Fall
+        # through to ordinary routing rather than inventing a record.
+        return None
+    match = citation_context.match_thread(service, conversation, run["question"])
+    if match.get("ambiguous"):
+        return citation_context.clarification(match["ambiguous"])
+    if match.get("citation"):
+        return citation_context.record_answer(
+            run["question"], [match["citation"]]
+        )
+    return None
 
 
 def _available(service, conversation, project=None):

@@ -204,6 +204,14 @@ ALTER TABLE summary_runs
 ALTER TABLE summary_runs
     ADD COLUMN IF NOT EXISTS agent_keys JSONB NOT NULL DEFAULT '[]';
 
+-- The citation the user had selected when they asked this follow-up, plus any
+-- further markers the question referenced. Stored on the run because the job
+-- worker re-reads the row rather than receiving the request body, exactly as
+-- `skill_keys` and `agent_keys` already are. Defaulting to '{}' is what keeps
+-- every run written before citations existed readable.
+ALTER TABLE summary_runs
+    ADD COLUMN IF NOT EXISTS citation_context JSONB NOT NULL DEFAULT '{}';
+
 COMMIT;
 
 CREATE TABLE IF NOT EXISTS summary_evidence (
