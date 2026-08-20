@@ -155,6 +155,10 @@ def _orchestrate(
             _selected_summary_skills(service, run),
             agent_context=_agent_context(states),
             leader_prompt=leader_prompt,
+            # A specialist run persists evidence exactly as a direct run does,
+            # so its claims are citable on the same terms. A cached section
+            # carries no `evidence_ids` by design, and therefore no citation.
+            evidence=execution.run_evidence(service, run),
         )
     if leader_missing:
         result["missing_data"] = list(dict.fromkeys(

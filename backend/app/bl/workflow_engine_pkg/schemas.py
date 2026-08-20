@@ -47,6 +47,27 @@ FINAL_SCHEMA = {
         "suggested_questions": {
             "type": "array", "items": {"type": "string"}
         },
+        # Per-claim traceability. Each entry is one factual statement from the
+        # answer together with the citation ids that support it, chosen from
+        # the `available_citations` supplied in the payload — the model never
+        # invents an id, a URL, or a record, and `citations.attach` drops any
+        # id that is not in that catalog. Claims are additive: `summary` and
+        # `key_findings` keep their existing shape, so a client that ignores
+        # this field reads exactly the answer it always did.
+        "claims": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "citation_ids": {
+                        "type": "array", "items": {"type": "string"}
+                    },
+                },
+                "required": ["text", "citation_ids"],
+                "additionalProperties": False,
+            },
+        },
         "skill_results": {
             "type": "array",
             "items": {
@@ -71,7 +92,7 @@ FINAL_SCHEMA = {
     },
     "required": [
         "headline", "summary", "coverage", "key_findings", "risks",
-        "missing_data", "suggested_questions", "skill_results",
+        "missing_data", "suggested_questions", "claims", "skill_results",
     ],
     "additionalProperties": False,
 }

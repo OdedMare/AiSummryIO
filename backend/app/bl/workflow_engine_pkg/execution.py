@@ -59,7 +59,31 @@ def execute(
     sections = _execute_all(
         service, run, root_id, workflows, progress_callback, boundaries
     )
-    return service._final_summary(root_id, question, sections, skills or [])
+    return service._final_summary(
+        root_id, question, sections, skills or [],
+        evidence=run_evidence(service, run),
+    )
+
+
+def run_evidence(service, run) -> List[dict]:
+    """The run's persisted evidence, or nothing when it has none yet.
+
+    Read back rather than threaded through the workflow futures: the rows are
+    already in the database by the time synthesis starts, and reading them is
+    what guarantees a citation points at a record that was really stored.
+    Reached through `getattr` like `history.recent_turns`, so a fake or older
+    repository without `run_evidence` degrades to no citations instead of
+    crashing a summary.
+    """
+    run_id = (run or {}).get("id")
+    reader = getattr(service._repository, "run_evidence", None)
+    if not run_id or reader is None:
+        return []
+    try:
+        return list(reader(run_id))
+    except Exception as exc:
+        _log.warning("evidence unavailable for citations: %s", exc)
+        return []
 
 
 def execute_sections(

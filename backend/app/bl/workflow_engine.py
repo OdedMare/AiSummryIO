@@ -220,11 +220,11 @@ class SummaryService:
 
     def _final_summary(
         self, root_id: str, question: str, sections: List[dict], skills=None,
-        agent_context=None, leader_prompt="",
+        agent_context=None, leader_prompt="", evidence=None,
     ) -> dict:
         return synthesis.final_summary(
             self, root_id, question, sections, skills,
-            agent_context, leader_prompt,
+            agent_context, leader_prompt, evidence,
         )
 
     def _run_skills(

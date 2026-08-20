@@ -11,6 +11,8 @@ import time
 from fastapi import APIRouter, Depends, Query, Response
 
 from app.api.models import FollowUpCreate, SummaryCreate
+from app.bl.workflow_engine_pkg import citations
+from app.common.errors import NotFoundError
 
 # Bounds the synchronous convenience path. A caller wanting longer should poll
 # the run, which is what the parameter degrades to on timeout.
@@ -83,6 +85,32 @@ def build(context) -> APIRouter:
     ):
         _authorized_run(context, run_id, session_id)
         return context.repository.evidence_catalog(run_id)
+
+    @router.get("/conversations/{conversation_id}/citations/{citation_id}")
+    def resolve_citation(
+        conversation_id: str,
+        citation_id: str,
+        limit: int = Query(20, ge=1, le=200),
+        session_id: str = Depends(context.user_session),
+    ):
+        """The public source record behind one citation marker.
+
+        Ownership is enforced exactly as the evidence endpoints enforce it —
+        `get_conversation(conversation_id, session_id)` raises for a
+        conversation the caller does not own, so a guessed citation id can
+        only ever resolve inside the caller's own thread. The citation is then
+        looked up in that conversation's own runs, which is what makes an id
+        from someone else's thread a 404 rather than a leak.
+        """
+        context.repository.get_conversation(conversation_id, session_id)
+        runs = context.repository.conversation_runs(conversation_id)
+        citation = citations.resolve(runs, citation_id)
+        if citation is None:
+            raise NotFoundError("הציטוט לא נמצא")
+        record = context.repository.evidence_record(
+            citation["run_id"], citation["evidence_id"], limit
+        )
+        return {"citation": citations.public(citation), "record": record}
 
     @router.get("/runs/{run_id}/evidence/{evidence_id}")
     def evidence_page(

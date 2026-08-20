@@ -92,6 +92,31 @@ class RunRepository:
             FROM summary_evidence WHERE run_id=%s ORDER BY created_at
         """, (run_id,))
 
+    def conversation_runs(self, conversation_id: str) -> List[dict]:
+        """Every finished run of a conversation, oldest first.
+
+        Citations are resolved across the thread, not within one run: a
+        follow-up cites what an earlier turn said. Only finished runs carry a
+        `result`, so only those can hold citations at all.
+        """
+        return self._all("""
+            SELECT id, conversation_id, question, result, status, created_at
+            FROM summary_runs
+            WHERE conversation_id=%s AND status IN ('completed','partial')
+            ORDER BY created_at
+        """, (conversation_id,))
+
+    def evidence_record(
+        self, run_id: str, evidence_id: str, limit: int = 100
+    ) -> dict:
+        """One evidence row, bounded, for resolving a citation.
+
+        Scoped by `run_id` as well as `evidence_id` so a caller who has passed
+        the run's ownership check cannot reach another run's evidence by
+        guessing an id — the same pairing `evidence_page` already relies on.
+        """
+        return self.evidence_page(run_id, evidence_id, 0, limit)
+
     def evidence_page(
         self, run_id: str, evidence_id: str, offset: int, limit: int
     ) -> dict:

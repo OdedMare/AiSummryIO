@@ -6,6 +6,7 @@ from typing import Dict, List
 
 from app.common.errors import AgentError
 from app.common.logging_setup import trace
+from app.bl.workflow_engine_pkg import citations
 from app.bl.workflow_engine_pkg.schemas import (
     FINAL_SCHEMA, SECTION_SCHEMA, SKILL_SCHEMA, merge_output_schema,
 )
@@ -227,31 +228,69 @@ def _section_fallback(
     }
 
 
+# Why ids and not URLs: the model is given a closed list of handles onto
+# evidence that was really persisted, so the only thing it can do wrong is
+# cite nothing. Asking it to name a source or write a link would make every
+# marker a claim in its own right, unverifiable against anything.
+_CITATION_GUIDANCE = (
+    "\n`claims` breaks your answer into individual factual statements and "
+    "traces each one to its source. For every statement in `summary`, "
+    "`key_findings`, and `risks` that asserts a fact about the data, add one "
+    "entry with the statement in `text` (Hebrew, as written in the answer) "
+    "and the supporting `citation_ids`."
+    "\nChoose `citation_ids` **only** from `available_citations`. Each "
+    "section lists the ids covering it in its own `citation_ids`; a claim "
+    "drawn from a section must cite from that section's ids. Never invent an "
+    "id, a URL, or a source name, and never cite an id that is not listed."
+    "\nA statement you cannot trace to a listed citation gets an empty "
+    "`citation_ids` rather than a guessed one. Do not create a claim for an "
+    "opinion, a caveat, or a description of the process. Return `claims` "
+    "empty when `available_citations` is empty."
+)
+
+
 def final_summary(
     service, root_id, question, sections, skills=None,
-    agent_context=None, leader_prompt="",
+    agent_context=None, leader_prompt="", evidence=None,
 ) -> dict:
+    """Merge sections into the answer, with per-claim citations.
+
+    `evidence` is the run's persisted evidence rows. It is what makes a
+    citation resolvable: the catalog is built from rows that really exist, so
+    a marker can never point at a missing or unrelated record. Omitted — a
+    cached answer, a preview — the run simply carries no claims, and the
+    answer is exactly what it was before citations existed.
+    """
     skills = skills or []
-    safe_sections = [_safe_section(section) for section in sections]
+    catalog = citations.build(sections, evidence or [])
+    safe_sections = [
+        _safe_section(section, catalog) for section in sections
+    ]
     final = _shared_summary(
         service, question, sections, safe_sections,
-        agent_context or [], leader_prompt,
+        agent_context or [], leader_prompt, catalog,
     )
     final["skill_results"] = service._run_skills(
         question, skills, sections, safe_sections
     )
     final["sections"] = sections
     final["partial"] = any(item["status"] != "completed" for item in sections)
-    return final
+    return citations.attach(final, catalog)
 
 
-def _safe_section(section: dict) -> dict:
+def _safe_section(section: dict, catalog=None) -> dict:
     """The section view sent to the final call and to every Skill.
 
     `patterns`, `outliers`, and `coverage` are included because a Skill that
     never sees rows can only reason about distributions if the section carries
     them. Optional via `get`, so a section built before this contract — a
     cached run, a `preview_skill` sample — still passes through.
+
+    It also carries this section's `citation_ids`, which is what makes
+    per-claim citation possible at all. The raw `evidence_ids` still never
+    reach the model: a citation id is an opaque handle into a catalog built in
+    Python from evidence that was really persisted, so the model chooses among
+    real sources instead of naming one.
     """
     keys = (
         "workflow_key", "name", "status", "summary", "facts", "warnings"
@@ -260,12 +299,26 @@ def _safe_section(section: dict) -> dict:
     for key in ("coverage", "patterns", "outliers"):
         if section.get(key):
             safe[key] = section[key]
+    cited = _section_citations(section, catalog)
+    if cited:
+        safe["citation_ids"] = cited
     return safe
+
+
+def _section_citations(section: dict, catalog) -> List[str]:
+    """The citation ids covering this section, in catalog order."""
+    if not catalog:
+        return []
+    evidence_ids = set(section.get("evidence_ids") or [])
+    return [
+        item["citation_id"] for item in catalog
+        if item["evidence_id"] in evidence_ids
+    ]
 
 
 def _shared_summary(
     service, question, sections, safe_sections,
-    agent_context=None, leader_prompt="",
+    agent_context=None, leader_prompt="", catalog=None,
 ) -> dict:
     prompt = service._repository.enabled_content(
         "final-summary",
@@ -306,7 +359,10 @@ def _shared_summary(
         "`missing_data` and say that it cannot be rated from the supplied "
         "sections."
     )
+    prompt += _CITATION_GUIDANCE
     data = {"question": question, "sections": safe_sections}
+    if catalog:
+        data["available_citations"] = citations.options(catalog)
     if agent_context:
         data["specialist_reports"] = agent_context
     payload = json.dumps(data, ensure_ascii=False)
@@ -340,6 +396,10 @@ def _final_fallback(sections: List[dict], reason: str = "") -> dict:
             for question in item["suggested_questions"]
         ],
         "skill_results": [],
+        # No model ran, so nothing was traced to a source. The catalog is
+        # still published by `citations.attach`, which keeps the response
+        # shape identical whether or not synthesis succeeded.
+        "claims": [],
         "degraded": True,
     }
 
