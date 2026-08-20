@@ -32,6 +32,15 @@ decisions stay under `bl/`; SQL stays under `dal/repository/`.
 - `ProjectCreate` stores a mission plus exact keys from the shared catalog.
   Project routes use the signed anonymous session and never expose another
   session's workspace.
+- `FollowUpCreate.citation_id` and `referenced_citation_ids` are optional, so
+  every existing client keeps posting the body it always did. They are bounded
+  here and stored on the run as `citation_context`, because the worker reads
+  the run row rather than the request body.
+- `GET /conversations/{id}/citations/{citation_id}` resolves one citation. It
+  is scoped by **conversation**, not by citation alone, so
+  `get_conversation(conversation_id, session_id)` — the same check the evidence
+  routes apply — runs before anything is looked up. A citation id from another
+  session's thread is a 404, never a record.
 - `SummaryCreate.project_id` is optional for wire compatibility. The route
   resolves an omitted value to the caller's protected `Hunger Games` system
   project and stores the resolved id on the conversation.

@@ -25,6 +25,9 @@ python -m pytest -q
 | LLM client | `llm_timeout_seconds` reaches the SDK and is part of the client cache key, so a saved change takes effect |
 | Leader review | The review payload carries `fact_count`, not every fact, while the worker's own view keeps them |
 | Health | `/health/live` fails only once abandoned threads have eaten the pool; `/health` keeps reporting either way |
+| Citations | A claim points at a persisted evidence row; the model selects only from the real catalog; an invented id is dropped; a section with no saved evidence yields no citation; the public DTO never carries the raw record; a summary with nothing to cite is unchanged |
+| Citation follow-ups | An explicit `citation_id` returns that record without routing; a clear reference resolves; an ambiguous one asks which record; an unknown id falls back to ordinary routing; the citation context is bounded and persisted |
+| Citation access | Another session's conversation is refused before any lookup; an owned citation returns its public record; a missing id is a clean 404 |
 | Auth | scrypt hashing and verification |
 
 ## Testing without `flunks`

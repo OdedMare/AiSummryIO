@@ -11,7 +11,8 @@ client, and the provider it was constructed with.
 | `jobs.py` | 72 | `JobRunner` — the bounded background queue |
 
 `workflow_engine_pkg/` holds the behavior modules the facade delegates to,
-including `conversational_planning.py`.
+including `conversational_planning.py`, `citations.py`, and
+`citation_context.py`.
 
 `prompts/` holds the prompt text those modules send, as markdown rather than
 Python constants — see [prompts/README.md](prompts/README.md). Callers use
@@ -180,6 +181,47 @@ an FDE and `_run_skills` strips before any result reaches a user.
 `preview_skill` runs unsaved Skill instructions against caller-supplied sample
 sections — no packages, no persistence — so a wording problem can be separated
 from a package failure.
+
+### Citations (`workflow_engine_pkg/citations.py`)
+
+`final_summary` receives the run's persisted evidence and builds a catalog
+from it before calling the model: one entry per evidence row a section really
+saved, keyed `c1`, `c2`, … The model is handed only `available_citations` —
+id, label, step, field **names**, and row count — and returns `claims`, each a
+sentence plus the ids supporting it. `attach` then validates every id against
+the catalog and drops the unknown ones.
+
+Three properties follow, and they are the whole design:
+
+- A citation exists only where a record exists, because the catalog is built
+  from rows read back out of `summary_evidence`.
+- The model cannot invent one. It never sees a record id or writes a URL; it
+  picks from a closed list, and anything outside it is discarded.
+- The internal entry never leaves. It keeps `records` so an excerpt can be cut;
+  `public` is the only shape that reaches a client, and the rows themselves are
+  served by the evidence endpoints that already enforce ownership.
+
+A claim whose id is dropped keeps its text and loses its marker — degrading to
+the section-level traceability that existed before, rather than failing a run
+that is otherwise correct.
+
+### Citation-aware follow-ups (`workflow_engine_pkg/citation_context.py`)
+
+`routing.follow_up` consults this before it routes anything, and it returns
+None for every question that names no record — so ordinary routing is
+untouched.
+
+An explicit `citation_id` (sent when the user asked with a source selected,
+persisted on the run as `citation_context`) resolves against the thread and
+returns that record directly: no router call, no workflow, no search. "הצג לי
+את הרשומה הזו" is a retrieval, and running a search would answer with
+something else.
+
+Without one, the question is matched lexically against the thread's citations.
+A clear winner resolves; **several comparable matches return a clarification**
+instead, because a wrong record still looks like an answer. Matching is
+lexical rather than a model call: the candidates are a short closed list this
+conversation already cited, and the user's own words decide.
 
 ### Planning and tools
 

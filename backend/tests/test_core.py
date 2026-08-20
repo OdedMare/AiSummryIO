@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.common.errors import (
-    AgentError, ConflictError, ProviderError, UnavailableError,
+    AgentError, ConflictError, NotFoundError, ProviderError, UnavailableError,
 )
 from app.api.models import EvaluationCreate, GeoBoundaries, ProjectCreate
 from app.api.evaluation_excel import evaluation_workbook, read_root_ids
@@ -40,19 +40,22 @@ from app.dal.repository.evaluations import EvaluationRepository
 from app.dal.repository.content import _set_agent_workflows
 from app.dal.repository.schema import SCHEMA
 from app.dal.repository.conversations import conversation_title
+from app.dal.repository.runs import _INSERT_RUN
 from app.dal.repository.projects import ProjectRepository
 from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
-from app.bl.workflow_engine_pkg import history, specialists
+from app.bl.workflow_engine_pkg import (
+    citation_context, citations, history, routing, specialists,
+)
 from app.bl.workflow_engine_pkg.execution import chunk_facts, fact_chunks
 from app.bl.workflow_engine_pkg.schemas import (
     FINAL_SCHEMA, LEADER_DELEGATION_SCHEMA, LEADER_REVIEW_SCHEMA,
     WORKER_ANSWER_SCHEMA, WORKER_PLAN_SCHEMA,
 )
 from app.api.models import (
-    DryRunCreate, ModelsProbeRequest, PackageInspect, SkillPreview,
-    SkillPreviewSection, SummaryCreate, WorkflowStep,
+    DryRunCreate, FollowUpCreate, ModelsProbeRequest, PackageInspect,
+    SkillPreview, SkillPreviewSection, SummaryCreate, WorkflowStep,
 )
 
 
@@ -3909,3 +3912,419 @@ def test_deleting_a_prompt_leaves_the_file_based_default(monkeypatch):
     assert repository.enabled_content(
         "workflow-planner", "file default"
     ) == "file default"
+
+
+# ---------------------------------------------------------------------------
+# Sentence-level citations
+#
+# The rule these pin: a citation marker resolves to evidence this run really
+# stored, and never to anything else. Everything below is a way for that to go
+# wrong — the model naming an id it was not given, a caller reaching another
+# session's evidence, an old summary that has no citations at all.
+# ---------------------------------------------------------------------------
+
+_CITED_SECTION = {
+    "workflow_id": "wf-1",
+    "workflow_key": "ownership",
+    "name": "בעלות",
+    "status": "completed",
+    "summary": "נמצאה בעלות",
+    "facts": ["דנה היא הבעלים"],
+    "warnings": [],
+    "evidence_ids": ["ev-1"],
+}
+
+_CITED_EVIDENCE = [{
+    "id": "ev-1",
+    "workflow_id": "wf-1",
+    "step_key": "owners",
+    "records": [{"owner": "דנה", "house": "הבית האדום"}],
+}]
+
+
+def _citation_llm(claims):
+    """A model that returns one final summary carrying the given claims."""
+    class FakeLlm:
+        def __init__(self):
+            self.payloads = []
+
+        def complete_json(self, _system, user, schema):
+            self.payloads.append(json.loads(user))
+            if "skill_results" in schema["properties"]:
+                return {
+                    "headline": "דנה היא הבעלים",
+                    "summary": "דנה היא הבעלים של הבית האדום.",
+                    "coverage": "רשומה אחת",
+                    "key_findings": [], "risks": [], "missing_data": [],
+                    "suggested_questions": [], "skill_results": [],
+                    "claims": claims,
+                }
+            return {"summary": "", "items": [], "sources": []}
+
+    return FakeLlm()
+
+
+def test_a_summary_claim_points_at_a_persisted_evidence_record():
+    """The whole point of a marker: it resolves to a record that exists."""
+    llm = _citation_llm([
+        {"text": "דנה היא הבעלים של הבית האדום.", "citation_ids": ["c1"]},
+    ])
+    service = SummaryService(_SkillRepository(), None, llm, None)
+
+    result = service._final_summary(
+        "", "מי הבעלים?", [dict(_CITED_SECTION)], evidence=_CITED_EVIDENCE,
+    )
+
+    assert result["claims"] == [
+        {"text": "דנה היא הבעלים של הבית האדום.", "citation_ids": ["c1"]},
+    ]
+    citation = result["citations"][0]
+    assert citation["citation_id"] == "c1"
+    # The citation resolves to the evidence row that was really saved.
+    assert citation["evidence_id"] == "ev-1"
+    assert citation["step_key"] == "owners"
+    assert citation["label"] == "בעלות"
+
+
+def test_the_final_summary_model_chooses_only_from_real_citation_ids():
+    """The model picks from a catalog built in Python, so it never has the
+    chance to invent a source, a record id, or a URL."""
+    llm = _citation_llm([])
+    service = SummaryService(_SkillRepository(), None, llm, None)
+
+    service._final_summary(
+        "", "מי הבעלים?", [dict(_CITED_SECTION)], evidence=_CITED_EVIDENCE,
+    )
+
+    payload = llm.payloads[-1]
+    assert payload["available_citations"] == [{
+        "citation_id": "c1",
+        "label": "בעלות",
+        "step_key": "owners",
+        "fields": ["owner", "house"],
+        "row_count": 1,
+    }]
+    # The section carries the ids covering it, so a claim from that section
+    # cites from its own sources.
+    assert payload["sections"][0]["citation_ids"] == ["c1"]
+
+
+def test_a_citation_the_model_invented_is_dropped_rather_than_rendered():
+    """A marker pointing at nothing is worse than no marker: it looks
+    traceable and is not."""
+    llm = _citation_llm([
+        {"text": "אמת", "citation_ids": ["c1"]},
+        {"text": "המצאה", "citation_ids": ["c99"]},
+    ])
+    service = SummaryService(_SkillRepository(), None, llm, None)
+
+    result = service._final_summary(
+        "", "מי הבעלים?", [dict(_CITED_SECTION)], evidence=_CITED_EVIDENCE,
+    )
+
+    assert result["claims"] == [
+        {"text": "אמת", "citation_ids": ["c1"]},
+        # The unknown id is dropped; the claim survives without a marker.
+        {"text": "המצאה", "citation_ids": []},
+    ]
+
+
+def test_a_section_whose_evidence_was_never_saved_produces_no_citation():
+    """A cached section carries no `evidence_ids`, so it must contribute no
+    citation rather than one that resolves to nothing."""
+    cached = dict(_CITED_SECTION, evidence_ids=[])
+    missing = dict(_CITED_SECTION, evidence_ids=["ev-gone"])
+
+    assert citations.build([cached], _CITED_EVIDENCE) == []
+    assert citations.build([missing], _CITED_EVIDENCE) == []
+
+
+def test_the_public_citation_never_carries_the_raw_source_record():
+    """The same rule `_raw_sources` enforces for Skills: the internal record
+    stays server-side and only the DTO reaches a client."""
+    catalog = citations.build([dict(_CITED_SECTION)], _CITED_EVIDENCE)
+    entry = catalog[0]
+    public = citations.public(entry)
+
+    assert "records" not in public
+    assert set(public) == {
+        "citation_id", "evidence_id", "source_id", "workflow_id",
+        "workflow_key", "step_key", "label", "fields", "excerpt", "row_count",
+    }
+    # The excerpt is a bounded rendering, not the record itself.
+    assert public["excerpt"] == "owner: דנה · house: הבית האדום"
+
+
+def test_a_summary_without_evidence_stays_exactly_what_it_was():
+    """Backward compatibility: an answer with nothing to cite carries the
+    fields it always did, plus empty citation fields."""
+    llm = _citation_llm([])
+    service = SummaryService(_SkillRepository(), None, llm, None)
+
+    result = service._final_summary("", "שאלה", [dict(_OWNERSHIP_SECTION)])
+
+    assert result["claims"] == []
+    assert result["citations"] == []
+    assert result["summary"] == "דנה היא הבעלים של הבית האדום."
+    # The section payload is unchanged when there is nothing to cite.
+    assert "citation_ids" not in llm.payloads[-1]["sections"][0]
+    assert "available_citations" not in llm.payloads[-1]
+
+
+def test_an_old_summary_without_citations_resolves_to_none_safely():
+    """Runs written before citations existed must not raise anywhere."""
+    assert citations.from_result({"summary": "ישן"}) == []
+    assert citations.from_result(None) == []
+    assert citations.resolve([{"id": "r1", "result": {"summary": "ישן"}}], "c1") is None
+
+
+# ---------------------------------------------------------------------------
+# Citation-aware follow-up retrieval
+# ---------------------------------------------------------------------------
+
+_PUBLIC_CITATION = {
+    "citation_id": "c1",
+    "evidence_id": "ev-1",
+    "source_id": "ev-1",
+    "workflow_id": "wf-1",
+    "workflow_key": "ownership",
+    "step_key": "owners",
+    "label": "בעלות",
+    "fields": ["owner", "house"],
+    "excerpt": "owner: דנה · house: הבית האדום",
+    "row_count": 1,
+}
+
+
+class _CitationRepository:
+    """A thread with one finished, cited turn."""
+
+    def __init__(self, citations_list=None):
+        self.evidence_calls = []
+        self._citations = (
+            citations_list if citations_list is not None else [_PUBLIC_CITATION]
+        )
+
+    def conversation_runs(self, _conversation_id):
+        return [{
+            "id": "run-1",
+            "status": "completed",
+            "result": {"summary": "תשובה", "citations": self._citations},
+        }]
+
+    def evidence_record(self, run_id, evidence_id, limit=100):
+        self.evidence_calls.append((run_id, evidence_id, limit))
+        return {
+            "id": evidence_id,
+            "records": [{"owner": "דנה", "house": "הבית האדום"}],
+            "row_count": 1,
+        }
+
+
+def _citation_service(repository):
+    return SummaryService(repository, None, None, None)
+
+
+def test_show_me_that_record_resolves_an_explicit_citation_without_searching():
+    """An explicitly cited follow-up is a retrieval, not a question: it must
+    return that record and run no workflow, tool, or model call."""
+    repository = _CitationRepository()
+    service = _citation_service(repository)
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("an explicit citation must not be routed")
+
+    service._select_detail = fail
+    service._execute = fail
+
+    result = routing.follow_up(
+        service,
+        {
+            "question": "הצג לי את הרשומה הזו",
+            "citation_context": {"citation_id": "c1"},
+        },
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *args, **kwargs: None,
+    )
+
+    assert result["citations"][0]["citation_id"] == "c1"
+    assert result["cited_records"][0]["records"] == [
+        {"owner": "דנה", "house": "הבית האדום"}
+    ]
+    # The record was read from the run that published the citation.
+    assert repository.evidence_calls[0][:2] == ("run-1", "ev-1")
+    # Every claim in a retrieval cites the source it was read from.
+    assert result["claims"][0]["citation_ids"] == ["c1"]
+
+
+def test_a_reference_to_a_record_resolves_when_one_citation_clearly_matches():
+    """"the record about the red house" names its subject well enough to
+    resolve without asking."""
+    repository = _CitationRepository([
+        _PUBLIC_CITATION,
+        dict(
+            _PUBLIC_CITATION, citation_id="c2", evidence_id="ev-2",
+            label="עסקאות", step_key="deals",
+            excerpt="street: הרצל", fields=["street"],
+        ),
+    ])
+    service = _citation_service(repository)
+    service._select_detail = lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("a clear reference must not be routed")
+    )
+
+    result = routing.follow_up(
+        service,
+        {"question": "תן לי את הרשומה על הבית האדום"},
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *args, **kwargs: None,
+    )
+
+    assert result["citations"][0]["citation_id"] == "c1"
+
+
+def test_an_ambiguous_reference_asks_which_record_instead_of_guessing():
+    """Two records matching the words equally well is exactly the case the
+    user has to settle: showing the wrong one still looks like an answer."""
+    repository = _CitationRepository([
+        dict(_PUBLIC_CITATION, citation_id="c1", label="בעלות",
+             excerpt="house: הבית האדום"),
+        dict(_PUBLIC_CITATION, citation_id="c2", evidence_id="ev-2",
+             label="עסקאות", excerpt="house: הבית האדום"),
+    ])
+    service = _citation_service(repository)
+
+    result = routing.follow_up(
+        service,
+        {"question": "תן לי את הרשומה על הבית האדום"},
+        {"id": "conv-1", "root_id": "001", "runs": []},
+        lambda *args, **kwargs: None,
+    )
+
+    assert result["needs_clarification"] is True
+    assert "לאיזו רשומה" in result["headline"]
+    assert len(result["options"]) == 2
+    # Nothing was retrieved, so no record was read.
+    assert repository.evidence_calls == []
+
+
+def test_an_unknown_citation_id_falls_back_to_ordinary_routing():
+    """A stale marker from a deleted run must not fail the follow-up, and must
+    never invent a record."""
+    repository = _CitationRepository()
+    service = _citation_service(repository)
+
+    answer = routing._cited_answer(
+        service,
+        {
+            "question": "הצג לי את הרשומה הזו",
+            "citation_context": {"citation_id": "c-does-not-exist"},
+        },
+        {"id": "conv-1", "runs": []},
+    )
+
+    assert answer is None
+    assert repository.evidence_calls == []
+
+
+def test_an_ordinary_follow_up_is_untouched_by_citation_resolution():
+    """Every question that names no record must route exactly as before."""
+    repository = _CitationRepository()
+    service = _citation_service(repository)
+
+    answer = routing._cited_answer(
+        service,
+        {"question": "ולמה?"},
+        {"id": "conv-1", "runs": []},
+    )
+
+    assert answer is None
+
+
+def test_a_follow_up_request_bounds_its_citation_context():
+    request = FollowUpCreate(
+        question="הצג לי את הרשומה",
+        citation_id="  c1  ",
+        referenced_citation_ids=["c2", "c2", "  "],
+    )
+
+    assert request.citation_id == "c1"
+    assert request.referenced_citation_ids == ["c2"]
+    # A request that names no citation keeps the body it always sent.
+    assert FollowUpCreate(question="ולמה?").citation_id is None
+    with pytest.raises(ValidationError, match="עד 10 ציטוטים"):
+        FollowUpCreate(
+            question="שאלה",
+            referenced_citation_ids=["c%d" % index for index in range(11)],
+        )
+
+
+def test_citation_context_is_persisted_on_the_run_the_worker_reads():
+    """The worker re-reads the run row rather than the request body, so the
+    citation has to travel on the run — like `skill_keys` already does."""
+    assert "citation_context JSONB NOT NULL DEFAULT '{}'" in SCHEMA
+    assert "citation_context, status, progress" in _INSERT_RUN
+
+
+def test_resolving_a_citation_rejects_another_users_conversation():
+    """A guessed citation id must not reach another session's evidence: the
+    conversation's ownership check runs before anything is resolved."""
+    class ForeignRepository(_CitationRepository):
+        @staticmethod
+        def get_conversation(_conversation_id, _session_id=None):
+            raise NotFoundError("השיחה לא נמצאה")
+
+    repository = ForeignRepository()
+    router = summary_routes.build(_citation_context_api(repository))
+    resolve = _route_handler(router, "/conversations/{conversation_id}/citations/{citation_id}")
+
+    with pytest.raises(NotFoundError, match="השיחה לא נמצאה"):
+        resolve("conv-other", "c1", 20, "session-attacker")
+
+    # Ownership is checked before the citation is even looked up.
+    assert repository.evidence_calls == []
+
+
+def test_resolving_an_owned_citation_returns_its_public_record():
+    repository = _CitationRepository()
+    router = summary_routes.build(_citation_context_api(repository))
+    resolve = _route_handler(router, "/conversations/{conversation_id}/citations/{citation_id}")
+
+    payload = resolve("conv-1", "c1", 20, "session-1")
+
+    assert payload["citation"]["citation_id"] == "c1"
+    assert "records" not in payload["citation"]
+    assert payload["record"]["records"] == [
+        {"owner": "דנה", "house": "הבית האדום"}
+    ]
+
+
+def test_resolving_a_missing_citation_id_is_a_clean_not_found():
+    repository = _CitationRepository()
+    router = summary_routes.build(_citation_context_api(repository))
+    resolve = _route_handler(router, "/conversations/{conversation_id}/citations/{citation_id}")
+
+    with pytest.raises(NotFoundError, match="הציטוט לא נמצא"):
+        resolve("conv-1", "c-nope", 20, "session-1")
+
+
+def _citation_context_api(repository):
+    """The router's dependency bundle, over a fake repository."""
+    class Context:
+        def __init__(self):
+            self.repository = repository
+            self.service = None
+            self.jobs = None
+            self.user_session = lambda: "session-1"
+            self.set_session_cookie = lambda *_args: None
+
+    if not hasattr(repository, "get_conversation"):
+        repository.get_conversation = lambda *_args, **_kwargs: {"id": "conv-1"}
+    return Context()
+
+
+def _route_handler(router, path):
+    for route in router.routes:
+        if route.path == path:
+            return route.endpoint
+    raise AssertionError("route not registered: " + path)

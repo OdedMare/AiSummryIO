@@ -11,6 +11,7 @@
   "include": [
     "tests/**/*.ts",
     "src/components/AppShell/commands.ts",
+    "src/components/SummaryWorkspace/citations.ts",
     "src/services/api.ts",
     "src/types/geo.ts",
     "src/types.ts"

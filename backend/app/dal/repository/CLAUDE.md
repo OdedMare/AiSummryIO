@@ -34,6 +34,21 @@ answer, and offering it as context would invite the model to treat a question
 that was never answered as if it had been. The newest turns are selected and
 then reversed, so a long thread keeps its most recent context.
 
+## Citations
+
+`summary_runs.citation_context` stores the citation a follow-up was asked
+about. It lives on the run for the same reason `skill_keys` does: the job
+worker re-reads the row, not the HTTP body. It defaults to `'{}'`, so every
+run written before citations existed reads back fine.
+
+The citation → evidence → record mapping itself is **not** a new table. A
+citation is derived from `summary_evidence` rows that a run already saved and
+published inside that run's `result`, so there is one source of truth and
+nothing to drift. `conversation_runs` reads a thread's finished runs to resolve
+a citation across turns, and `evidence_record` is `evidence_page` bounded to
+its first rows — scoped by `run_id` **and** `evidence_id`, so a caller who
+passed the run's ownership check still cannot reach another run's evidence.
+
 ## Feedback ratings
 
 `summary_feedback.rating` is a 1-5 star rating (`CHECK (rating BETWEEN 1 AND

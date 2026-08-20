@@ -156,11 +156,21 @@ ID/evidence, and reuse the conversation's stored boundaries.
   survives — as provenance. A source chip opens that workflow's own evidence by
   filtering the drawer on its `evidence_ids`; "הצגת ראיות" clears the filter back
   to the whole run.
-- Citations are **section-level, never per-claim**, because `_safe_section` in
-  `synthesis.py` passes only `workflow_key/name/status/summary/facts/warnings` to
-  the final-summary model — `evidence_ids` never reaches it, so the model cannot
-  tag a claim with a source. Do not render per-claim citation chips off the
-  current API; they would be guesses, and every claim must stay traceable.
+- **Citations are per-claim, and every marker resolves to a stored record.**
+  `_safe_section` now also passes each section's `citation_ids` — opaque
+  handles into a catalog `citations.build` assembles in Python from evidence
+  that was really persisted. The raw `evidence_ids` still never reach the
+  model, and `citations.attach` drops any id the model returns that is not in
+  the catalog, so a marker cannot point at a missing or unrelated record. The
+  model is never asked for a URL or a source name. `CitationChip` renders the
+  markers inline and opens the cited record in the **same** `EvidenceDrawer`
+  a source chip uses — never a second evidence surface. A summary carrying no
+  `claims`/`citations` (everything produced before this) renders as plain
+  text, so the fallback is the old behavior rather than an error.
+- A follow-up asked while a citation is selected sends its `citation_id`, and
+  the backend answers from that exact record without routing a search. With
+  nothing selected, an implicit reference resolves only on a clear match;
+  several plausible records ask which one was meant instead of guessing.
 - Section `warnings` and `degraded` lost their card, so they collect in
   `.answer-warnings` at the end of the answer. A partial source has to say so in
   the prose, not only as a dot on its chip.

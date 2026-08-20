@@ -115,10 +115,30 @@ LocatoAI. A file owns one class or one concern; split rather than append.
   contain every summary-eligible row, then reduces every batch analysis into
   one section. `stats` is still computed in Python over the whole dataset —
   frequency, ranges, and emptiness are exact and never counted by the model.
-- `_safe_section` deliberately withholds `evidence_ids` from the final-summary
-  model, so the summary is traceable only at section granularity. Per-claim
-  citations would require changing what that call receives — do not render them
-  in the UI until it does.
+- **Per-claim citations are structural, never generated.** `_safe_section`
+  still withholds the raw `evidence_ids`; what it passes instead is each
+  section's `citation_ids` — opaque handles into a catalog
+  `workflow_engine_pkg/citations.py` builds **in Python** from evidence rows
+  that were really persisted for the run. The model only ever selects from
+  that closed list, `citations.attach` drops any id outside it, and no prompt
+  asks for a URL, a record id, or a source name. That is what makes a marker
+  resolvable rather than a claim in its own right. A section whose evidence
+  was not saved (a cached section, a dry run) contributes no citation, so a
+  marker can never point at a missing record.
+- Citations are resolved through
+  `GET /conversations/{id}/citations/{citation_id}`, which applies the same
+  ownership check as the evidence routes before looking anything up — a
+  guessed id can only ever resolve inside the caller's own conversation.
+  `citations.public` is the only shape that leaves the process; the internal
+  entry keeps the records and never ships.
+- A follow-up may carry `citation_id`/`referenced_citation_ids`, persisted on
+  the run as `citation_context` because the worker re-reads the row rather
+  than the request body. An explicit citation is answered from that record
+  directly, with no routing and no model call. Without one,
+  `workflow_engine_pkg/citation_context.py` matches the question against the
+  thread's citations lexically and resolves **only on a clear winner** —
+  several comparable matches return a clarification, since a wrong record
+  still looks like an answer.
 - A plan interview asks one question per turn, carrying its own recommendation
   and optionally two to four clickable `options` whose first entry *is* that
   recommendation. `options` must be empty when the honest answers are not
