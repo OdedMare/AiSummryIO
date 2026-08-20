@@ -1,5 +1,6 @@
 import type {
-  AgentContent, Conversation, ConversationTurn, Evidence, EvidencePage,
+  AgentContent, CitationResolution, Conversation, ConversationTurn,
+  Evidence, EvidencePage,
   EvaluationBatch, EvaluationCaseDetail, EvaluationCasePage, EvaluationImport,
   PackageInspection,
   PackageVersion, PlanChatMessage, ProjectDraft, ProjectWorkspace,
@@ -152,18 +153,34 @@ export const api = {
         boundaries,
       }),
     }),
+  // `citationId` is sent when the user asks while a citation or an evidence
+  // record is selected, which is what lets "הצג לי את הרשומה הזו" resolve to
+  // that exact source instead of being routed as a fresh search. Both
+  // citation fields are optional and default to the body this always sent.
   followUp: (
     conversationId: string,
     question: string,
     skillKeys: string[],
     agentKeys: string[] = [],
+    citationId: string | null = null,
+    referencedCitationIds: string[] = [],
   ) =>
     request<SummaryRun>(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify({
         question, skill_keys: skillKeys, agent_keys: agentKeys,
+        citation_id: citationId,
+        referenced_citation_ids: referencedCitationIds,
       }),
     }),
+  // Resolves one citation inside a conversation the caller owns. Scoped by
+  // conversation rather than by citation alone, so the same ownership check
+  // the evidence routes apply also guards this one.
+  resolveCitation: (conversationId: string, citationId: string, limit = 20) =>
+    request<CitationResolution>(
+      `/api/conversations/${conversationId}/citations/` +
+      `${encodeURIComponent(citationId)}?limit=${limit}`,
+    ),
   run: (id: string) => request<SummaryRun>(`/api/runs/${id}`),
   evidence: (id: string) => request<Evidence[]>(`/api/runs/${id}/evidence`),
   evidencePage: (runId: string, evidenceId: string, offset = 0, limit = 100) =>

@@ -5,19 +5,23 @@ import {
 } from "react";
 import { Database, LoaderCircle } from "lucide-react";
 import { api } from "@/services/api";
-import type { Evidence, EvidencePage } from "@/types";
+import type { Citation, Evidence, EvidencePage } from "@/types";
 
 type LoadedEvidence = { runId: string; items: Evidence[]; error: string };
 
 export default function EvidenceDrawer({
-  runId, open, evidenceIds, title,
+  runId, open, evidenceIds, title, citation,
 }: {
   runId: string;
   open: boolean;
   /** When set, only these records show — a source chip opens its own evidence
-      rather than the whole run's. */
+      rather than the whole run's, and a citation opens exactly one. */
   evidenceIds?: string[];
   title?: string;
+  /** Set when the drawer was opened from a citation marker. Its excerpt says
+      which claim led here, so the record is read in context rather than as an
+      anonymous table. */
+  citation?: Citation | null;
 }) {
   const [loaded, setLoaded] = useState<LoadedEvidence | null>(null);
   useEvidence(runId, open, setLoaded);
@@ -33,7 +37,24 @@ export default function EvidenceDrawer({
   return (
     <div className="evidence-panel">
       {title && <h3 className="evidence-title">{title}</h3>}
+      {citation && <CitationContext citation={citation} />}
       <EvidenceList runId={runId} items={items} />
+    </div>
+  );
+}
+
+/** What the citation says about its source, above the rows themselves. The
+    fields are names, never values — the values are in the table below. */
+function CitationContext({ citation }: { citation: Citation }) {
+  return (
+    <div className="evidence-citation">
+      {citation.excerpt && <p className="evidence-excerpt">{citation.excerpt}</p>}
+      <p className="evidence-meta">
+        {citation.step_key} · {citation.row_count} רשומות
+        {citation.fields.length > 0 && (
+          <> · <span dir="ltr">{citation.fields.join(", ")}</span></>
+        )}
+      </p>
     </div>
   );
 }

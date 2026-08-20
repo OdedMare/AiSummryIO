@@ -5,9 +5,12 @@ import type { SummarySection } from "@/types";
 
 /** The section model survives as provenance rather than as layout: the prose
     above merges every workflow, so this row is the only place a reader can see
-    which ones it rests on. A chip opens that workflow's own evidence — the
-    closest thing to a citation the backend can support, since the final-summary
-    model never receives `evidence_ids` and so cannot tag a claim with one. */
+    which ones it rests on. A chip opens that workflow's whole evidence.
+
+    Per-claim citation markers now sit inline in the answer above
+    (`CitationChip`), and open one record rather than a workflow's whole set.
+    Both routes filter the same drawer, so this row stays the way to ask "what
+    did this source contribute" as a whole. */
 export default function SourceRow({
   sections, activeId, onSelect,
 }: {

@@ -290,6 +290,64 @@
   font-weight: 700;
 }
 
+/* An inline citation marker. Small and superscripted so it annotates the
+   sentence rather than interrupting it, but still a real 44px target: the
+   padding grows the hit area without growing the mark. */
+.citation-markers {
+  display: inline;
+  white-space: nowrap;
+}
+
+.citation-chip {
+  display: inline-block;
+  margin-inline-start: 2px;
+  padding: 10px 4px;
+  margin-block: -10px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  direction: ltr;
+  cursor: pointer;
+}
+
+.citation-chip:hover {
+  background: var(--primary-soft);
+}
+
+/* The open citation is marked by weight and a filled ground, never by color
+   alone — the same rule the source chips follow. */
+.citation-chip.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+  text-decoration: underline;
+}
+
+.answer-traced-sources {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.evidence-citation {
+  margin: 8px 0 0;
+}
+
+.evidence-excerpt {
+  margin: 0;
+  font-size: 13px;
+}
+
+.evidence-meta {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .skill-results {
   margin: 24px 0 18px;
 }

@@ -14,14 +14,21 @@ import Turn, { EvidenceView } from "./Turn";
  * fallback while a brand-new conversation has yet to load its thread.
  */
 export default function SummaryWorkspace({
-  runs, run, skills, onAsk,
+  runs, run, skills, onAsk, onCitationSelected,
 }: {
   runs: SummaryRun[];
   run: SummaryRun | null;
   skills: SummarySkill[];
   onAsk: (question: string) => void;
+  /** Reports which citation the reader has open, so a follow-up asked while
+      a source is selected can carry its id. */
+  onCitationSelected?: (citationId: string | null) => void;
 }) {
   const [view, setView] = useState<EvidenceView | null>(null);
+  const selectedCitationId = view?.citation?.citation_id ?? null;
+  useEffect(() => {
+    onCitationSelected?.(selectedCitationId);
+  }, [selectedCitationId, onCitationSelected]);
   const thread = runs.length ? runs : run ? [run] : [];
   const anchor = useAutoScroll(thread);
   if (!thread.length) return <EmptyWorkspace skills={skills} />;

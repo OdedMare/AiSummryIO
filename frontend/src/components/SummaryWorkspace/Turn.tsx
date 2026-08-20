@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction, useState } from "react";
 import { Database, Star } from "lucide-react";
 import { api } from "@/services/api";
-import type { SummaryRun, SummarySection } from "@/types";
+import type { Citation, SummaryRun, SummarySection } from "@/types";
 import AgentStatus from "./AgentStatus";
 import AgentTrace from "./AgentTrace";
 import EvidenceDrawer from "./EvidenceDrawer";
@@ -15,6 +15,10 @@ import SourceRow from "./SourceRow";
 export interface EvidenceView {
   runId: string;
   section: SummarySection | null;
+  /** Set when the drawer was opened from a citation marker rather than a
+      source chip: the drawer then shows that one evidence record, and the
+      marker reads as pressed. */
+  citation?: Citation | null;
 }
 
 /**
@@ -39,15 +43,28 @@ export default function Turn({
   const sections = run.result?.sections ?? run.progress.sections ?? [];
   const open = view?.runId === run.id;
   const source = open ? view?.section ?? null : null;
+  const citation = open ? view?.citation ?? null : null;
+
+  /* A citation opens the one evidence record it points at, reusing the
+     thread's existing drawer rather than introducing a second evidence
+     surface. Clicking the active marker again closes it. */
+  const selectCitation = (chosen: Citation) => {
+    const same = citation?.citation_id === chosen.citation_id;
+    setView(same ? null : { runId: run.id, section: null, citation: chosen });
+  };
 
   /* A chip toggles its own evidence; picking another swaps the filter without
      closing the drawer. "הצגת ראיות" clears the filter back to the whole run. */
   const selectSource = (section: SummarySection) => {
-    const same = open && source?.workflow_id === section.workflow_id;
-    setView(same ? null : { runId: run.id, section });
+    const same = open && !citation
+      && source?.workflow_id === section.workflow_id;
+    setView(same ? null : { runId: run.id, section, citation: null });
   };
   const toggleAll = () => {
-    setView(open && !source ? null : { runId: run.id, section: null });
+    const showingAll = open && !source && !citation;
+    setView(showingAll
+      ? null
+      : { runId: run.id, section: null, citation: null });
   };
 
   return (
@@ -56,17 +73,23 @@ export default function Turn({
       {first && <RunHeader run={run} />}
       <AgentStatus run={run} />
       <AgentTrace run={run} />
-      <SummaryContent run={run} />
+      <SummaryContent run={run} onSelectCitation={selectCitation}
+        activeCitationId={citation?.citation_id ?? null} />
       <SourceRow sections={sections} onSelect={selectSource}
-        activeId={open ? source?.workflow_id ?? null : null} />
-      {run.result && <TurnFooter run={run} evidenceOpen={open && !source}
-        toggleAll={toggleAll} />}
+        activeId={open && !citation ? source?.workflow_id ?? null : null} />
+      {run.result && <TurnFooter run={run}
+        evidenceOpen={open && !source && !citation} toggleAll={toggleAll} />}
       {/* Offered only on the newest turn: chips under an older answer would
           invite the user to reopen a question the thread has moved past. */}
       {run.result && last &&
         <NextQuestions result={run.result} onAsk={onAsk} />}
+      {/* A citation filters the same drawer down to its own evidence record,
+          so "open the source behind this claim" and "open this workflow's
+          sources" land in one place. */}
       <EvidenceDrawer runId={run.id} open={open}
-        evidenceIds={source?.evidence_ids} title={source?.name} />
+        evidenceIds={citation ? [citation.evidence_id] : source?.evidence_ids}
+        title={citation ? `מקור: ${citation.label}` : source?.name}
+        citation={citation} />
     </article>
   );
 }

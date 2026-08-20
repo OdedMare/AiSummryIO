@@ -170,6 +170,14 @@ export function useAppShell() {
     }
   };
 
+  /* The citation the reader currently has open, lifted here from the
+     transcript so the composer can attach it: a follow-up asked while a
+     source is selected is about that source, and sending its id is what makes
+     "הצג לי את הרשומה הזו" resolve deterministically instead of being routed
+     as a fresh search. */
+  const [selectedCitationId, setSelectedCitationId] =
+    useState<string | null>(null);
+
   const send = async (text: string) => {
     if (submitting || isActive(run)) return;
     setSubmitting(true);
@@ -198,6 +206,7 @@ export function useAppShell() {
         geometry,
         selectedAgentKeys,
         activeProject.id,
+        selectedCitationId,
       );
       setConversation(next.conversation);
       // A map request is sent without an identifier and comes back carrying
@@ -270,6 +279,8 @@ export function useAppShell() {
     selectConversation,
     submit,
     ask,
+    selectedCitationId,
+    setSelectedCitationId,
   };
 }
 
@@ -283,11 +294,12 @@ async function submitRequest(
   geometry: GeoJSONPolygon[],
   agentKeys: string[],
   projectId: string,
+  citationId: string | null = null,
 ) {
   if (conversation) {
     if (!message.trim()) throw new Error("יש לכתוב שאלת המשך");
     const run = await api.followUp(
-      conversation.id, message.trim(), skillKeys, agentKeys,
+      conversation.id, message.trim(), skillKeys, agentKeys, citationId,
     );
     return { conversation, run };
   }

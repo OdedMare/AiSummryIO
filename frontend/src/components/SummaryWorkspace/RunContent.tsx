@@ -1,6 +1,10 @@
 import { AlertTriangle, Sparkles } from "lucide-react";
 import BrandMark from "@/components/AppShell/BrandMark";
-import type { SummaryRun, SummarySection, SummarySkill } from "@/types";
+import type {
+  Citation, SummaryClaim, SummaryRun, SummarySection, SummarySkill,
+} from "@/types";
+import { CitationMarkers, CitedLine, CitedText } from "./CitationChip";
+import { citationNumbers, trailingCitations } from "./citations";
 import { SkillHint, SkillResults } from "./Skills";
 
 export function EmptyWorkspace({ skills }: { skills: SummarySkill[] }) {
@@ -43,27 +47,70 @@ export function RunHeader({ run }: { run: SummaryRun }) {
 /** One continuous answer rather than a card per workflow. Sections are merged
     into the prose and reappear below as sources, so a reader follows a single
     thread instead of reassembling one from stacked panels. */
-export function SummaryContent({ run }: { run: SummaryRun }) {
+export function SummaryContent({
+  run, activeCitationId, onSelectCitation,
+}: {
+  run: SummaryRun;
+  /** The citation whose record is open, so its marker reads as pressed. */
+  activeCitationId?: string | null;
+  /** Opens a citation's exact record in the thread's evidence drawer. */
+  onSelectCitation?: (citation: Citation) => void;
+}) {
   const result = run.result;
   const sections = result?.sections ?? run.progress.sections ?? [];
   const synthesized = Boolean(result?.summary);
+  /* Absent on a summary produced before citations existed, which is why every
+     consumer below treats them as optional and renders plain text without
+     them. */
+  const claims = result?.claims ?? [];
+  const citations = result?.citations ?? [];
+  const active = activeCitationId ?? null;
+  const select = onSelectCitation ?? (() => {});
+  const cite = { claims, citations, activeId: active, onSelect: select };
   return (
     <>
       {run.error && <div className="error-banner" role="alert">{run.error}</div>}
       <article className="answer-body">
         {result?.headline && <p className="answer-headline">{result.headline}</p>}
         {synthesized
-          ? <p>{result?.summary}</p>
+          ? <p><CitedText text={result?.summary ?? ""} {...cite} /></p>
           : <PendingAnswer sections={sections} />}
         {result?.coverage && <p className="answer-coverage">{result.coverage}</p>}
-        <AnswerList items={result?.key_findings ?? []} />
-        <AnswerList title="סיכונים" tone="risk" items={result?.risks ?? []} />
+        <AnswerList items={result?.key_findings ?? []} cite={cite} />
+        <AnswerList title="סיכונים" tone="risk" items={result?.risks ?? []}
+          cite={cite} />
+        {/* Gaps are statements about missing evidence, so there is nothing to
+            cite them to. */}
         <AnswerList title="מידע חסר" tone="gap"
           items={result?.missing_data ?? []} />
+        {result && <TracedSources result={result} activeId={active}
+          onSelect={select} />}
         <Warnings sections={synthesized ? sections : []} />
       </article>
       <SkillResults items={result?.skill_results ?? []} />
     </>
+  );
+}
+
+/** Sources traced to a claim whose sentence never appeared verbatim in the
+    rendered text. Without this the claim would silently lose its citation,
+    and every claim has to stay reachable from the answer. */
+function TracedSources({
+  result, activeId, onSelect,
+}: {
+  result: NonNullable<SummaryRun["result"]>;
+  activeId: string | null;
+  onSelect: (citation: Citation) => void;
+}) {
+  const trailing = trailingCitations(result);
+  if (!trailing.length) return null;
+  return (
+    <p className="answer-traced-sources">
+      מקורות נוספים לתשובה:{" "}
+      <CitationMarkers citations={trailing}
+        numbers={citationNumbers(result.citations ?? [])}
+        activeId={activeId} onSelect={onSelect} />
+    </p>
   );
 }
 
@@ -87,14 +134,29 @@ function PendingAnswer({ sections }: { sections: SummarySection[] }) {
 
 /** Findings, risks and gaps read as part of the answer, so they are plain
     lists in the flow — not tiles or bordered blocks beside it. */
+interface CiteProps {
+  claims: SummaryClaim[];
+  citations: Citation[];
+  activeId: string | null;
+  onSelect: (citation: Citation) => void;
+}
+
 function AnswerList(
-  { title, tone, items }: { title?: string; tone?: string; items: string[] },
+  { title, tone, items, cite }: {
+    title?: string; tone?: string; items: string[]; cite?: CiteProps;
+  },
 ) {
   if (!items.length) return null;
   return (
     <div className={`answer-list ${tone ?? ""}`}>
       {title && <h3>{title}</h3>}
-      <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>
+            {cite ? <CitedLine line={item} {...cite} /> : item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

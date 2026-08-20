@@ -38,7 +38,7 @@ export default function AppShell() {
       <section className="conversation-shell">
         <Topbar app={app} />
         <SummaryWorkspace runs={app.runs} run={app.run} skills={app.skills}
-          onAsk={app.ask} />
+          onAsk={app.ask} onCitationSelected={app.setSelectedCitationId} />
         <Composer app={app} />
       </section>
       {!app.conversation && <MapPanel app={app} />}

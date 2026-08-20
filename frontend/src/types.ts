@@ -61,6 +61,46 @@ export interface AgentTrace {
   missing_data?: string[];
 }
 
+/**
+ * One source a claim rests on — the public citation, never the internal
+ * record. It carries enough to render a marker and to open the exact evidence
+ * behind it; the rows themselves come from the evidence endpoints.
+ */
+export interface Citation {
+  citation_id: string;
+  evidence_id: string;
+  /** The source record this resolves to. */
+  source_id: string;
+  workflow_id: string;
+  workflow_key: string;
+  step_key: string;
+  /** Human label for the source: the workflow's name, or its step. */
+  label: string;
+  /** Field names the source supports, not their values. */
+  fields: string[];
+  /** A short rendering of the first record, for recognizing it inline. */
+  excerpt: string;
+  row_count: number;
+}
+
+/** One factual statement from the answer and the citations supporting it. */
+export interface SummaryClaim {
+  text: string;
+  citation_ids: string[];
+}
+
+/** A citation resolved to its bounded source rows. */
+export interface CitationRecord extends Citation {
+  run_id: string;
+  records: Array<Record<string, unknown>>;
+}
+
+/** What `GET /conversations/{id}/citations/{citation_id}` returns. */
+export interface CitationResolution {
+  citation: Citation;
+  record: EvidencePage;
+}
+
 export interface SummaryResult {
   /** One-line answer, shown before any detail. */
   headline?: string;
@@ -72,6 +112,13 @@ export interface SummaryResult {
   suggested_questions: string[];
   skill_results: SkillResult[];
   sections: SummarySection[];
+  /** Claims traced to sources. Absent on summaries produced before
+      citations existed, which render as plain text. */
+  claims?: SummaryClaim[];
+  /** Every source this answer can cite. Empty when nothing was traced. */
+  citations?: Citation[];
+  /** Records returned directly by a "show me that record" follow-up. */
+  cited_records?: CitationRecord[];
   partial: boolean;
   degraded?: boolean;
   needs_clarification?: boolean;
