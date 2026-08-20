@@ -142,6 +142,34 @@ Compose and the Helm charts remain available for local or existing installs,
 but they are not part of this OpenShift path. The frontend remains a separate
 image built from `frontend/`.
 
+## Frontend deployment
+
+The frontend serves the app and proxies `/api/*` to the backend itself, so the
+browser stays same-origin and no reverse proxy sits in front of it:
+
+```bash
+docker build -t aisummryio-frontend:latest ./frontend
+docker run --rm -p 3000:3000 \
+  -e BACKEND_URL='http://aisummryio-backend:8000' \
+  aisummryio-frontend:latest
+```
+
+`next build` compiles the `/api/*` rewrite target into the build output, so
+`BACKEND_URL` cannot take effect as a plain runtime variable. The image is
+built against an unresolvable sentinel host, and
+[`frontend/docker-entrypoint.sh`](frontend/docker-entrypoint.sh) substitutes
+the real value into the recorded build artifacts on every container start,
+regenerating them from pristine copies so a restart with a changed
+`BACKEND_URL` takes effect. One image therefore runs against any backend —
+Compose, the sandbox, and the Helm chart all pass it as an ordinary
+environment variable, and changing it needs a restart, not a rebuild.
+
+`BACKEND_URL` must be reachable **from the frontend container**: a Compose
+service name, or a cluster-internal Service, never a public host. It defaults
+to `http://127.0.0.1:8000`, which inside a container means the frontend
+itself, so leaving it unset only works when the backend shares that network
+namespace. The container start logs the target it resolved.
+
 ## CI
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every branch push
@@ -150,7 +178,9 @@ and pull request:
 - **Build backend image** — then `import app.main` inside it, proving the image
   starts rather than merely layering.
 - **Build frontend image** — `npm run build` runs in the Dockerfile, so a type
-  error or failed Next build fails the job.
+  error or failed Next build fails the job. The built image is then started
+  with a `BACKEND_URL` of its own, proving the entrypoint really rewrites the
+  compiled proxy target instead of shipping the build-time sentinel.
 - **Lint charts** — `helm lint` plus `helm template` against
   `ci/test-values.yaml` (rendering the real credentialed paths, not empty
   defaults), and the missing-database guard above.

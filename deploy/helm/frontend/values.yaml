@@ -18,9 +18,10 @@ service:
   type: ClusterIP
   port: 3000
 
-# next.config.ts rewrites /api/* to this URL server-side, so the browser
-# stays same-origin and no CORS setup is needed. It must be reachable from
-# the frontend pod — a cluster-internal Service name, not a public host.
+# The frontend proxies /api/* to this URL server-side, so the browser stays
+# same-origin and no CORS setup is needed. The image entrypoint applies it at
+# container start. It must be reachable from the frontend pod — a
+# cluster-internal Service name, not a public host.
 #
 # `backend.fullnameOverride` is unset by default, so the backend Service is
 # named "<release>-aisummry-backend". Set `url` outright if the backend was
