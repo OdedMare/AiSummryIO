@@ -79,8 +79,11 @@ def build(context) -> APIRouter:
         return _await_run(context, run, wait, response)
 
     @router.get("/specialists")
-    def specialists():
-        return context.service.specialist_options()
+    def specialists(
+        project_id: str, session_id: str = Depends(context.user_session)
+    ):
+        context.repository.get_project(project_id, session_id)
+        return context.service.specialist_options(project_id)
 
     @router.get("/runs/{run_id}")
     def run_status(run_id: str, session_id: str = Depends(context.user_session)):

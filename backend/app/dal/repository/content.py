@@ -29,14 +29,17 @@ class ContentRepository:
             rows
         )
 
-    def list_summary_skills(self) -> List[dict]:
+    def list_summary_skills(self, project_id=None) -> List[dict]:
+        project_filter = " AND project_id=%s" if project_id else ""
+        params = (project_id,) if project_id else ()
         return self._all("""
             SELECT content_key, name, description
             FROM agent_content
             WHERE kind='skill' AND agent_enabled IS TRUE
               AND user_selectable IS TRUE
+        """ + project_filter + """
             ORDER BY name
-        """)
+        """, params)
 
     def enabled_summary_skills(self, keys: List[str]) -> List[dict]:
         if not keys:
@@ -59,7 +62,8 @@ class ContentRepository:
             where = " AND content_key = ANY(%s)"
             params = (selected,)
         rows = self._with_workflow_keys(self._all("""
-            SELECT id, content_key, kind, name, description, content, config
+            SELECT id, project_id, content_key, kind, name, description,
+                   content, config
             FROM agent_content
             WHERE kind='agent' AND agent_enabled IS TRUE""" + where + """
             ORDER BY name

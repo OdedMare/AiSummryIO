@@ -19,23 +19,24 @@ import {
 import { usePackageCatalog } from "./packages/usePackageCatalog";
 
 export default function PackageCatalog({
-  items,
+  projectId, items,
   onRefresh,
 }: {
+  projectId: string;
   items: PackageVersion[];
   onRefresh: () => Promise<void>;
 }) {
-  const catalog = usePackageCatalog(onRefresh);
+  const catalog = usePackageCatalog(projectId, onRefresh);
   return (
     <div className="studio-split">
       <PackageList items={items} onEdit={catalog.edit}
         onNew={catalog.startNew}
         onRemove={catalog.remove} />
       <form className="studio-form" onSubmit={catalog.save}>
-        <PackageFormHeader form={catalog.form}
+        <PackageFormHeader projectId={projectId} form={catalog.form}
           editing={!!catalog.editingId}
           inspection={catalog.inspection} onApply={catalog.applyDraft} />
-        <PackageFields form={catalog.form} update={catalog.update}
+        <PackageFields projectId={projectId} form={catalog.form} update={catalog.update}
           onDropField={(event, target) =>
             dropTextField(event, target, catalog.setForm)}
           inspection={catalog.inspection}

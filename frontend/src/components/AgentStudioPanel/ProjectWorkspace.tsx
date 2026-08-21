@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import {
-  Bot, BookOpen, Check, FolderKanban, LoaderCircle, Save, Sparkles,
+  Bot, BookOpen, FolderKanban, LoaderCircle, Save, Sparkles,
   Trash2, Workflow, Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -27,7 +27,7 @@ const emptyProject: ProjectDraft = {
 };
 
 export default function ProjectWorkspace({
-  items,
+  items, activeProjectId, onSelectProject,
   packages,
   workflows,
   content,
@@ -35,14 +35,19 @@ export default function ProjectWorkspace({
   onNavigate,
 }: {
   items: Project[];
+  activeProjectId: string;
+  onSelectProject: (projectId: string) => void;
   packages: PackageVersion[];
   workflows: WorkflowVersion[];
   content: AgentContent[];
   onRefresh: () => Promise<void>;
   onNavigate: (tab: CatalogTab) => void;
 }) {
-  const [form, setForm] = useState<ProjectDraft>(emptyProject);
-  const [editingId, setEditingId] = useState("");
+  const initialProject = items.find((item) => item.id === activeProjectId);
+  const [form, setForm] = useState<ProjectDraft>(
+    initialProject ? projectDraft(initialProject) : emptyProject,
+  );
+  const [editingId, setEditingId] = useState(initialProject?.id ?? "");
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -53,6 +58,7 @@ export default function ProjectWorkspace({
   const agents = content.filter((item) => item.kind === "agent");
 
   const edit = (item: Project) => {
+    onSelectProject(item.id);
     setEditingId(item.id);
     setForm(projectDraft(item));
     setError("");
@@ -79,6 +85,7 @@ export default function ProjectWorkspace({
         ? await api.updateProject(editingId, form)
         : await api.createProject(form);
       setEditingId(saved.id);
+      onSelectProject(saved.id);
       setForm(projectDraft(saved));
       setNotice("הפרויקט נשמר.");
       await onRefresh();
@@ -96,7 +103,9 @@ export default function ProjectWorkspace({
   };
 
   const remove = async (item: Project) => {
-    if (!window.confirm(`למחוק את הפרויקט „${item.name}”? הקטלוג עצמו לא יימחק.`)) {
+    if (!window.confirm(
+      `למחוק את הפרויקט „${item.name}” ואת כל הטולים, התהליכים, ה־Skills והסוכנים שלו?`,
+    )) {
       return;
     }
     setError("");
@@ -110,7 +119,7 @@ export default function ProjectWorkspace({
   };
 
   const attachMissionSkill = async (draft: SkillPlanDraft) => {
-    const skill = await api.createContent({
+    const skill = await api.createContent(editingId, {
       kind: "skill",
       name: draft.name,
       description: draft.description,
@@ -138,7 +147,7 @@ export default function ProjectWorkspace({
           <div>
             <span className="studio-kicker">Project brief</span>
             <h3 id="project-brief-title">המשימה שמכוונת את סביבת העבודה</h3>
-            <p>הקטלוג נשאר מקור אמת אחד; הפרויקט בוחר רק מה שדרוש למשימה.</p>
+            <p>כל היכולות שנוצרות בפרויקט שייכות רק לו ונמחקות יחד איתו.</p>
           </div>
           <div className="project-brief-fields">
             <label><span>שם הפרויקט *</span>
@@ -162,7 +171,7 @@ export default function ProjectWorkspace({
                 : <Sparkles size={17} aria-hidden="true" />}
               יצירה עם FDE
             </button>}
-            {editingId && selected && <MissionSkillAssistant
+            {editingId && selected && <MissionSkillAssistant projectId={editingId}
               project={{ ...selected, ...form }} open={assistantOpen}
               onOpen={() => setAssistantOpen(true)}
               onClose={() => setAssistantOpen(false)}
@@ -171,41 +180,14 @@ export default function ProjectWorkspace({
         </section>
 
         <div className="project-capability-grid">
-          <CapabilitySection icon={Wrench} title="טולים" hint="מקורות הנתונים של הפרויקט"
-            manageLabel="ניהול טולים" onManage={() => onNavigate("packages")}
-            options={packages.map((item) => ({
-              key: item.package_key, name: item.name,
-              description: item.description, enabled: item.agent_enabled,
-            }))}
-            selected={form.tool_keys}
-            onChange={(tool_keys) => update({ tool_keys })} />
-          <CapabilitySection icon={Workflow} title="Workflows"
-            hint="תהליכים שמחברים נתונים לתשובה"
-            manageLabel="ניהול Workflows" onManage={() => onNavigate("workflows")}
-            options={workflows.map((item) => ({
-              key: item.workflow_key, name: item.name,
-              description: item.description, enabled: item.agent_enabled,
-            }))}
-            selected={form.workflow_keys}
-            onChange={(workflow_keys) => update({ workflow_keys })} />
-          <CapabilitySection icon={BookOpen} title="Skills"
-            hint="ניתוחים וניסוחים מותאמים למשימה"
-            manageLabel="ניהול Skills" onManage={() => onNavigate("content")}
-            options={skills.map((item) => ({
-              key: item.content_key, name: item.name,
-              description: item.description, enabled: item.agent_enabled,
-            }))}
-            selected={form.skill_keys}
-            onChange={(skill_keys) => update({ skill_keys })} />
-          <CapabilitySection icon={Bot} title="Agents"
-            hint="המומחים שהמנהל יכול להפעיל"
-            manageLabel="ניהול Agents" onManage={() => onNavigate("specialists")}
-            options={agents.map((item) => ({
-              key: item.content_key, name: item.name,
-              description: item.description, enabled: item.agent_enabled,
-            }))}
-            selected={form.agent_keys}
-            onChange={(agent_keys) => update({ agent_keys })} />
+          <CapabilityLink icon={Wrench} title="טולים" count={packages.length}
+            onManage={() => onNavigate("packages")} />
+          <CapabilityLink icon={Workflow} title="Workflows" count={workflows.length}
+            onManage={() => onNavigate("workflows")} />
+          <CapabilityLink icon={BookOpen} title="Skills" count={skills.length}
+            onManage={() => onNavigate("content")} />
+          <CapabilityLink icon={Bot} title="Agents" count={agents.length}
+            onManage={() => onNavigate("specialists")} />
         </div>
 
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -282,80 +264,29 @@ function ProjectList({
   );
 }
 
-interface CapabilityOption {
-  key: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  missing?: boolean;
-}
-
-function CapabilitySection({
-  icon: Icon, title, hint, options, selected, onChange, manageLabel, onManage,
+function CapabilityLink({
+  icon: Icon, title, count, onManage,
 }: {
   icon: LucideIcon;
   title: string;
-  hint: string;
-  options: CapabilityOption[];
-  selected: string[];
-  onChange: (keys: string[]) => void;
-  manageLabel: string;
+  count: number;
   onManage: () => void;
 }) {
-  const toggle = (key: string) => onChange(
-    selected.includes(key)
-      ? selected.filter((item) => item !== key)
-      : [...selected, key],
-  );
-  const known = new Set(options.map((option) => option.key));
-  const visibleOptions = [
-    ...options,
-    ...selected.filter((key) => !known.has(key)).map((key) => ({
-      key,
-      name: key,
-      description: "הפריט כבר לא קיים בקטלוג",
-      enabled: false,
-      missing: true,
-    })),
-  ];
   return (
-    <fieldset className="project-capability">
-      <legend><Icon size={17} aria-hidden="true" /> {title}</legend>
+    <section className="project-capability">
       <div className="project-capability-head">
-        <p>{hint}</p>
-        <button type="button" onClick={onManage}>{manageLabel}</button>
+        <p><Icon size={17} aria-hidden="true" /> {title}: {count}</p>
+        <button type="button" onClick={onManage}>ניהול</button>
       </div>
-      {!options.length && <p className="capability-empty">אין עדיין פריטים בקטלוג.</p>}
-      <div className="project-options">
-        {visibleOptions.map((option) => {
-          const active = selected.includes(option.key);
-          return <label key={option.key}
-            className={`${active ? "selected" : ""}${option.missing ? " missing" : ""}`}>
-            <input type="checkbox" checked={active}
-              onChange={() => toggle(option.key)} />
-            <span className="capability-check" aria-hidden="true">
-              {active && <Check size={14} />}
-            </span>
-            <span><strong title={option.name}>{option.name}</strong>
-              <small title={option.description || option.key}>
-                {option.description || option.key}
-              </small>
-              <small className={option.enabled ? "capability-live" : "capability-off"}>
-                {option.missing
-                  ? "לא קיים בקטלוג — הסירו לפני שמירה"
-                  : option.enabled ? "פעיל לסוכן" : "כבוי — נשמר בפרויקט בלבד"}
-              </small>
-            </span>
-          </label>;
-        })}
-      </div>
-    </fieldset>
+      {!count && <p className="capability-empty">אין עדיין פריטים בפרויקט.</p>}
+    </section>
   );
 }
 
 function MissionSkillAssistant({
-  project, open, onOpen, onClose, onAttach,
+  projectId, project, open, onOpen, onClose, onAttach,
 }: {
+  projectId: string;
   project: Project;
   open: boolean;
   onOpen: () => void;
@@ -374,7 +305,9 @@ function MissionSkillAssistant({
     agent_enabled: true,
   };
   const chat = usePlanChat<SkillPlanDraft>(
-    (messages, draft) => api.planSkillChat(messages, { ...seed, ...(draft ?? {}) }),
+    (messages, draft) => api.planSkillChat(
+      messages, { ...seed, ...(draft ?? {}) }, projectId,
+    ),
     (readyDraft) => {
       setApplying(true);
       setApplyError("");

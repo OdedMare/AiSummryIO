@@ -6,17 +6,18 @@ import WorkflowLibrary from "./workflow/WorkflowLibrary";
 import { useWorkflowEditor } from "./workflow/useWorkflowEditor";
 
 export default function WorkflowEditor({
-  packages,
+  projectId, packages,
   workflows,
   agents,
   onRefresh,
 }: {
+  projectId: string;
   packages: PackageVersion[];
   workflows: WorkflowVersion[];
   agents: AgentContent[];
   onRefresh: () => Promise<void>;
 }) {
-  const editor = useWorkflowEditor(packages, onRefresh);
+  const editor = useWorkflowEditor(projectId, packages, onRefresh);
   return (
     <div className="workflow-studio">
       <WorkflowLibrary workflows={workflows} editor={editor} />

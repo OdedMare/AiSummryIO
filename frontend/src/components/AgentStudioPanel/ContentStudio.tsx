@@ -22,8 +22,9 @@ const sampleSections =
 היתרים | נמצאה בקשה שסורבה | בקשת היתר מ-2023 סורבה`;
 
 export default function ContentStudio({
-  items, onRefresh,
+  projectId, items, onRefresh,
 }: {
+  projectId: string;
   items: AgentContent[];
   onRefresh: () => Promise<void>;
 }) {
@@ -64,7 +65,7 @@ export default function ContentStudio({
     if (!confirmed) return;
     setError("");
     try {
-      await api.deleteContent(item.id);
+      await api.deleteContent(projectId, item.id);
       // The form would otherwise keep editing a row that no longer exists
       // and fail on the next save.
       if (editingId === item.id) reset();
@@ -80,8 +81,8 @@ export default function ContentStudio({
         ...form, content_key: form.content_key || undefined,
         user_selectable: form.kind === "skill" && form.user_selectable,
       };
-      if (editingId) await api.updateContent(editingId, payload);
-      else { await api.createContent(payload); reset(); }
+      if (editingId) await api.updateContent(projectId, editingId, payload);
+      else { await api.createContent(projectId, payload); reset(); }
       await onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "השמירה נכשלה");
@@ -93,7 +94,8 @@ export default function ContentStudio({
     <div className="studio-split">
       <ContentList items={items} onEdit={edit} onRemove={remove}
         onNew={startNew} />
-      <ContentForm form={form} update={update} save={save} error={error}
+      <ContentForm projectId={projectId} form={form} update={update}
+        save={save} error={error}
         saving={saving} editing={!!editingId} reset={startNew} />
     </div>
   );
@@ -152,8 +154,9 @@ function ContentCard({
 }
 
 function ContentForm({
-  form, update, save, error, saving, editing, reset,
+  projectId, form, update, save, error, saving, editing, reset,
 }: {
+  projectId: string;
   form: typeof emptyContent;
   update: (patch: Partial<typeof emptyContent>) => void;
   save: (event: FormEvent) => Promise<void>;
@@ -168,7 +171,7 @@ function ContentForm({
         <h3>{editing ? "עריכת Skill או הנחיה" : "Skill או הנחיה חדשים"}</h3>
         <p>Skill שמוצג למשתמש באמת משנה את תוצאת הסיכום.</p>
       </div>
-        {form.kind === "skill" && <SkillPlanChat form={form}
+        {form.kind === "skill" && <SkillPlanChat projectId={projectId} form={form}
           onApply={(draft: SkillPlanDraft) => update(draft)} />}
       </header>
       <div className="form-grid two">
@@ -196,7 +199,8 @@ function ContentForm({
           onChange={(e) => update({ content: e.target.value })} rows={18} />
       </label>
       {form.kind === "skill" && form.content.trim() &&
-        <SkillTester name={form.name} content={form.content} />}
+        <SkillTester projectId={projectId} name={form.name}
+          content={form.content} />}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-actions">
         {editing && <button type="button" className="secondary-button"
@@ -227,7 +231,9 @@ function SelectableToggle({
   );
 }
 
-function SkillTester({ name, content }: { name: string; content: string }) {
+function SkillTester({
+  projectId, name, content,
+}: { projectId: string; name: string; content: string }) {
   const [question, setQuestion] = useState("מה חשוב לדעת על המזהה?");
   const [sections, setSections] = useState(sampleSections);
   const [result, setResult] = useState<SkillPreviewResult | null>(null);
@@ -236,7 +242,7 @@ function SkillTester({ name, content }: { name: string; content: string }) {
   const run = async () => {
     setRunning(true); setError(""); setResult(null);
     try {
-      setResult(await api.previewSkill({
+      setResult(await api.previewSkill(projectId, {
         name: name || "טיוטת Skill", content, question,
         sections: parseSections(sections),
       }));

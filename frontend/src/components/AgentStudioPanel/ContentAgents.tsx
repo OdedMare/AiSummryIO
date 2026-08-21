@@ -4,16 +4,17 @@ import type { SkillPlanDraft, SpecialistPlanDraft } from "@/types";
 import { PlanChat, PlanChatDrawer, usePlanChat } from "./PlanChat";
 
 export function SkillPlanChat({
-  form,
+  projectId, form,
   onApply,
 }: {
+  projectId: string;
   form: SkillPlanDraft;
   onApply: (draft: SkillPlanDraft) => void;
 }) {
   const [open, setOpen] = useState(false);
   const chat = usePlanChat<SkillPlanDraft>(
     (messages, draft) => api.planSkillChat(
-      messages, { ...form, ...(draft ?? {}) },
+      messages, { ...form, ...(draft ?? {}) }, projectId,
     ),
     (readyDraft) => {
       onApply(readyDraft);
@@ -33,16 +34,17 @@ export function SkillPlanChat({
 }
 
 export function SpecialistPlanChat({
-  form,
+  projectId, form,
   onApply,
 }: {
+  projectId: string;
   form: SpecialistPlanDraft & { content_key?: string };
   onApply: (draft: SpecialistPlanDraft) => void;
 }) {
   const [open, setOpen] = useState(false);
   const chat = usePlanChat<SpecialistPlanDraft>(
     (messages, draft) => api.planSpecialistChat(
-      messages, { ...form, ...(draft ?? {}) },
+      messages, { ...form, ...(draft ?? {}) }, projectId,
     ),
     (readyDraft) => {
       onApply(readyDraft);

@@ -123,7 +123,7 @@ class SummaryService:
                 scoped.append(agent)
         return scoped
 
-    def specialist_options(self) -> List[dict]:
+    def specialist_options(self, project_id=None) -> List[dict]:
         return [
             {
                 "content_key": item["content_key"],
@@ -131,6 +131,7 @@ class SummaryService:
                 "description": item.get("description", ""),
             }
             for item in specialists.available(self)
+            if not project_id or item.get("project_id") == project_id
         ]
 
     def plan_workflow(self, prompt: str) -> dict:
@@ -141,7 +142,7 @@ class SummaryService:
 
     def plan_tool_chat(
         self, messages: List[dict], draft: Dict, inspection: Dict,
-        focus_field: str = "",
+        focus_field: str = "", project_id=None,
     ) -> dict:
         return conversational_planning.plan_tool_chat(
             self, messages, draft, inspection, focus_field
@@ -149,13 +150,15 @@ class SummaryService:
 
     def plan_workflow_chat(
         self, messages: List[dict], draft: Dict, focus_field: str = "",
+        project_id=None,
     ) -> dict:
         return conversational_planning.plan_workflow_chat(
-            self, messages, draft, focus_field
+            self, messages, draft, focus_field, project_id
         )
 
     def plan_skill_chat(
         self, messages: List[dict], draft: Dict, focus_field: str = "",
+        project_id=None,
     ) -> dict:
         return conversational_planning.plan_skill_chat(
             self, messages, draft, focus_field
@@ -163,9 +166,10 @@ class SummaryService:
 
     def plan_specialist_chat(
         self, messages: List[dict], draft: Dict, focus_field: str = "",
+        project_id=None,
     ) -> dict:
         return conversational_planning.plan_specialist_chat(
-            self, messages, draft, focus_field
+            self, messages, draft, focus_field, project_id
         )
 
     def preview_skill(
@@ -175,8 +179,12 @@ class SummaryService:
             self, name, content, question, sections
         )
 
-    def dry_run(self, workflow_id: str, root_id: str) -> dict:
+    def dry_run(
+        self, workflow_id: str, root_id: str, project_id=None
+    ) -> dict:
         workflow = self._repository.get_workflow(workflow_id)
+        if project_id and workflow.get("project_id") != project_id:
+            raise ValueError("ה-Workflow אינו שייך לפרויקט")
         run = {"id": "dry-run", "question": "בדיקת FDE"}
         return self._execute_workflow(run, root_id, workflow, False)
 

@@ -37,6 +37,7 @@ function useStudio() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("projects");
   const [projects, setProjects] = useState<ProjectWorkspace[]>([]);
+  const [projectId, setProjectId] = useState("");
   const [packages, setPackages] = useState<PackageVersion[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowVersion[]>([]);
   const [content, setContent] = useState<AgentContent[]>([]);
@@ -45,16 +46,25 @@ function useStudio() {
   const refresh = useCallback(async () => {
     setError("");
     try {
+      const nextProjects = await api.projects();
+      const selected = nextProjects.some((item) => item.id === projectId)
+        ? projectId : nextProjects[0]?.id ?? "";
+      setProjects(nextProjects);
+      setProjectId(selected);
+      if (!selected) {
+        setPackages([]); setWorkflows([]); setContent([]); setReview([]);
+        return;
+      }
       const values = await Promise.all([
-        api.projects(), api.packages(), api.workflows(), api.content(),
+        api.packages(selected), api.workflows(selected), api.content(selected),
         api.reviewQueue(),
       ]);
-      setProjects(values[0]); setPackages(values[1]); setWorkflows(values[2]);
-      setContent(values[3]); setReview(values[4]);
+      setPackages(values[0]); setWorkflows(values[1]);
+      setContent(values[2]); setReview(values[3]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "טעינת הסטודיו נכשלה");
     }
-  }, []);
+  }, [projectId]);
   useEffect(() => {
     api.adminSession()
       .then(() => { setAuthorized(true); void refresh(); })
@@ -68,8 +78,8 @@ function useStudio() {
     review: review.length,
   }), [projects, packages, workflows, content, review]);
   return {
-    authorized, tab, setTab, projects, packages, workflows, content, review, error,
-    refresh, counts,
+    authorized, tab, setTab, projects, projectId, setProjectId, packages,
+    workflows, content, review, error, refresh, counts,
   };
 }
 
@@ -91,6 +101,14 @@ function StudioHeader({
       <div><span className="studio-kicker">SumOrAI Workspace</span>
         <h2 id="studio-title" dir="ltr">SumOrAI Agent Studio</h2>
       </div>
+      {studio.authorized &&
+        <label className="studio-project-select"><span>פרויקט</span>
+          <select value={studio.projectId}
+            onChange={(event) => studio.setProjectId(event.target.value)}>
+            {studio.projects.map((project) =>
+              <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>}
       {studio.authorized &&
         <button type="button" className="studio-refresh"
           onClick={() => void studio.refresh()}>
@@ -150,22 +168,25 @@ function StudioNav({ studio }: { studio: Studio }) {
 
 function StudioBody({ studio }: { studio: Studio }) {
   if (studio.tab === "projects") {
-    return <ProjectWorkspacePanel items={studio.projects}
+    return <ProjectWorkspacePanel key={studio.projectId} items={studio.projects}
+      activeProjectId={studio.projectId} onSelectProject={studio.setProjectId}
       packages={studio.packages} workflows={studio.workflows}
       content={studio.content} onRefresh={studio.refresh}
       onNavigate={(tab) => studio.setTab(tab)} />;
   }
   if (studio.tab === "packages") {
-    return <PackageCatalog items={studio.packages} onRefresh={studio.refresh} />;
+    return <PackageCatalog projectId={studio.projectId}
+      items={studio.packages} onRefresh={studio.refresh} />;
   }
   if (studio.tab === "workflows") {
-    return <WorkflowEditor packages={studio.packages}
+    return <WorkflowEditor projectId={studio.projectId} packages={studio.packages}
       workflows={studio.workflows}
       agents={studio.content.filter((item) => item.kind === "agent")}
       onRefresh={studio.refresh} />;
   }
   if (studio.tab === "specialists") {
     return <SpecialistStudio
+      projectId={studio.projectId}
       items={studio.content.filter((item) => item.kind === "agent")}
       workflows={studio.workflows}
       skills={studio.content.filter((item) => item.kind === "skill")}
@@ -173,6 +194,7 @@ function StudioBody({ studio }: { studio: Studio }) {
   }
   if (studio.tab === "content") {
     return <ContentStudio
+      projectId={studio.projectId}
       items={studio.content.filter((item) => item.kind !== "agent")}
       onRefresh={studio.refresh} />;
   }

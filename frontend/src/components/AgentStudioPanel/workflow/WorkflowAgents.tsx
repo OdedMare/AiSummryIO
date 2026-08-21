@@ -16,7 +16,9 @@ export function WorkflowPlanChat({
 }) {
   const [open, setOpen] = useState(false);
   const chat = usePlanChat<WorkflowPlan>(
-    (messages, draft) => api.planWorkflowChat(messages, draft),
+    (messages, draft) => api.planWorkflowChat(
+      messages, draft, editor.projectId,
+    ),
     (readyPlan) => {
       editor.loadPlan(readyPlan);
       setOpen(false);
@@ -56,7 +58,9 @@ export function WorkflowFieldAgent({
   const [open, setOpen] = useState(false);
   const label = WORKFLOW_FIELD_LABELS[field];
   const chat = usePlanChat<WorkflowPlan>(
-    (messages, draft) => api.planWorkflowChat(messages, draft, field),
+    (messages, draft) => api.planWorkflowChat(
+      messages, draft, editor.projectId, field,
+    ),
     (readyPlan) => {
       if (field === "steps") editor.loadPlanSteps(readyPlan);
       else {

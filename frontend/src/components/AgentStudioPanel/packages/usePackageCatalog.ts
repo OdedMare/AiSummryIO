@@ -16,6 +16,7 @@ import {
 } from "./packageModel";
 
 export function usePackageCatalog(
+  projectId: string,
   onRefresh: () => Promise<void>,
 ) {
   const [form, setForm] = useState(emptyPackage);
@@ -83,10 +84,10 @@ export function usePackageCatalog(
     try {
       const payload = packagePayload(form);
       if (editingId) {
-        await api.updatePackage(editingId, payload);
+        await api.updatePackage(projectId, editingId, payload);
         setMessage("הטול עודכן.");
       } else {
-        await api.createPackage(payload);
+        await api.createPackage(projectId, payload);
         setMessage("נשמר טול חדש.");
         reset();
       }
@@ -106,7 +107,7 @@ export function usePackageCatalog(
     setError("");
     setMessage("");
     try {
-      await api.deletePackage(item.id);
+      await api.deletePackage(projectId, item.id);
       if (editingId === item.id) reset();
       setMessage(`הטול „${item.name}” נמחק.`);
       await onRefresh();
@@ -124,7 +125,7 @@ export function usePackageCatalog(
     setError("");
     setMessage("");
     try {
-      const result = await api.inspectPackage({
+      const result = await api.inspectPackage(projectId, {
         ...packagePayload(form),
         root_id: inspectId.trim(),
       });

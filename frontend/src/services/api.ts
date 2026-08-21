@@ -96,6 +96,10 @@ function detailEntry(entry: unknown): string {
   return field ? `${field}: ${msg}` : msg;
 }
 
+function scoped(path: string, projectId: string): string {
+  return `${path}?project_id=${encodeURIComponent(projectId)}`;
+}
+
 export const api = {
   projects: () => request<ProjectWorkspace[]>("/api/projects"),
   createProject: (data: ProjectDraft) =>
@@ -116,7 +120,8 @@ export const api = {
     `/api/conversations${projectId
       ? `?project_id=${encodeURIComponent(projectId)}` : ""}`,
   ),
-  skills: () => request<SummarySkill[]>("/api/skills"),
+  skills: (projectId: string) =>
+    request<SummarySkill[]>(scoped("/api/skills", projectId)),
   conversation: (id: string) =>
     request<Conversation>(`/api/conversations/${id}`),
   deleteConversation: (id: string) =>
@@ -128,7 +133,8 @@ export const api = {
   // renders, so this is for a caller that wants the text alone.
   messages: (id: string) =>
     request<ConversationTurn[]>(`/api/conversations/${id}/messages`),
-  specialists: () => request<SummaryAgent[]>("/api/specialists"),
+  specialists: (projectId: string) =>
+    request<SummaryAgent[]>(scoped("/api/specialists", projectId)),
   // Either rootId or boundaries must be present; the backend rejects a
   // request carrying neither. A request sent from the map with no identifier
   // typed comes back with `conversation.root_id` set to the drawn area's WKT
@@ -207,102 +213,112 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  packages: () => request<PackageVersion[]>("/api/packages"),
-  createPackage: (data: Record<string, unknown>) =>
-    request<PackageVersion>("/api/packages", {
+  packages: (projectId: string) =>
+    request<PackageVersion[]>(scoped("/api/packages", projectId)),
+  createPackage: (projectId: string, data: Record<string, unknown>) =>
+    request<PackageVersion>(scoped("/api/packages", projectId), {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updatePackage: (id: string, data: Record<string, unknown>) =>
-    request<PackageVersion>(`/api/packages/${id}`, {
+  updatePackage: (projectId: string, id: string, data: Record<string, unknown>) =>
+    request<PackageVersion>(scoped(`/api/packages/${id}`, projectId), {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  inspectPackage: (data: Record<string, unknown>) =>
-    request<PackageInspection>("/api/packages/inspect", {
+  inspectPackage: (projectId: string, data: Record<string, unknown>) =>
+    request<PackageInspection>(scoped("/api/packages/inspect", projectId), {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  deletePackage: (id: string) =>
-    request<{ deleted: string; name: string }>(`/api/packages/${id}`, {
+  deletePackage: (projectId: string, id: string) =>
+    request<{ deleted: string; name: string }>(
+      scoped(`/api/packages/${id}`, projectId), {
       method: "DELETE",
     }),
   planToolChat: (
     messages: PlanChatMessage[], draft: Partial<ToolPlanDraft>,
-    inspection: PackageInspection | null, focusField = "",
+    inspection: PackageInspection | null, projectId: string, focusField = "",
   ) =>
-    request<ToolPlanChatTurn>("/api/packages/plan-chat", {
+    request<ToolPlanChatTurn>(scoped("/api/packages/plan-chat", projectId), {
       method: "POST",
       body: JSON.stringify({
         messages, draft, inspection: inspection ?? {},
         focus_field: focusField,
       }),
     }),
-  workflows: () => request<WorkflowVersion[]>("/api/workflows"),
-  createWorkflow: (data: Record<string, unknown>) =>
-    request<WorkflowVersion>("/api/workflows", {
+  workflows: (projectId: string) =>
+    request<WorkflowVersion[]>(scoped("/api/workflows", projectId)),
+  createWorkflow: (projectId: string, data: Record<string, unknown>) =>
+    request<WorkflowVersion>(scoped("/api/workflows", projectId), {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateWorkflow: (id: string, data: Record<string, unknown>) =>
-    request<WorkflowVersion>(`/api/workflows/${id}`, {
+  updateWorkflow: (projectId: string, id: string, data: Record<string, unknown>) =>
+    request<WorkflowVersion>(scoped(`/api/workflows/${id}`, projectId), {
       method: "PUT",
       body: JSON.stringify(data),
     }),
   planWorkflowChat: (
-    messages: PlanChatMessage[], draft: WorkflowPlan | null, focusField = "",
+    messages: PlanChatMessage[], draft: WorkflowPlan | null, projectId: string,
+    focusField = "",
   ) =>
-    request<WorkflowPlanChatTurn>("/api/workflows/plan-chat", {
+    request<WorkflowPlanChatTurn>(scoped("/api/workflows/plan-chat", projectId), {
       method: "POST",
       body: JSON.stringify({
         messages, draft: draft ?? {}, focus_field: focusField,
       }),
     }),
   // Evidence from past runs is kept so an existing summary stays traceable.
-  deleteWorkflow: (id: string) =>
-    request<{ deleted: string; name: string }>(`/api/workflows/${id}`, {
+  deleteWorkflow: (projectId: string, id: string) =>
+    request<{ deleted: string; name: string }>(
+      scoped(`/api/workflows/${id}`, projectId), {
       method: "DELETE",
     }),
-  dryRun: (id: string, rootId: string) =>
-    request<Record<string, unknown>>(`/api/workflows/${id}/dry-run`, {
+  dryRun: (projectId: string, id: string, rootId: string) =>
+    request<Record<string, unknown>>(
+      scoped(`/api/workflows/${id}/dry-run`, projectId), {
       method: "POST",
       body: JSON.stringify({ root_id: rootId, question: "בדיקת FDE" }),
     }),
-  content: () => request<AgentContent[]>("/api/agent-content"),
-  createContent: (data: Record<string, unknown>) =>
-    request<AgentContent>("/api/agent-content", {
+  content: (projectId: string) =>
+    request<AgentContent[]>(scoped("/api/agent-content", projectId)),
+  createContent: (projectId: string, data: Record<string, unknown>) =>
+    request<AgentContent>(scoped("/api/agent-content", projectId), {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateContent: (id: string, data: Record<string, unknown>) =>
-    request<AgentContent>(`/api/agent-content/${id}`, {
+  updateContent: (projectId: string, id: string, data: Record<string, unknown>) =>
+    request<AgentContent>(scoped(`/api/agent-content/${id}`, projectId), {
       method: "PUT",
       body: JSON.stringify(data),
     }),
   // A built-in Skill or prompt returns at the next startup; deleting one
   // resets it rather than removing it for good.
-  deleteContent: (id: string) =>
-    request<{ deleted: string; name: string }>(`/api/agent-content/${id}`, {
+  deleteContent: (projectId: string, id: string) =>
+    request<{ deleted: string; name: string }>(
+      scoped(`/api/agent-content/${id}`, projectId), {
       method: "DELETE",
     }),
-  previewSkill: (data: Record<string, unknown>) =>
-    request<SkillPreviewResult>("/api/agent-content/preview-skill", {
+  previewSkill: (projectId: string, data: Record<string, unknown>) =>
+    request<SkillPreviewResult>(
+      scoped("/api/agent-content/preview-skill", projectId), {
       method: "POST",
       body: JSON.stringify(data),
     }),
   planSkillChat: (
     messages: PlanChatMessage[], draft: Partial<SkillPlanDraft>,
-    focusField = "",
-  ) => request<SkillPlanChatTurn>("/api/agent-content/plan-skill-chat", {
+    projectId: string, focusField = "",
+  ) => request<SkillPlanChatTurn>(
+    scoped("/api/agent-content/plan-skill-chat", projectId), {
     method: "POST",
     body: JSON.stringify({ messages, draft, focus_field: focusField }),
   }),
   planSpecialistChat: (
     messages: PlanChatMessage[],
     draft: Partial<SpecialistPlanDraft> & { content_key?: string },
-    focusField = "",
+    projectId: string, focusField = "",
   ) => request<SpecialistPlanChatTurn>(
-    "/api/agent-content/plan-specialist-chat",
+    scoped("/api/agent-content/plan-specialist-chat", projectId),
     {
       method: "POST",
       body: JSON.stringify({ messages, draft, focus_field: focusField }),

@@ -47,7 +47,10 @@ def build(context) -> APIRouter:
         return context.repository.conversation_history(conversation_id, limit)
 
     @router.get("/skills")
-    def summary_skills():
-        return context.repository.list_summary_skills()
+    def summary_skills(
+        project_id: str, session_id: str = Depends(context.user_session)
+    ):
+        context.repository.get_project(project_id, session_id)
+        return context.repository.list_summary_skills(project_id)
 
     return router

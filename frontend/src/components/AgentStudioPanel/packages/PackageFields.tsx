@@ -56,11 +56,12 @@ export function PackageList({
 }
 
 export function PackageFormHeader({
-  form,
+  projectId, form,
   editing,
   inspection,
   onApply,
 }: {
+  projectId: string;
   form: PackageForm;
   editing: boolean;
   inspection: PackageInspection | null;
@@ -73,18 +74,20 @@ export function PackageFormHeader({
         <h3>{editing ? "גרסה חדשה למקור" : "מקור מידע חדש"}</h3>
         <p>חבילת FLAPI שמביאה נתונים לתהליך הסיכום.</p>
       </div>
-      <ToolPlanChat form={form} inspection={inspection} onApply={onApply} />
+      <ToolPlanChat projectId={projectId} form={form}
+        inspection={inspection} onApply={onApply} />
     </header>
   );
 }
 
 export function PackageFields({
-  form,
+  projectId, form,
   update,
   onDropField,
   inspection,
   onApplyField,
 }: {
+  projectId: string;
   form: PackageForm;
   update: UpdatePackage;
   onDropField: (
@@ -95,7 +98,8 @@ export function PackageFields({
   onApplyField: (field: keyof ToolPlanDraft, value: string) => void;
 }) {
   const agent = (field: keyof ToolPlanDraft) => (
-    <PackageFieldAgent field={field} form={form} inspection={inspection}
+    <PackageFieldAgent projectId={projectId} field={field} form={form}
+      inspection={inspection}
       onApply={onApplyField} />
   );
   return (

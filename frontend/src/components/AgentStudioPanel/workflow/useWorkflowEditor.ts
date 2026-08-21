@@ -15,6 +15,7 @@ import {
 } from "./workflowModel";
 
 export function useWorkflowEditor(
+  projectId: string,
   packages: PackageVersion[],
   onRefresh: () => Promise<void>,
 ) {
@@ -95,10 +96,10 @@ export function useWorkflowEditor(
     try {
       const payload = workflowPayload(form, steps);
       if (editingId) {
-        await api.updateWorkflow(editingId, payload);
+        await api.updateWorkflow(projectId, editingId, payload);
         setMessage("התהליך עודכן.");
       } else {
-        await api.createWorkflow(payload);
+        await api.createWorkflow(projectId, payload);
         setMessage("התהליך נשמר.");
         reset();
       }
@@ -127,7 +128,7 @@ export function useWorkflowEditor(
     if (!confirmed) return;
     setLibraryError("");
     try {
-      await api.deleteWorkflow(item.id);
+      await api.deleteWorkflow(projectId, item.id);
       if (editingId === item.id) reset();
       await onRefresh();
     } catch (reason) {
@@ -143,7 +144,7 @@ export function useWorkflowEditor(
     setDryResult("מריץ חבילות…");
     setLibraryError("");
     try {
-      const result = await api.dryRun(id, dryRunId.trim());
+      const result = await api.dryRun(projectId, id, dryRunId.trim());
       setDryResult(JSON.stringify(result, null, 2));
     } catch (reason) {
       setDryResult("");
@@ -199,6 +200,7 @@ export function useWorkflowEditor(
   };
 
   return {
+    projectId,
     form,
     steps,
     error,

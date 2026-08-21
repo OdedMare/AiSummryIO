@@ -83,7 +83,23 @@ export function useAppShell() {
       .then(setConversations).catch(() => undefined);
   }, [activeProject]);
 
-  useInitialData(setDark, setSkills, setAgents);
+  useInitialData(setDark);
+  useEffect(() => {
+    if (!activeProject) return;
+    let cancelled = false;
+    void Promise.all([
+      api.skills(activeProject.id), api.specialists(activeProject.id),
+    ]).then(([nextSkills, nextAgents]) => {
+      if (cancelled) return;
+      setSkills(nextSkills);
+      setAgents(nextAgents);
+    }).catch(() => {
+      if (cancelled) return;
+      setSkills([]);
+      setAgents([]);
+    });
+    return () => { cancelled = true; };
+  }, [activeProject]);
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadProjects(); }, 0);
     return () => window.clearTimeout(timer);

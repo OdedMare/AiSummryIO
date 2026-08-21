@@ -55,10 +55,12 @@ def plan_tool_chat(
 
 def plan_workflow_chat(
     service, messages: List[dict], draft: Optional[dict],
-    focus_field: str = "",
+    focus_field: str = "", project_id=None,
 ) -> dict:
     """One turn of workflow planning, validated like any other plan."""
-    return _WorkflowPlanner(service).turn(messages, draft, focus_field)
+    return _WorkflowPlanner(service, project_id).turn(
+        messages, draft, focus_field
+    )
 
 
 def plan_skill_chat(
@@ -71,10 +73,12 @@ def plan_skill_chat(
 
 def plan_specialist_chat(
     service, messages: List[dict], draft: Optional[dict],
-    focus_field: str = "",
+    focus_field: str = "", project_id=None,
 ) -> dict:
     """One turn that configures a catalog-bounded specialist draft."""
-    return _SpecialistPlanner(service).turn(messages, draft, focus_field)
+    return _SpecialistPlanner(service, project_id).turn(
+        messages, draft, focus_field
+    )
 
 
 class _Planner:
@@ -370,9 +374,12 @@ class _WorkflowPlanner(_Planner):
     prompt = "workflow_interview"
     schema = WORKFLOW_PLAN_CHAT_SCHEMA
 
-    def __init__(self, service):
+    def __init__(self, service, project_id=None):
         _Planner.__init__(self, service)
-        self._tools = service._repository.list_packages()
+        self._tools = (
+            service._repository.list_packages(project_id)
+            if project_id else service._repository.list_packages()
+        )
 
     def _before(self, *_extra) -> Optional[dict]:
         if self._tools:
@@ -488,10 +495,16 @@ class _SpecialistPlanner(_Planner):
         "workflow_keys", "skill_keys",
     )
 
-    def __init__(self, service):
+    def __init__(self, service, project_id=None):
         _Planner.__init__(self, service)
-        self._workflows = service._repository.list_workflows()
-        self._content = service._repository.list_agent_content()
+        self._workflows = (
+            service._repository.list_workflows(project_id)
+            if project_id else service._repository.list_workflows()
+        )
+        self._content = (
+            service._repository.list_agent_content(project_id)
+            if project_id else service._repository.list_agent_content()
+        )
         self._agents_by_id = {
             item.get("id"): item for item in self._content
             if item.get("kind") == "agent" and item.get("id")

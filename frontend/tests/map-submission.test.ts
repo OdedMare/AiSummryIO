@@ -162,12 +162,15 @@ test("multipolygon identifiers are sent unchanged in live, inspect, and dry run"
   ).concat("34.0000000 32.0000000").join(", ") + ")))";
 
   await api.start(identifier, "", []);
-  await api.inspectPackage({ root_id: identifier });
-  await api.dryRun("workflow-geo", identifier);
+  await api.inspectPackage("project-1", { root_id: identifier });
+  await api.dryRun("project-1", "workflow-geo", identifier);
 
   assert.ok(identifier.length > 256);
   assert.equal(requests[0].body.root_id, identifier);
   assert.equal(requests[1].body.root_id, identifier);
   assert.equal(requests[2].body.root_id, identifier);
-  assert.equal(requests[2].path, "/api/workflows/workflow-geo/dry-run");
+  assert.equal(
+    requests[2].path,
+    "/api/workflows/workflow-geo/dry-run?project_id=project-1",
+  );
 });

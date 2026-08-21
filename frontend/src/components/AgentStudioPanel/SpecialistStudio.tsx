@@ -27,8 +27,9 @@ const emptySpecialist: SpecialistForm = {
 };
 
 export default function SpecialistStudio({
-  items, workflows, skills, onRefresh,
+  projectId, items, workflows, skills, onRefresh,
 }: {
+  projectId: string;
   items: AgentContent[];
   workflows: WorkflowVersion[];
   skills: AgentContent[];
@@ -82,8 +83,8 @@ export default function SpecialistStudio({
         },
         user_selectable: false,
       };
-      if (editingId) await api.updateContent(editingId, payload);
-      else { await api.createContent(payload); reset(); }
+      if (editingId) await api.updateContent(projectId, editingId, payload);
+      else { await api.createContent(projectId, payload); reset(); }
       await onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "שמירת המומחה נכשלה");
@@ -99,7 +100,7 @@ export default function SpecialistStudio({
     if (!confirmed) return;
     setError("");
     try {
-      await api.deleteContent(item.id);
+      await api.deleteContent(projectId, item.id);
       // The form would otherwise keep editing a row that no longer exists
       // and fail on the next save.
       if (editingId === item.id) reset();
@@ -113,7 +114,8 @@ export default function SpecialistStudio({
     <div className="studio-split specialist-studio">
       <SpecialistList items={items} onEdit={edit} onRemove={remove}
         onNew={startNew} />
-      <SpecialistFormView form={form} update={update} workflows={workflows}
+      <SpecialistFormView projectId={projectId} form={form} update={update}
+        workflows={workflows}
         skills={skills} save={save} saving={saving} error={error}
         editing={!!editingId} reset={startNew} />
     </div>
@@ -165,8 +167,9 @@ function SpecialistList({
 }
 
 function SpecialistFormView({
-  form, update, workflows, skills, save, saving, error, editing, reset,
+  projectId, form, update, workflows, skills, save, saving, error, editing, reset,
 }: {
+  projectId: string;
   form: SpecialistForm;
   update: (patch: Partial<SpecialistForm>) => void;
   workflows: WorkflowVersion[];
@@ -184,7 +187,7 @@ function SpecialistFormView({
         <h3>{editing ? "עריכת מומחה" : "מומחה חדש"}</h3>
         <p>המנהל מאציל משימה; רק המומחה מפעיל את ה־Workflows שהוקצו לו.</p>
       </div>
-        <SpecialistPlanChat form={form}
+        <SpecialistPlanChat projectId={projectId} form={form}
           onApply={(draft: SpecialistPlanDraft) => update(draft)} />
       </header>
       <div className="form-grid two">

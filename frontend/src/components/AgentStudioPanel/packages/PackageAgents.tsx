@@ -27,10 +27,11 @@ const AUTHORED_LABELS: Array<[
 ];
 
 export function ToolPlanChat({
-  form,
+  projectId, form,
   inspection,
   onApply,
 }: {
+  projectId: string;
   form: PackageForm;
   inspection: PackageInspection | null;
   onApply: (draft: ToolPlanDraft) => void;
@@ -41,6 +42,7 @@ export function ToolPlanChat({
       messages,
       { ...connectionDraft(form), ...(draft ?? {}) },
       inspection,
+      projectId,
     ),
     (readyDraft) => {
       onApply(readyDraft);
@@ -89,11 +91,12 @@ const FIELD_AGENT_LABELS: Partial<Record<keyof ToolPlanDraft, string>> = {
 };
 
 export function PackageFieldAgent({
-  field,
+  projectId, field,
   form,
   inspection,
   onApply,
 }: {
+  projectId: string;
   field: keyof ToolPlanDraft;
   form: PackageForm;
   inspection: PackageInspection | null;
@@ -106,6 +109,7 @@ export function PackageFieldAgent({
       messages,
       { ...connectionDraft(form), ...(draft ?? {}) },
       inspection,
+      projectId,
       field,
     ),
     (readyDraft) => {
