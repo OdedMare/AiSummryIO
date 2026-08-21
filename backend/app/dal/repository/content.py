@@ -17,9 +17,16 @@ from app.dal.repository.base import new_id, slug
 
 
 class ContentRepository:
-    def list_agent_content(self) -> List[dict]:
+    def list_agent_content(self, project_id=None) -> List[dict]:
+        if project_id:
+            rows = self._all("""
+                SELECT * FROM agent_content
+                WHERE project_id=%s ORDER BY name
+            """, (project_id,))
+        else:
+            rows = self._all("SELECT * FROM agent_content ORDER BY name")
         return self._with_workflow_keys(
-            self._all("SELECT * FROM agent_content ORDER BY name")
+            rows
         )
 
     def list_summary_skills(self) -> List[dict]:
@@ -92,7 +99,7 @@ class ContentRepository:
             "SELECT * FROM agent_content WHERE id=%s", (content_id,)
         )])[0]
 
-    def create_agent_content(self, data: dict) -> dict:
+    def create_agent_content(self, data: dict, project_id=None) -> dict:
         content_key = data.get("content_key") or slug(data["name"])
         if self._key_taken("agent_content", "content_key", content_key):
             raise ValueError(
@@ -100,17 +107,22 @@ class ContentRepository:
                 % content_key
             )
         row_id = new_id()
-        item = dict(data, id=row_id, content_key=content_key)
+        item = dict(
+            data, id=row_id, content_key=content_key, project_id=project_id
+        )
         self._validate_enabled(item)
         with connect(self._store) as connection:
             connection.execute(
-                _INSERT_CONTENT, _content_values(row_id, content_key, data)
+                _INSERT_CONTENT,
+                _content_values(row_id, content_key, data, project_id),
             )
             _set_agent_workflows(connection, row_id, item)
             connection.commit()
         return self.get_agent_content(row_id)
 
-    def update_agent_content(self, content_id: str, data: dict) -> dict:
+    def update_agent_content(
+        self, content_id: str, data: dict, project_id=None
+    ) -> dict:
         """Edit a Skill, prompt, or specialist in place.
 
         `content_key` is the identity `enabled_content`, the Skill catalog, and
@@ -118,9 +130,10 @@ class ContentRepository:
         payload.
         """
         # `_one` raises NotFoundError (404) when the id is unknown.
-        current = self.get_agent_content(content_id)
+        current = self._owned_content(content_id, project_id)
         item = dict(
-            data, id=content_id, content_key=current["content_key"]
+            data, id=content_id, content_key=current["content_key"],
+            project_id=current.get("project_id"),
         )
         self._validate_enabled(item)
         with connect(self._store) as connection:
@@ -134,7 +147,7 @@ class ContentRepository:
             connection.commit()
         return self.get_agent_content(content_id)
 
-    def delete_agent_content(self, content_id: str) -> dict:
+    def delete_agent_content(self, content_id: str, project_id=None) -> dict:
         """Remove a Skill, prompt, or specialist.
 
         Nothing pins one by row id, so unlike a tool wired into a workflow
@@ -149,16 +162,20 @@ class ContentRepository:
         workflow. Deleting one is a way to reset it, not to remove it.
         """
         # `_one` raises NotFoundError (404) when the id is unknown.
-        item = self._one(
-            "SELECT content_key, name FROM agent_content WHERE id=%s",
-            (content_id,),
-        )
+        item = self._owned_content(content_id, project_id)
         with connect(self._store) as connection:
             connection.execute(
                 "DELETE FROM agent_content WHERE id=%s", (content_id,)
             )
             connection.commit()
         return {"deleted": item["content_key"], "name": item["name"]}
+
+    def _owned_content(self, content_id: str, project_id=None) -> dict:
+        if project_id:
+            return self._with_workflow_keys([self._one("""
+                SELECT * FROM agent_content WHERE id=%s AND project_id=%s
+            """, (content_id, project_id))])[0]
+        return self.get_agent_content(content_id)
 
     def _validate_enabled(self, data: dict) -> None:
         """Gate a specialist on the way in, when it is enabled.
@@ -187,7 +204,8 @@ class ContentRepository:
             FROM summary_workflows AS workflow
             LEFT JOIN agent_content AS owner ON owner.id=workflow.agent_id
             WHERE workflow.workflow_key = ANY(%s)
-        """, (workflows,))
+              AND workflow.project_id IS NOT DISTINCT FROM %s
+        """, (workflows, item.get("project_id")))
         by_key = {row["workflow_key"]: row for row in rows}
         missing = [key for key in workflows if key not in by_key]
         if missing:
@@ -215,7 +233,8 @@ class ContentRepository:
             row["workflow_key"] for row in self._all("""
                 SELECT workflow_key FROM summary_workflows
                 WHERE agent_enabled IS TRUE AND workflow_key = ANY(%s)
-            """, (workflows,))
+                  AND project_id IS NOT DISTINCT FROM %s
+            """, (workflows, item.get("project_id")))
         }
         missing = [key for key in workflows if key not in available]
         if missing:
@@ -228,7 +247,8 @@ class ContentRepository:
                 SELECT content_key FROM agent_content
                 WHERE kind='skill' AND agent_enabled IS TRUE
                   AND content_key = ANY(%s)
-            """, (skills,))
+                  AND project_id IS NOT DISTINCT FROM %s
+            """, (skills, item.get("project_id")))
         } if skills else set()
         missing_skills = [key for key in skills if key not in available_skills]
         if missing_skills:
@@ -293,8 +313,8 @@ def _content_fields(data):
     )
 
 
-def _content_values(row_id, content_key, data):
-    return (row_id, content_key) + _content_fields(data)
+def _content_values(row_id, content_key, data, project_id=None):
+    return (row_id, content_key, project_id) + _content_fields(data)
 
 
 def _content_update_values(content_id, data):
@@ -326,14 +346,15 @@ def _set_agent_workflows(
         connection.execute("""
             UPDATE summary_workflows SET agent_id=%s
             WHERE workflow_key = ANY(%s)
-        """, (content_id, keys))
+              AND project_id IS NOT DISTINCT FROM %s
+        """, (content_id, keys, item.get("project_id")))
 
 
 _INSERT_CONTENT = """
     INSERT INTO agent_content (
-        id, content_key, kind, name, description,
+        id, content_key, project_id, kind, name, description,
         content, config, user_selectable, agent_enabled
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
 _UPDATE_CONTENT = """

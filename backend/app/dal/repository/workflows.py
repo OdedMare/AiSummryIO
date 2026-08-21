@@ -17,8 +17,14 @@ from app.dal.repository.validation import validate_steps
 class WorkflowRepository:
     _validate_steps = staticmethod(validate_steps)
 
-    def list_workflows(self) -> List[dict]:
-        rows = self._all("SELECT * FROM summary_workflows ORDER BY name")
+    def list_workflows(self, project_id=None) -> List[dict]:
+        if project_id:
+            rows = self._all("""
+                SELECT * FROM summary_workflows
+                WHERE project_id=%s ORDER BY name
+            """, (project_id,))
+        else:
+            rows = self._all("SELECT * FROM summary_workflows ORDER BY name")
         return self._with_steps(rows)
 
     def get_workflow(self, workflow_id: str) -> dict:
@@ -28,7 +34,7 @@ class WorkflowRepository:
         row["steps"] = self._steps(workflow_id)
         return row
 
-    def create_workflow(self, data: dict) -> dict:
+    def create_workflow(self, data: dict, project_id=None) -> dict:
         workflow_key = data.get("workflow_key") or slug(data["name"])
         if self._key_taken("summary_workflows", "workflow_key", workflow_key):
             raise ValueError(
@@ -38,17 +44,19 @@ class WorkflowRepository:
         row_id = new_id()
         validate_steps(data.get("steps", []))
         self._validate_agent(
-            data.get("agent_id"), data.get("agent_enabled", True)
+            data.get("agent_id"), data.get("agent_enabled", True), project_id
         )
+        self._validate_project_tools(data.get("steps", []), project_id)
         with connect(self._store) as connection:
             connection.execute(
-                _INSERT_WORKFLOW, _workflow_values(row_id, workflow_key, data)
+                _INSERT_WORKFLOW,
+                _workflow_values(row_id, workflow_key, data, project_id),
             )
             _insert_steps(connection, row_id, data.get("steps", []))
             connection.commit()
         return self.get_workflow(row_id)
 
-    def update_workflow(self, workflow_id: str, data: dict) -> dict:
+    def update_workflow(self, workflow_id: str, data: dict, project_id=None) -> dict:
         """Edit a workflow in place.
 
         `workflow_key` is the identity the agent routes by and is never
@@ -61,12 +69,13 @@ class WorkflowRepository:
         the agent is allowed to select it.
         """
         # `_one` raises NotFoundError (404) when the id is unknown.
-        self.get_workflow(workflow_id)
+        self._owned_workflow(workflow_id, project_id)
         steps = data.get("steps", [])
         validate_steps(steps)
         self._validate_agent(
-            data.get("agent_id"), data.get("agent_enabled", True)
+            data.get("agent_id"), data.get("agent_enabled", True), project_id
         )
+        self._validate_project_tools(steps, project_id)
         with connect(self._store) as connection:
             connection.execute(
                 _UPDATE_WORKFLOW, _workflow_update_values(workflow_id, data)
@@ -79,7 +88,7 @@ class WorkflowRepository:
             connection.commit()
         return self.get_workflow(workflow_id)
 
-    def delete_workflow(self, workflow_id: str) -> dict:
+    def delete_workflow(self, workflow_id: str, project_id=None) -> dict:
         """Remove a workflow.
 
         `workflow_steps` cascades from `summary_workflows`, so the steps go
@@ -88,10 +97,7 @@ class WorkflowRepository:
         really happened, and a past summary stays traceable after the workflow
         that produced it is retired.
         """
-        workflow = self._one(
-            "SELECT workflow_key, name FROM summary_workflows WHERE id=%s",
-            (workflow_id,),
-        )
+        workflow = self._owned_workflow(workflow_id, project_id)
         with connect(self._store) as connection:
             connection.execute(
                 "DELETE FROM summary_workflows WHERE id=%s", (workflow_id,)
@@ -122,21 +128,48 @@ class WorkflowRepository:
         by_key = {row["workflow_key"]: row for row in self._with_steps(rows)}
         return [by_key[key] for key in keys if key in by_key]
 
-    def _validate_agent(self, agent_id, agent_enabled: bool) -> None:
+    def _owned_workflow(self, workflow_id: str, project_id=None) -> dict:
+        if project_id:
+            return self._one("""
+                SELECT * FROM summary_workflows WHERE id=%s AND project_id=%s
+            """, (workflow_id, project_id))
+        return self.get_workflow(workflow_id)
+
+    def _validate_agent(
+        self, agent_id, agent_enabled: bool, project_id=None
+    ) -> None:
         """Refuse an assignment to a missing row or to non-agent content."""
         if not agent_id:
-            if agent_enabled and self._all("""
-                SELECT id FROM agent_content WHERE kind='agent' LIMIT 1
-            """):
+            query = "SELECT id FROM agent_content WHERE kind='agent'"
+            params = ()
+            if project_id:
+                query += " AND project_id=%s"
+                params = (project_id,)
+            if agent_enabled and self._all(query + " LIMIT 1", params):
                 raise ValueError(
                     "כדי להפעיל Workflow יש לבחור סוכן אחראי"
                 )
             return
+        project_filter = " AND project_id=%s" if project_id else ""
+        params = (agent_id, project_id) if project_id else (agent_id,)
         if not self._all("""
             SELECT id FROM agent_content
-            WHERE id=%s AND kind='agent' LIMIT 1
-        """, (agent_id,)):
+            WHERE id=%s AND kind='agent'""" + project_filter + " LIMIT 1",
+            params,
+        ):
             raise ValueError("הסוכן שנבחר אינו קיים")
+
+    def _validate_project_tools(self, steps: List[dict], project_id=None) -> None:
+        if not project_id or not steps:
+            return
+        ids = [step["package_version_id"] for step in steps]
+        rows = self._all("""
+            SELECT id FROM summary_packages
+            WHERE project_id=%s AND id = ANY(%s)
+        """, (project_id, ids))
+        found = {row["id"] for row in rows}
+        if any(package_id not in found for package_id in ids):
+            raise ValueError("Workflow יכול להשתמש רק בטולים של אותו פרויקט")
 
     def _with_steps(self, rows: List[dict]) -> List[dict]:
         for row in rows:
@@ -164,8 +197,8 @@ def _workflow_fields(data):
     )
 
 
-def _workflow_values(row_id, workflow_key, data):
-    return (row_id, workflow_key) + _workflow_fields(data)
+def _workflow_values(row_id, workflow_key, data, project_id=None):
+    return (row_id, workflow_key, project_id) + _workflow_fields(data)
 
 
 def _workflow_update_values(workflow_id, data):
@@ -191,9 +224,9 @@ def _step_values(workflow_id, position, step):
 
 _INSERT_WORKFLOW = """
     INSERT INTO summary_workflows (
-        id, workflow_key, name, description, role,
+        id, workflow_key, project_id, name, description, role,
         agent_enabled, agent_id, system_prompt, output_schema, examples
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
 _UPDATE_WORKFLOW = """

@@ -12,21 +12,38 @@ def build(context) -> APIRouter:
     )
 
     @router.get("")
-    def agent_content():
-        return context.repository.list_agent_content()
+    def agent_content(
+        project_id: str, session_id: str = Depends(context.user_session)
+    ):
+        context.repository.get_project(project_id, session_id)
+        return context.repository.list_agent_content(project_id)
 
     @router.post("")
-    def create_agent_content(payload: AgentContentCreate):
-        return context.repository.create_agent_content(payload.model_dump())
+    def create_agent_content(
+        payload: AgentContentCreate, project_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        context.repository.get_project(project_id, session_id)
+        return context.repository.create_agent_content(
+            payload.model_dump(), project_id
+        )
 
     @router.put("/{content_id}")
-    def update_agent_content(content_id: str, payload: AgentContentCreate):
+    def update_agent_content(
+        content_id: str, payload: AgentContentCreate, project_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        context.repository.get_project(project_id, session_id)
         return context.repository.update_agent_content(
-            content_id, payload.model_dump()
+            content_id, payload.model_dump(), project_id
         )
 
     @router.post("/preview-skill")
-    def preview_skill(payload: SkillPreview):
+    def preview_skill(
+        payload: SkillPreview, project_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        context.repository.get_project(project_id, session_id)
         return context.service.preview_skill(
             payload.name,
             payload.content,
@@ -35,21 +52,33 @@ def build(context) -> APIRouter:
         )
 
     @router.post("/plan-skill-chat")
-    def plan_skill_chat(payload: PlanChatCreate):
+    def plan_skill_chat(
+        payload: PlanChatCreate, project_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        context.repository.get_project(project_id, session_id)
         return context.service.plan_skill_chat(
             [item.model_dump() for item in payload.messages], payload.draft,
-            payload.focus_field,
+            payload.focus_field, project_id,
         )
 
     @router.post("/plan-specialist-chat")
-    def plan_specialist_chat(payload: PlanChatCreate):
+    def plan_specialist_chat(
+        payload: PlanChatCreate, project_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        context.repository.get_project(project_id, session_id)
         return context.service.plan_specialist_chat(
             [item.model_dump() for item in payload.messages], payload.draft,
-            payload.focus_field,
+            payload.focus_field, project_id,
         )
 
     @router.delete("/{content_id}")
-    def delete_agent_content(content_id: str):
-        return context.repository.delete_agent_content(content_id)
+    def delete_agent_content(
+        content_id: str, project_id: str,
+        session_id: str = Depends(context.user_session),
+    ):
+        context.repository.get_project(project_id, session_id)
+        return context.repository.delete_agent_content(content_id, project_id)
 
     return router

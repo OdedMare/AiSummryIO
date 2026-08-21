@@ -15,7 +15,12 @@ from app.dal.repository.base import new_id, slug
 
 
 class PackageRepository:
-    def list_packages(self) -> List[dict]:
+    def list_packages(self, project_id=None) -> List[dict]:
+        if project_id:
+            return self._all("""
+                SELECT * FROM summary_packages
+                WHERE project_id=%s ORDER BY name
+            """, (project_id,))
         return self._all("SELECT * FROM summary_packages ORDER BY name")
 
     def agent_tools(self) -> List[dict]:
@@ -41,7 +46,7 @@ class PackageRepository:
             "SELECT * FROM summary_packages WHERE id=%s", (package_id,)
         )
 
-    def create_package(self, data: dict) -> dict:
+    def create_package(self, data: dict, project_id=None) -> dict:
         package_key = data.get("package_key") or slug(data["name"])
         if self._key_taken("summary_packages", "package_key", package_key):
             raise ValueError(
@@ -51,12 +56,12 @@ class PackageRepository:
         row_id = new_id()
         with connect(self._store) as connection:
             connection.execute(_INSERT_PACKAGE, _package_values(
-                row_id, package_key, data
+                row_id, package_key, data, project_id
             ))
             connection.commit()
         return self.get_package(row_id)
 
-    def update_package(self, package_id: str, data: dict) -> dict:
+    def update_package(self, package_id: str, data: dict, project_id=None) -> dict:
         """Edit a tool in place.
 
         `package_key` is the tool's identity and is never rewritten from the
@@ -65,7 +70,7 @@ class PackageRepository:
         the FDE no longer recognises.
         """
         # `_one` raises NotFoundError (404) when the id is unknown.
-        self.get_package(package_id)
+        self._owned_package(package_id, project_id)
         with connect(self._store) as connection:
             connection.execute(
                 _UPDATE_PACKAGE, _package_update_values(package_id, data)
@@ -73,7 +78,7 @@ class PackageRepository:
             connection.commit()
         return self.get_package(package_id)
 
-    def delete_package(self, package_id: str) -> dict:
+    def delete_package(self, package_id: str, project_id=None) -> dict:
         """Remove a tool.
 
         `workflow_steps.package_version_id` has no `ON DELETE` clause, so a
@@ -81,10 +86,7 @@ class PackageRepository:
         constraint violation — a 500 with a psycopg message. It is named here
         instead, with the workflows that block it.
         """
-        package = self._one(
-            "SELECT package_key, name FROM summary_packages WHERE id=%s",
-            (package_id,),
-        )
+        package = self._owned_package(package_id, project_id)
         used_by = self._workflows_using(package["package_key"])
         if used_by:
             raise ValueError(
@@ -97,6 +99,13 @@ class PackageRepository:
             )
             connection.commit()
         return {"deleted": package["package_key"], "name": package["name"]}
+
+    def _owned_package(self, package_id: str, project_id=None) -> dict:
+        if project_id:
+            return self._one("""
+                SELECT * FROM summary_packages WHERE id=%s AND project_id=%s
+            """, (package_id, project_id))
+        return self.get_package(package_id)
 
     def _workflows_using(self, package_key: str) -> List[str]:
         """Names of workflows whose steps point at this tool."""
@@ -125,8 +134,8 @@ def _package_fields(data):
     )
 
 
-def _package_values(row_id, package_key, data):
-    return (row_id, package_key) + _package_fields(data)
+def _package_values(row_id, package_key, data, project_id=None):
+    return (row_id, package_key, project_id) + _package_fields(data)
 
 
 def _package_update_values(package_id, data):
@@ -135,12 +144,12 @@ def _package_update_values(package_id, data):
 
 _INSERT_PACKAGE = """
     INSERT INTO summary_packages (
-        id, package_key, name, description, package_id,
+        id, package_key, project_id, name, description, package_id,
         input_cube_name, input_cube_parameter, input_mode,
         output_cube_name, query_name, timeout_seconds,
         agent_enabled, agent_instructions,
         output_schema, example_input, example_output
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 """
 
 _UPDATE_PACKAGE = """
