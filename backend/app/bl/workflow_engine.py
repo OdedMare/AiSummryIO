@@ -51,10 +51,11 @@ class SummaryService:
             self._repository.enabled_workflows(["baseline", "both"])
         )
         skills = self._project_skills(run, project)
+        memory = history.memory_context(conversation)
+        execute_run = dict(run, _memory=memory) if memory else run
         return self._execute(
-            run, conversation["root_id"], run["question"], workflows, progress,
-            skills, conversation.get("boundaries"),
-            history.memory_context(conversation),
+            execute_run, conversation["root_id"], run["question"], workflows,
+            progress, skills, conversation.get("boundaries"),
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
@@ -191,11 +192,11 @@ class SummaryService:
 
     def _execute(
         self, run, root_id, question, workflows, progress_callback,
-        skills=None, boundaries=None, memory=None,
+        skills=None, boundaries=None,
     ) -> dict:
         return execution.execute(
             self, run, root_id, question, workflows, progress_callback,
-            skills, boundaries, memory,
+            skills, boundaries,
         )
 
     def _execute_workflow(
@@ -260,10 +261,10 @@ class SummaryService:
 
     def _select_detail(
         self, question: str, workflows: List[dict], evidence: List[dict],
-        tools=None, turns=None,
+        tools=None, turns=None, memory=None,
     ) -> dict:
         return routing.select_detail(
-            self, question, workflows, evidence, tools, turns
+            self, question, workflows, evidence, tools, turns, memory
         )
 
     @staticmethod

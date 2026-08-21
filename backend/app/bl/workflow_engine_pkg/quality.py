@@ -15,6 +15,7 @@ def finalize(service, run: dict, result: dict, elapsed_seconds: float) -> dict:
     enriched["quality"] = assess(enriched)
     enriched["telemetry"] = {
         "model": _model(service),
+        "prompt_revision": _prompt_revision(service),
         "duration_ms": max(0, int(elapsed_seconds * 1000)),
         "tool_calls": len(evidence),
         "evidence_rows": sum(len(item.get("records") or []) for item in evidence),
@@ -85,4 +86,14 @@ def _model(service) -> str:
     try:
         return str(service._store.get().llm_model)
     except AttributeError:
+        return ""
+
+
+def _prompt_revision(service) -> str:
+    reader = getattr(service._repository, "prompt_revision", None)
+    if not reader:
+        return ""
+    try:
+        return str(reader())
+    except Exception:
         return ""

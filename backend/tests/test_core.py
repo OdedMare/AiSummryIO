@@ -4481,11 +4481,13 @@ def test_quality_gate_reports_real_coverage_without_inventing_token_usage():
     assert result["quality"]["score"] == 1.0
     assert result["quality"]["passed"] is True
     assert result["telemetry"] == {
-        "model": "local-model", "duration_ms": 1250, "tool_calls": 1,
+        "model": "local-model", "prompt_revision": "",
+        "duration_ms": 1250, "tool_calls": 1,
         "evidence_rows": 2, "workflow_count": 1,
         "specialist_count": 0, "rounds_used": 0, "degraded": False,
         "token_usage_available": False,
     }
+    assert "automatic_quality" in evaluation_repository_module._BATCH_SELECT
 
 
 def test_structured_memory_learns_only_observable_preferences_and_routes():
@@ -4507,9 +4509,10 @@ def test_dynamic_tool_round_runs_only_an_allowlisted_unseen_workflow(monkeypatch
     first = {"id": "wf-1", "workflow_key": "first"}
     second = {"id": "wf-2", "workflow_key": "second"}
     state = {
-        "agent": {"content_key": "agent-1"},
+        "agent": {"id": "a1", "content_key": "agent-1", "name": "Agent"},
         "available_workflows": [first, second],
-        "workflows": [first], "sections": [],
+        "workflows": [first], "sections": [], "skills": [], "answers": [],
+        "task": "task", "status": "completed", "error": "",
     }
     calls = []
 

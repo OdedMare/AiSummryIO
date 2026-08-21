@@ -41,7 +41,7 @@ def select_workflows(workflows: List[dict], root_id, boundaries) -> List[dict]:
 
 def execute(
     service, run, root_id, question, workflows, progress_callback,
-    skills=None, boundaries=None, memory=None,
+    skills=None, boundaries=None,
 ) -> dict:
     workflows = select_workflows(workflows, root_id, boundaries)
     if not workflows:
@@ -61,7 +61,7 @@ def execute(
     )
     return service._final_summary(
         root_id, question, sections, skills or [],
-        evidence=run_evidence(service, run), memory=memory,
+        evidence=run_evidence(service, run), memory=run.get("_memory"),
     )
 
 

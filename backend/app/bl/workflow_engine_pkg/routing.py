@@ -23,6 +23,8 @@ Routing policy:
     question, and offer two to four answerable options when they are known.
 5. Never invent a workflow key, tool id, result, or capability. Return null for
     route fields that do not apply. User-facing text must be in Hebrew.
+6. `user_preferences` is a weak tie-breaker only. Never let a past route count
+    override the current question, capability match, or safety constraints.
 """
 
 _WORKFLOW_COMMANDS = (
@@ -49,8 +51,14 @@ def follow_up(service, run, conversation, progress, project=None) -> dict:
     question = history.standalone_question(
         service, run["question"], turns, memory
     )
-    selected = service._select_detail(
-        question, workflows, prior, tools=tools, turns=turns
+    selected = (
+        service._select_detail(
+            question, workflows, prior, tools=tools, turns=turns,
+            memory=memory,
+        ) if memory else
+        service._select_detail(
+            question, workflows, prior, tools=tools, turns=turns
+        )
     )
     if selected.get("clarification"):
         return _with_decision(
@@ -58,13 +66,16 @@ def follow_up(service, run, conversation, progress, project=None) -> dict:
         )
     chosen = _chosen_workflows(service, selected, workflows, tools)
     if chosen:
+        execute_run = dict(run, _memory=memory) if memory else run
         return _with_decision(service._execute(
-            run, conversation["root_id"], question, chosen, progress,
-            skills, conversation.get("boundaries"), memory,
+            execute_run, conversation["root_id"], question, chosen, progress,
+            skills, conversation.get("boundaries"),
         ), selected)
-    return _with_decision(
-        service._synthesize_cached(question, prior, skills, memory), selected
+    cached = (
+        service._synthesize_cached(question, prior, skills, memory)
+        if memory else service._synthesize_cached(question, prior, skills)
     )
+    return _with_decision(cached, selected)
 
 
 def _cited_answer(service, run, conversation):
@@ -191,7 +202,7 @@ def _chosen_workflows(service, selected, workflows, tools) -> List[dict]:
 
 
 def select_detail(
-    service, question, workflows, evidence, tools=None, turns=None
+    service, question, workflows, evidence, tools=None, turns=None, memory=None
 ) -> dict:
     tools = tools or []
     if not workflows and not tools:
@@ -203,7 +214,9 @@ def select_detail(
             "confidence": 1.0, "decision_source": "explicit_request",
         }
     ratings = _route_ratings(service)
-    payload = _router_payload(question, workflows, tools, evidence, turns, ratings)
+    payload = _router_payload(
+        question, workflows, tools, evidence, turns, ratings, memory
+    )
     prompt = service._repository.enabled_content(
         "tool-aware-router",
         "Choose existing evidence, a Workflow, an approved standalone tool, "
@@ -255,7 +268,7 @@ def _route_ratings(service) -> dict:
 
 
 def _router_payload(
-    question, workflows, tools, evidence, turns=None, ratings=None
+    question, workflows, tools, evidence, turns=None, ratings=None, memory=None
 ) -> dict:
     """What the router selects on.
 
@@ -274,6 +287,8 @@ def _router_payload(
     }
     if turns:
         payload["history"] = turns
+    if memory:
+        payload["user_preferences"] = memory
     return payload
 
 
@@ -405,6 +420,10 @@ def _confidence(value, default: float) -> float:
 
 
 def _with_decision(result: dict, selected: dict) -> dict:
+    # Compatibility seam for tests and older callers that inject the old
+    # selection shape. Every production selector now supplies one of these.
+    if "confidence" not in selected and "decision_source" not in selected:
+        return result
     enriched = dict(result)
     enriched["route_decision"] = {
         "action": selected.get("action", "clarify"),

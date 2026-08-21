@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
   CircleStop, Download, Layers3, LoaderCircle, Pause, Play, RefreshCw,
-  Search, Star, Timer, Trash2, UsersRound,
+  Search, ShieldCheck, Star, Timer, Trash2, UsersRound,
 } from "lucide-react";
 import { SummaryContent } from "@/components/SummaryWorkspace/RunContent";
 import { api } from "@/services/api";
@@ -144,6 +144,9 @@ function Stats({ batch }: { batch: EvaluationBatch }) {
     ["רצים / בתור", batch.running + batch.queued, "active",
       <LoaderCircle className="spin" key="active" />],
     ["ציון ממוצע", batch.average_rating ?? "—", "rating", <Star key="rating" />],
+    ["איכות אוטומטית", batch.automatic_quality == null
+      ? "—" : `${Math.round(batch.automatic_quality * 100)}%`,
+      "success", <ShieldCheck key="quality" />],
   ];
   return <section className="evaluation-stats" aria-label="נתוני הריצה">
     {stats.map(([label, value, tone, icon]) => <article key={String(label)}

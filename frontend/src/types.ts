@@ -72,6 +72,7 @@ export interface RunQuality {
 
 export interface RunTelemetry {
   model: string;
+  prompt_revision: string;
   duration_ms: number;
   tool_calls: number;
   evidence_rows: number;
@@ -492,6 +493,7 @@ export interface EvaluationBatch {
   stopped: number;
   reviewed: number;
   average_rating: number | null;
+  automatic_quality: number | null;
   created_at: string;
   updated_at: string;
   finished_at: string | null;

@@ -17,6 +17,25 @@ from app.dal.repository.base import new_id, slug
 
 
 class ContentRepository:
+    def prompt_revision(self) -> str:
+        """Stable fingerprint of the live model instructions used by runs."""
+        row = self._one("""
+            SELECT md5(COALESCE(string_agg(item.value, E'\n'
+                       ORDER BY item.key), '')) AS revision
+            FROM (
+                SELECT 'content:' || content_key AS key, content AS value
+                FROM agent_content WHERE agent_enabled IS TRUE
+                UNION ALL
+                SELECT 'workflow:' || workflow_key, system_prompt
+                FROM summary_workflows WHERE agent_enabled IS TRUE
+                UNION ALL
+                SELECT 'step:' || workflow_id || ':' || step_key,
+                       summary_prompt
+                FROM workflow_steps
+            ) item
+        """)
+        return str(row.get("revision") or "")[:12]
+
     def list_agent_content(self, project_id=None) -> List[dict]:
         if project_id:
             rows = self._all("""

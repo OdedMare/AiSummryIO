@@ -297,10 +297,16 @@ LEFT JOIN LATERAL (
         COUNT(*) FILTER (WHERE status='failed') AS failed,
         COUNT(*) FILTER (WHERE status='stopped') AS stopped,
         COUNT(rating) AS reviewed,
-        ROUND(AVG(rating)::numeric, 2) AS average_rating
+        ROUND(AVG(rating)::numeric, 2) AS average_rating,
+        ROUND(AVG(quality_score)::numeric, 2) AS automatic_quality
     FROM (
         SELECT COALESCE(run.status, evaluation.status) AS status,
-               evaluation.rating
+               evaluation.rating,
+               CASE
+                   WHEN jsonb_typeof(run.result->'quality'->'score')='number'
+                   THEN (run.result->'quality'->>'score')::numeric
+                   ELSE NULL
+               END AS quality_score
         FROM evaluation_cases evaluation
         LEFT JOIN summary_runs run ON run.id=evaluation.run_id
         WHERE evaluation.batch_id=batch.id
@@ -319,7 +325,8 @@ SELECT batch.*,
        COALESCE(stats.failed, 0) AS failed,
        COALESCE(stats.stopped, 0) AS stopped,
        COALESCE(stats.reviewed, 0) AS reviewed,
-       stats.average_rating
+       stats.average_rating,
+       stats.automatic_quality
 FROM evaluation_batches batch
 """ + _STATS_JOIN
 
