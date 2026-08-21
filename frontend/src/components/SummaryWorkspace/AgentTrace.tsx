@@ -7,20 +7,42 @@ import type {
 
 export default function AgentTrace({ run }: { run: SummaryRun }) {
   const trace = run.result?.agent_trace ?? run.progress.agent_trace;
-  if (!trace?.specialists.length) return null;
+  const quality = run.result?.quality;
+  const telemetry = run.result?.telemetry;
+  const decision = run.result?.route_decision;
+  if (!trace?.specialists.length && !quality && !telemetry && !decision) return null;
   const active = run.status === "queued" || run.status === "running";
   return (
     <details className="agent-trace" open={active || undefined}>
       <summary>
         <Bot size={17} aria-hidden="true" />
-        <span>עבודת המומחים</span>
-        <small>{phaseLabel(trace.phase, trace.rounds_used)}</small>
+        <span>איך התשובה נבנתה</span>
+        <small>{trace
+          ? phaseLabel(trace.phase, trace.rounds_used)
+          : quality ? `ביטחון ${qualityLabel(quality.level)}` : "פרטי הריצה"}</small>
       </summary>
-      <ol className="agent-trace-list">
+      {(quality || telemetry || decision) && <dl className="agent-run-insights">
+        {quality && <div><dt>ביטחון</dt><dd>
+          {Math.round(quality.score * 100)}% · {qualityLabel(quality.level)}
+        </dd></div>}
+        {decision && <div><dt>ניתוב</dt><dd>
+          {decisionLabel(decision.action)} · {Math.round(decision.confidence * 100)}%
+        </dd></div>}
+        {telemetry && <div><dt>איסוף</dt><dd>
+          {telemetry.workflow_count} Workflows · {telemetry.tool_calls} קריאות · {telemetry.evidence_rows} רשומות
+        </dd></div>}
+        {telemetry && <div><dt>זמן</dt><dd>
+          {(telemetry.duration_ms / 1000).toLocaleString("he-IL", { maximumFractionDigits: 1 })} שנ׳
+        </dd></div>}
+      </dl>}
+      {!!quality?.reasons.length && <p className="agent-trace-quality-note">
+        {quality.reasons.join(" · ")}
+      </p>}
+      {!!trace?.specialists.length && <ol className="agent-trace-list">
         {trace.specialists.map((specialist) => (
           <Specialist key={specialist.agent_id} specialist={specialist} />
         ))}
-      </ol>
+      </ol>}
       {!!trace.missing_data?.length &&
         <div className="agent-trace-gaps" role="status">
           <AlertTriangle size={15} aria-hidden="true" />
@@ -28,6 +50,17 @@ export default function AgentTrace({ run }: { run: SummaryRun }) {
         </div>}
     </details>
   );
+}
+
+function qualityLabel(level: "high" | "medium" | "low"): string {
+  return level === "high" ? "גבוה" : level === "medium" ? "בינוני" : "נמוך";
+}
+
+function decisionLabel(action: string): string {
+  if (action === "workflow") return "Workflow";
+  if (action === "tool") return "טול";
+  if (action === "use_cached") return "ראיות קיימות";
+  return "בקשת הבהרה";
 }
 
 function Specialist({ specialist }: { specialist: SpecialistTrace }) {

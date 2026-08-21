@@ -61,6 +61,35 @@ export interface AgentTrace {
   missing_data?: string[];
 }
 
+export interface RunQuality {
+  score: number;
+  level: "high" | "medium" | "low";
+  section_coverage: number;
+  citation_coverage: number;
+  passed: boolean;
+  reasons: string[];
+}
+
+export interface RunTelemetry {
+  model: string;
+  duration_ms: number;
+  tool_calls: number;
+  evidence_rows: number;
+  workflow_count: number;
+  specialist_count: number;
+  rounds_used: number;
+  degraded: boolean;
+  token_usage_available: boolean;
+}
+
+export interface RouteDecision {
+  action: "use_cached" | "workflow" | "tool" | "clarify";
+  workflow_key?: string | null;
+  tool_version_id?: string | null;
+  confidence: number;
+  source: string;
+}
+
 /**
  * One source a claim rests on — the public citation, never the internal
  * record. It carries enough to render a marker and to open the exact evidence
@@ -128,6 +157,9 @@ export interface SummaryResult {
       answers were not a short list — free text stays the way out. */
   options?: ClarifyOption[];
   agent_trace?: AgentTrace;
+  quality?: RunQuality;
+  telemetry?: RunTelemetry;
+  route_decision?: RouteDecision;
 }
 
 export interface ClarifyOption {

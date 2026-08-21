@@ -126,10 +126,14 @@ def _orchestrate(
         questions = decision.get("questions", [])
         if decision.get("done") or not questions:
             break
-        if evidence is None:
-            evidence = _evidence_context(
-                service, prior_sources, run["id"], sections
-            )
+        added = _execute_requested_workflows(
+            service, run, conversation, progress, states, questions,
+            sections, max_rounds, round_number,
+        )
+        sections.extend(added)
+        evidence = _evidence_context(
+            service, prior_sources, run["id"], sections
+        )
         _answer_questions(
             service, states, questions, evidence, worker_prompt,
             round_number, workers,
@@ -323,6 +327,11 @@ def _plan_state(
         "agent": agent,
         "task": assignment["task"],
         "workflows": prepared,
+        "available_workflows": [
+            _worker_workflow(
+                item, agent, assignment["task"], skills, worker_prompt
+            ) for item in workflows
+        ],
         "skills": skills,
         "cached_sections": cached if use_cached else [],
         "sections": [],
@@ -434,7 +443,9 @@ def _review(service, question, states, leader_prompt, limit) -> dict:
         "`done=true` when no deeper question could materially improve the "
         "answer. Otherwise return at most one question for each relevant "
         "specialist, using only a supplied `agent_key`. Write questions in "
-        "Hebrew."
+        "Hebrew. When new source data is required, optionally set "
+        "`workflow_key` to one of that specialist's supplied unexecuted "
+        "Workflows; otherwise set it to null."
     )
     try:
         result = service._llm.complete_json(
@@ -442,14 +453,23 @@ def _review(service, question, states, leader_prompt, limit) -> dict:
         )
     except AgentError:
         return {"done": True, "questions": [], "missing_data": []}
-    known = {state["agent"]["content_key"] for state in states}
+    known = {state["agent"]["content_key"]: state for state in states}
     questions, seen = [], set()
     for item in result.get("questions", []):
         key = item.get("agent_key")
         question_text = _text(item.get("question"))
         if key not in known or key in seen or not question_text:
             continue
-        questions.append({"agent_key": key, "question": question_text})
+        allowed = {
+            item["workflow_key"]
+            for item in known[key].get("available_workflows", [])
+        }
+        workflow_key = item.get("workflow_key")
+        questions.append({
+            "agent_key": key,
+            "question": question_text,
+            "workflow_key": workflow_key if workflow_key in allowed else None,
+        })
         seen.add(key)
         if len(questions) == limit:
             break
@@ -458,6 +478,58 @@ def _review(service, question, states, leader_prompt, limit) -> dict:
         "questions": questions,
         "missing_data": _texts(result.get("missing_data")),
     }
+
+
+def _execute_requested_workflows(
+    service, run, conversation, progress, states, questions, existing,
+    max_rounds, round_number,
+) -> List[dict]:
+    """Execute newly requested allowlisted Workflows, once and within cap."""
+    used = {item.get("workflow_key") for item in existing}
+    remaining = max(0, _MAX_WORKFLOWS - len(used))
+    requested = []
+    owners = {}
+    by_key = {state["agent"]["content_key"]: state for state in states}
+    for item in questions:
+        state = by_key[item["agent_key"]]
+        key = item.get("workflow_key")
+        if not key or key in used or remaining == 0:
+            continue
+        workflow = next((
+            candidate for candidate in state.get("available_workflows", [])
+            if candidate["workflow_key"] == key
+        ), None)
+        if not workflow:
+            continue
+        requested.append(workflow)
+        owners[workflow["id"]] = state
+        used.add(key)
+        remaining -= 1
+    if not requested:
+        return []
+
+    def report(completed, total, arrived):
+        _emit(
+            progress, len(existing) + completed, len(existing) + total,
+            existing + arrived, states, "running_workflows", max_rounds,
+            round_number,
+        )
+
+    added = execution.execute_sections(
+        service, run, conversation.get("root_id"), requested, report,
+        conversation.get("boundaries"),
+    )
+    for section in added:
+        state = owners.get(section["workflow_id"])
+        if not state:
+            continue
+        section["agent_key"] = state["agent"]["content_key"]
+        section["agent_keys"] = [section["agent_key"]]
+        state["sections"].append(section)
+        state["workflows"].append(next(
+            item for item in requested if item["id"] == section["workflow_id"]
+        ))
+    return added
 
 
 def _answer_questions(
@@ -707,6 +779,14 @@ def _reports(states) -> List[dict]:
                     "limitations": item["limitations"],
                 }
                 for item in state["answers"]
+            ],
+            "available_workflows": [
+                _workflow_option(item)
+                for item in state.get("available_workflows", [])
+                if item.get("workflow_key") not in {
+                    section.get("workflow_key")
+                    for section in state["sections"]
+                }
             ],
         }
         for state in states

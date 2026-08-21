@@ -150,6 +150,7 @@ LEADER_REVIEW_SCHEMA = {
                 "properties": {
                     "agent_key": {"type": "string"},
                     "question": {"type": "string"},
+                    "workflow_key": {"type": ["string", "null"]},
                 },
                 "required": ["agent_key", "question"],
                 "additionalProperties": False,

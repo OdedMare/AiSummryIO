@@ -513,6 +513,40 @@
   border-bottom: 1px solid var(--border);
 }
 
+.agent-run-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-run-insights > div {
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.agent-run-insights dt {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.agent-run-insights dd {
+  margin: 3px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.agent-trace-quality-note {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--warning);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
 .agent-trace-list {
   display: grid;
   gap: 10px;
