@@ -67,6 +67,16 @@ class ConversationRepository:
         """, (conversation_id, max(1, limit)))
         return [_turn(row) for row in reversed(rows)]
 
+    def update_conversation_memory(
+        self, conversation_id: str, memory: dict
+    ) -> None:
+        with connect(self._store) as connection:
+            connection.execute(
+                "UPDATE conversations SET memory=%s WHERE id=%s",
+                (Jsonb(memory), conversation_id),
+            )
+            connection.commit()
+
     def list_conversations(
         self, session_id: str, project_id=None
     ) -> List[dict]:

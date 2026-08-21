@@ -41,6 +41,45 @@ _FALLBACK_PROMPT = (
 )
 
 
+def learned_memory(previous: dict, question: str, result: dict) -> dict:
+    """Merge only stable, observable preferences; never infer identity."""
+    memory = dict(previous or {})
+    text = " ".join((question or "").split())
+    if any("\u0590" <= char <= "\u05ff" for char in text):
+        memory["preferred_language"] = "he"
+    lowered = text.casefold()
+    styles = {
+        "brief": ("בקצרה", "תמציתי", "brief", "short"),
+        "detailed": ("בפירוט", "לעומק", "detailed", "deep"),
+        "table": ("טבלה", "table"),
+    }
+    for style, markers in styles.items():
+        if any(marker in lowered for marker in markers):
+            memory["response_style"] = style
+            break
+    routes = [
+        item.get("workflow_key") for item in result.get("sections", [])
+        if item.get("workflow_key")
+    ]
+    if routes:
+        counts = dict(memory.get("route_counts") or {})
+        for route in routes:
+            counts[route] = min(1000, int(counts.get(route, 0)) + 1)
+        memory["route_counts"] = counts
+    return memory
+
+
+def memory_context(conversation: dict) -> dict:
+    memory = conversation.get("memory") or {}
+    if not isinstance(memory, dict):
+        return {}
+    return {
+        key: memory[key] for key in (
+            "preferred_language", "response_style", "route_counts"
+        ) if key in memory
+    }
+
+
 def recent_turns(service, conversation: dict) -> List[Dict[str, str]]:
     """The conversation's finished question/answer pairs, oldest first.
 

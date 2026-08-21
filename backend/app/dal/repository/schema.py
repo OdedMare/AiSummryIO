@@ -195,6 +195,11 @@ ALTER TABLE conversations
     ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id)
         ON DELETE SET NULL;
 
+-- Small, structured preferences learned from completed turns.  This is not a
+-- second message history: questions and answers remain in summary_runs.
+ALTER TABLE conversations
+    ADD COLUMN IF NOT EXISTS memory JSONB NOT NULL DEFAULT '{}';
+
 COMMIT;
 
 CREATE TABLE IF NOT EXISTS summary_runs (

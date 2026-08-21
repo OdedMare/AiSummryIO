@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from app.common.logging_setup import abandoned_workers, trace
+from app.bl.workflow_engine_pkg import history, quality
 
 _log = trace("jobs")
 
@@ -171,6 +172,19 @@ class JobRunner:
             else:
                 result = self._service.follow_up(
                     run, conversation, progress
+                )
+            result = quality.finalize(
+                self._service, run, result, time.time() - started
+            )
+            writer = getattr(
+                self._repository, "update_conversation_memory", None
+            )
+            if writer:
+                writer(
+                    conversation["id"],
+                    history.learned_memory(
+                        conversation.get("memory"), run["question"], result
+                    ),
                 )
             status = "partial" if result.get("partial") else "completed"
             self._repository.update_run(
