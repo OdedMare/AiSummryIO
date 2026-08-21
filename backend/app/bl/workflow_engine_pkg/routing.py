@@ -45,19 +45,26 @@ def follow_up(service, run, conversation, progress, project=None) -> dict:
     prior, workflows, tools = _available(service, conversation, project)
     skills = service._project_skills(run, project)
     turns = history.recent_turns(service, conversation)
-    question = history.standalone_question(service, run["question"], turns)
+    memory = history.memory_context(conversation)
+    question = history.standalone_question(
+        service, run["question"], turns, memory
+    )
     selected = service._select_detail(
         question, workflows, prior, tools=tools, turns=turns
     )
     if selected.get("clarification"):
-        return _clarification_result(selected, workflows, tools)
+        return _with_decision(
+            _clarification_result(selected, workflows, tools), selected
+        )
     chosen = _chosen_workflows(service, selected, workflows, tools)
     if chosen:
-        return service._execute(
+        return _with_decision(service._execute(
             run, conversation["root_id"], question, chosen, progress,
-            skills, conversation.get("boundaries"),
-        )
-    return service._synthesize_cached(question, prior, skills)
+            skills, conversation.get("boundaries"), memory,
+        ), selected)
+    return _with_decision(
+        service._synthesize_cached(question, prior, skills, memory), selected
+    )
 
 
 def _cited_answer(service, run, conversation):
@@ -191,7 +198,10 @@ def select_detail(
         return _no_options(evidence)
     explicit = explicit_workflow(question, workflows)
     if explicit:
-        return {"action": "workflow", "workflow_key": explicit["workflow_key"]}
+        return {
+            "action": "workflow", "workflow_key": explicit["workflow_key"],
+            "confidence": 1.0, "decision_source": "explicit_request",
+        }
     ratings = _route_ratings(service)
     payload = _router_payload(question, workflows, tools, evidence, turns, ratings)
     prompt = service._repository.enabled_content(
@@ -204,7 +214,10 @@ def select_detail(
         selected = service._llm.complete_json(
             prompt, json.dumps(payload, ensure_ascii=False), ROUTER_SCHEMA
         )
-        return _validate_selection(selected, workflows, tools, evidence)
+        valid = _validate_selection(selected, workflows, tools, evidence)
+        valid["confidence"] = _confidence(valid.get("confidence"), 0.7)
+        valid["decision_source"] = "model"
+        return valid
     except AgentError:
         return _fallback_selection(workflows, tools, evidence)
 
@@ -342,7 +355,10 @@ def _catalog_options(workflows, tools) -> List[dict]:
 
 def _fallback_selection(workflows, tools, evidence) -> dict:
     if evidence:
-        return {"action": "use_cached", "workflow_key": None}
+        return {
+            "action": "use_cached", "workflow_key": None,
+            "confidence": 0.45, "decision_source": "fallback",
+        }
     return _single_selection(workflows, tools)
 
 
@@ -359,11 +375,13 @@ def _single_selection(workflows, tools) -> dict:
         return {
             "action": "workflow",
             "workflow_key": workflows[0]["workflow_key"],
+            "confidence": 0.8, "decision_source": "single_option",
         }
     return {
         "action": "tool",
         "workflow_key": None,
         "tool_version_id": tools[0]["id"],
+        "confidence": 0.8, "decision_source": "single_option",
     }
 
 
@@ -375,7 +393,27 @@ def _clarify(message="לאיזה נושא תרצו להעמיק?", options=None)
         "clarification": message,
         "recommendation": "",
         "options": options or [],
+        "confidence": 0.2,
+        "decision_source": "guardrail",
     }
+
+
+def _confidence(value, default: float) -> float:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return round(max(0.0, min(1.0, float(value))), 2)
+    return default
+
+
+def _with_decision(result: dict, selected: dict) -> dict:
+    enriched = dict(result)
+    enriched["route_decision"] = {
+        "action": selected.get("action", "clarify"),
+        "workflow_key": selected.get("workflow_key"),
+        "tool_version_id": selected.get("tool_version_id"),
+        "confidence": _confidence(selected.get("confidence"), 0.5),
+        "source": selected.get("decision_source", "model"),
+    }
+    return enriched
 
 
 def tool_workflow(tool: dict) -> dict:
@@ -403,7 +441,7 @@ def _tool_step(tool: dict, instructions: str) -> dict:
     }
 
 
-def synthesize_cached(service, question, evidence, skills=None) -> dict:
+def synthesize_cached(service, question, evidence, skills=None, memory=None) -> dict:
     grouped = {}
     for item in evidence:
         grouped.setdefault(item["step_key"], []).extend(item["records"])
@@ -412,7 +450,7 @@ def synthesize_cached(service, question, evidence, skills=None) -> dict:
         {"name": "ראיות קיימות", "system_prompt": ""}, facts, []
     )
     return service._final_summary(
-        "", question, [_cached_section(generated)], skills or []
+        "", question, [_cached_section(generated)], skills or [], memory=memory
     )
 
 

@@ -3,7 +3,7 @@
 from typing import Dict, List
 
 from app.bl.workflow_engine_pkg import (
-    conversational_planning, execution, planning, routing, specialists,
+    conversational_planning, execution, history, planning, routing, specialists,
     synthesis,
 )
 from app.bl.workflow_engine_pkg.schemas import (
@@ -54,6 +54,7 @@ class SummaryService:
         return self._execute(
             run, conversation["root_id"], run["question"], workflows, progress,
             skills, conversation.get("boundaries"),
+            history.memory_context(conversation),
         )
 
     def follow_up(self, run: dict, conversation: dict, progress) -> dict:
@@ -190,11 +191,11 @@ class SummaryService:
 
     def _execute(
         self, run, root_id, question, workflows, progress_callback,
-        skills=None, boundaries=None,
+        skills=None, boundaries=None, memory=None,
     ) -> dict:
         return execution.execute(
             self, run, root_id, question, workflows, progress_callback,
-            skills, boundaries,
+            skills, boundaries, memory,
         )
 
     def _execute_workflow(
@@ -228,11 +229,11 @@ class SummaryService:
 
     def _final_summary(
         self, root_id: str, question: str, sections: List[dict], skills=None,
-        agent_context=None, leader_prompt="", evidence=None,
+        agent_context=None, leader_prompt="", evidence=None, memory=None,
     ) -> dict:
         return synthesis.final_summary(
             self, root_id, question, sections, skills,
-            agent_context, leader_prompt, evidence,
+            agent_context, leader_prompt, evidence, memory,
         )
 
     def _run_skills(
@@ -282,9 +283,11 @@ class SummaryService:
         return planning.json_type(value)
 
     def _synthesize_cached(
-        self, question: str, evidence: List[dict], skills=None
+        self, question: str, evidence: List[dict], skills=None, memory=None
     ) -> dict:
-        return routing.synthesize_cached(self, question, evidence, skills)
+        return routing.synthesize_cached(
+            self, question, evidence, skills, memory
+        )
 
     @staticmethod
     def _empty_result(message: str) -> dict:

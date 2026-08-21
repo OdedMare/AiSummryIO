@@ -108,7 +108,7 @@ def _clip(answer: str) -> str:
 
 
 def standalone_question(
-    service, question: str, turns: List[Dict[str, str]]
+    service, question: str, turns: List[Dict[str, str]], memory=None
 ) -> str:
     """`question` restated to stand alone, or unchanged when it already does.
 
@@ -121,7 +121,7 @@ def standalone_question(
         return question
     try:
         result = service._llm.complete_json(
-            _prompt(service), _payload(question, turns), REWRITE_SCHEMA
+            _prompt(service), _payload(question, turns, memory), REWRITE_SCHEMA
         )
     except AgentError as exc:
         _logger.info("question rewrite unavailable, routing raw: %s", exc)
@@ -135,10 +135,11 @@ def _prompt(service) -> str:
     )
 
 
-def _payload(question: str, turns: List[Dict[str, str]]) -> str:
-    return json.dumps(
-        {"history": turns, "question": question}, ensure_ascii=False
-    )
+def _payload(question: str, turns: List[Dict[str, str]], memory=None) -> str:
+    payload = {"history": turns, "question": question}
+    if memory:
+        payload["memory"] = memory
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _resolved(result, question: str) -> str:

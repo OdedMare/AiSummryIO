@@ -416,6 +416,7 @@ ROUTER_SCHEMA = {
         "workflow_key": {"type": ["string", "null"]},
         "tool_version_id": {"type": ["string", "null"]},
         "clarification": {"type": ["string", "null"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         # A `clarify` used to return bare text plus every workflow name, which
         # asked the user to pick from a catalog they did not write. These let
         # the same router call ask one answerable question instead: what it

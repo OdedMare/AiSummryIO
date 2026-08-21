@@ -251,7 +251,7 @@ _CITATION_GUIDANCE = (
 
 def final_summary(
     service, root_id, question, sections, skills=None,
-    agent_context=None, leader_prompt="", evidence=None,
+    agent_context=None, leader_prompt="", evidence=None, memory=None,
 ) -> dict:
     """Merge sections into the answer, with per-claim citations.
 
@@ -268,7 +268,7 @@ def final_summary(
     ]
     final = _shared_summary(
         service, question, sections, safe_sections,
-        agent_context or [], leader_prompt, catalog,
+        agent_context or [], leader_prompt, catalog, memory,
     )
     final["skill_results"] = service._run_skills(
         question, skills, sections, safe_sections
@@ -318,7 +318,7 @@ def _section_citations(section: dict, catalog) -> List[str]:
 
 def _shared_summary(
     service, question, sections, safe_sections,
-    agent_context=None, leader_prompt="", catalog=None,
+    agent_context=None, leader_prompt="", catalog=None, memory=None,
 ) -> dict:
     prompt = service._repository.enabled_content(
         "final-summary",
@@ -361,6 +361,8 @@ def _shared_summary(
     )
     prompt += _CITATION_GUIDANCE
     data = {"question": question, "sections": safe_sections}
+    if memory:
+        data["user_preferences"] = memory
     if catalog:
         data["available_citations"] = citations.options(catalog)
     if agent_context:

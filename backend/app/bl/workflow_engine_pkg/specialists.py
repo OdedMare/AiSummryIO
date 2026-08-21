@@ -70,7 +70,9 @@ def follow_up(
     service, run, conversation, progress, agents, manually_selected=False
 ) -> dict:
     turns = history.recent_turns(service, conversation)
-    question = history.standalone_question(service, run["question"], turns)
+    question = history.standalone_question(
+        service, run["question"], turns, history.memory_context(conversation)
+    )
     return _orchestrate(
         service, run, conversation, progress, agents,
         question, True, turns, manually_selected,
@@ -159,6 +161,7 @@ def _orchestrate(
             # so its claims are citable on the same terms. A cached section
             # carries no `evidence_ids` by design, and therefore no citation.
             evidence=execution.run_evidence(service, run),
+            memory=history.memory_context(conversation),
         )
     if leader_missing:
         result["missing_data"] = list(dict.fromkeys(
