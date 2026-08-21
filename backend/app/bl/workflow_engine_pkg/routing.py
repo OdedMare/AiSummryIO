@@ -8,6 +8,24 @@ from app.bl.workflow_engine_pkg import citation_context, history
 from app.bl.workflow_engine_pkg.schemas import ROUTER_SCHEMA
 
 
+_ROUTING_GUIDANCE = """
+Routing policy:
+1. Use `use_cached` only when the supplied evidence can answer the question
+    directly. Do not use it for requests to refresh, verify, compare with a new
+    state, or fetch information that is not present in the evidence.
+2. Choose the narrowest available Workflow or approved standalone tool that
+    can produce the requested information. Prefer a detail route over cached
+    evidence when the user asks for more detail or a different field.
+3. A standalone tool is valid only when its description and instructions match
+    the question; never infer capabilities from its name alone.
+4. Use `clarify` when multiple routes are plausible or the request lacks the
+    identifier, scope, or criterion needed to choose safely. Ask one concrete
+    question, and offer two to four answerable options when they are known.
+5. Never invent a workflow key, tool id, result, or capability. Return null for
+    route fields that do not apply. User-facing text must be in Hebrew.
+"""
+
+
 def follow_up(service, run, conversation, progress, project=None) -> dict:
     """Answer a follow-up in the context of the thread it belongs to.
 
@@ -171,6 +189,7 @@ def select_detail(
         "Choose existing evidence, a Workflow, an approved standalone tool, "
         "or clarification. Write any user-facing text in Hebrew.",
     )
+    prompt += "\n\n" + _ROUTING_GUIDANCE
     try:
         selected = service._llm.complete_json(
             prompt, json.dumps(payload, ensure_ascii=False), ROUTER_SCHEMA

@@ -89,6 +89,7 @@ export default function ProjectWorkspace({
       setForm(projectDraft(saved));
       setNotice("הפרויקט נשמר.");
       await onRefresh();
+      onSelectProject(saved.id);
       if (startAssistant) setAssistantOpen(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "שמירת הפרויקט נכשלה");

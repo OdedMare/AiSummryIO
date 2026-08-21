@@ -37,7 +37,9 @@ from app.dal.providers.flapi.runner_config import (
 from app.dal.repository import Repository
 from app.dal.repository import evaluations as evaluation_repository_module
 from app.dal.repository.evaluations import EvaluationRepository
-from app.dal.repository.content import _set_agent_workflows
+from app.dal.repository.content import ContentRepository, _set_agent_workflows
+from app.dal.repository.packages import PackageRepository
+from app.dal.repository.workflows import WorkflowRepository
 from app.dal.repository.schema import SCHEMA
 from app.dal.repository.conversations import conversation_title
 from app.dal.repository.runs import _INSERT_RUN
@@ -110,6 +112,41 @@ def test_schema_scopes_project_workspaces_to_the_user_session():
     assert "is_system BOOLEAN NOT NULL DEFAULT FALSE" in SCHEMA
     assert "projects_one_system_idx" in SCHEMA
     assert "ADD COLUMN IF NOT EXISTS project_id" in SCHEMA
+    assert "summary_packages_project_idx" in SCHEMA
+    assert "summary_workflows_project_idx" in SCHEMA
+    assert "agent_content_project_idx" in SCHEMA
+
+
+def test_studio_catalog_reads_are_filtered_by_project():
+    calls = []
+
+    def capture(query, params=()):
+        calls.append((" ".join(query.split()), params))
+        return []
+
+    packages = PackageRepository()
+    packages._all = capture
+    workflows = WorkflowRepository()
+    workflows._all = capture
+    content = ContentRepository()
+    content._all = capture
+
+    assert packages.list_packages("project-a") == []
+    assert workflows.list_workflows("project-a") == []
+    assert content.list_agent_content("project-a") == []
+    assert len(calls) == 3
+    assert all("project_id=%s" in query for query, _params in calls)
+    assert all(params == ("project-a",) for _query, params in calls)
+
+
+def test_workflow_rejects_a_tool_from_another_project():
+    repository = WorkflowRepository()
+    repository._all = lambda _query, _params=(): []
+
+    with pytest.raises(ValueError, match="אותו פרויקט"):
+        repository._validate_project_tools(
+            [{"package_version_id": "tool-from-project-b"}], "project-a"
+        )
 
 
 def test_the_system_project_cannot_be_deleted_or_renamed():
@@ -3840,7 +3877,8 @@ def test_specialist_save_writes_the_workflow_owner_column():
 
     assert statements == [
         "UPDATE summary_workflows SET agent_id=NULL WHERE agent_id=%s",
-        "UPDATE summary_workflows SET agent_id=%s WHERE workflow_key = ANY(%s)",
+        "UPDATE summary_workflows SET agent_id=%s WHERE workflow_key = ANY(%s) "
+        "AND project_id IS NOT DISTINCT FROM %s",
     ]
 
 
