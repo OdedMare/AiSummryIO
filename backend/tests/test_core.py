@@ -1739,6 +1739,98 @@ def test_follow_up_router_can_choose_detail_workflow_despite_cached_evidence():
     assert llm.received["existing_evidence"][0]["row_count"] == 1
 
 
+def test_explicit_follow_up_runs_a_named_baseline_workflow_without_routing():
+    workflow = {
+        "id": "workflow-hotels", "workflow_key": "hotels",
+        "name": "מלונות", "description": "מידע על מלונות", "role": "baseline",
+    }
+
+    class FakeRepository:
+        @staticmethod
+        def enabled_workflows(roles):
+            assert roles == ["baseline", "detail", "both"]
+            return [workflow]
+
+        @staticmethod
+        def agent_tools():
+            return []
+
+        @staticmethod
+        def run_evidence(_run_id):
+            return []
+
+    class NeverRouteLlm:
+        @staticmethod
+        def complete_json(*_args):
+            raise AssertionError("an explicit workflow command must not be routed")
+
+    service = SummaryService(FakeRepository(), None, NeverRouteLlm(), None)
+    captured = {}
+    service._execute = lambda _run, _root, question, workflows, *_args: (
+        captured.update(question=question, workflows=workflows)
+        or {"summary": "סיכום מלונות"}
+    )
+
+    result = service.follow_up(
+        {"id": "run-2", "question": "תעמיק במלונות"},
+        {"root_id": "001", "runs": []},
+        lambda *_args: None,
+    )
+
+    assert result["summary"] == "סיכום מלונות"
+    assert captured == {
+        "question": "תעמיק במלונות", "workflows": [workflow],
+    }
+
+
+def test_specialist_explicit_follow_up_selects_its_named_baseline_workflow():
+    workflows = [
+        _specialist_workflow("workflow-hotels", "hotels", "מלונות"),
+        _specialist_workflow("workflow-food", "food", "מסעדות"),
+    ]
+    workflows[0]["role"] = "baseline"
+
+    class FakeRepository:
+        @staticmethod
+        def enabled_workflows_by_keys(_keys, roles):
+            assert roles == ["baseline", "detail", "both"]
+            return workflows
+
+        @staticmethod
+        def enabled_skill_options(_keys):
+            return []
+
+        @staticmethod
+        def enabled_skills(_keys):
+            return []
+
+    class WrongPlanLlm:
+        @staticmethod
+        def complete_json(_system, _user, schema):
+            assert schema is WORKER_PLAN_SCHEMA
+            return {
+                "workflow_keys": ["food"], "skill_keys": [],
+                "use_cached": False,
+            }
+
+    service = SummaryService(FakeRepository(), None, WrongPlanLlm(), None)
+    state = specialists._plan_state(
+        service,
+        {
+            "agent": {
+                "content_key": "travel", "content": "",
+                "config": {
+                    "workflow_keys": ["hotels", "food"], "skill_keys": [],
+                },
+            },
+            "task": "בדוק אפשרויות לינה",
+        },
+        [], "תעמיק במלונות", True, "worker prompt",
+    )
+
+    assert [item["workflow_key"] for item in state["workflows"]] == ["hotels"]
+
+
 def test_fde_prompt_builds_a_draft_only_from_existing_tools():
     tools = [{
         "id": "tool-v1",
