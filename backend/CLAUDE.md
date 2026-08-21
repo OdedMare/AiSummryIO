@@ -13,8 +13,9 @@ The backend turns one opaque string identifier into a traceable Hebrew
 summary. An initial request runs the selected project's `agent_enabled`
 `baseline`/`both` workflows; a legacy request without `project_id` is attached
 to that session's `Hunger Games` compatibility workspace.
-Follow-ups reuse conversation evidence and run one relevant
-`detail`/`both` workflow or one FDE-approved standalone tool when needed.
+Follow-ups reuse conversation evidence and run one relevant active workflow or
+one FDE-approved standalone tool when needed. An explicit action request that
+names an authorized workflow runs it directly.
 A follow-up is resolved against the conversation's prior turns first, so a
 question that names its subject only by reference can still be routed.
 

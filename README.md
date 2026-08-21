@@ -7,8 +7,9 @@ examples; users provide one identifier and receive a progressive full summary.
 ## What it does
 
 - The first request runs every agent-enabled `baseline`/`both` workflow.
-- Follow-up questions reuse saved evidence and run a relevant `detail` workflow
-  or one FDE-approved standalone tool only when more data is needed.
+- Follow-up questions reuse saved evidence and run a relevant active workflow
+  or one FDE-approved standalone tool only when more data is needed. An
+  explicit action request naming a workflow runs that workflow directly.
 - An FDE can describe a goal in plain language; the planner builds a reviewable
   workflow draft from existing tools or specifies the missing tool contract.
 - Each browser session can keep project workspaces: a named mission plus the

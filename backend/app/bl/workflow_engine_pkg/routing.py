@@ -25,6 +25,11 @@ Routing policy:
     route fields that do not apply. User-facing text must be in Hebrew.
 """
 
+_WORKFLOW_COMMANDS = (
+    "תעמיק", "העמק", "פתח", "הפעל", "תפעיל", "תריץ", "הרץ",
+    "deepen", "open", "run", "execute",
+)
+
 
 def follow_up(service, run, conversation, progress, project=None) -> dict:
     """Answer a follow-up in the context of the thread it belongs to.
@@ -92,13 +97,15 @@ def _available(service, conversation, project=None):
     ]
     if project:
         workflows = service._repository.enabled_workflows_by_keys(
-            project.get("workflow_keys", []), ["detail", "both"]
+            project.get("workflow_keys", []), ["baseline", "detail", "both"]
         )
         tools = service._repository.agent_tools_by_keys(
             project.get("tool_keys", [])
         )
         return prior, workflows, tools
-    workflows = service._repository.enabled_workflows(["detail", "both"])
+    workflows = service._repository.enabled_workflows(
+        ["baseline", "detail", "both"]
+    )
     return prior, workflows, service._repository.agent_tools()
 
 
@@ -182,6 +189,9 @@ def select_detail(
     tools = tools or []
     if not workflows and not tools:
         return _no_options(evidence)
+    explicit = explicit_workflow(question, workflows)
+    if explicit:
+        return {"action": "workflow", "workflow_key": explicit["workflow_key"]}
     ratings = _route_ratings(service)
     payload = _router_payload(question, workflows, tools, evidence, turns, ratings)
     prompt = service._repository.enabled_content(
@@ -197,6 +207,21 @@ def select_detail(
         return _validate_selection(selected, workflows, tools, evidence)
     except AgentError:
         return _fallback_selection(workflows, tools, evidence)
+
+
+def explicit_workflow(question: str, workflows: List[dict]):
+    """A uniquely named workflow in an action request, otherwise ``None``."""
+    text = " ".join(question.casefold().split())
+    if not any(command in text for command in _WORKFLOW_COMMANDS):
+        return None
+    matches = [
+        item for item in workflows
+        if any(
+            value and str(value).casefold() in text
+            for value in (item.get("name"), item.get("workflow_key"))
+        )
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _no_options(evidence) -> dict:

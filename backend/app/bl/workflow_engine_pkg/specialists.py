@@ -4,7 +4,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
-from app.bl.workflow_engine_pkg import execution, history, synthesis
+from app.bl.workflow_engine_pkg import execution, history, routing, synthesis
 from app.bl.workflow_engine_pkg.schemas import (
     LEADER_DELEGATION_SCHEMA,
     LEADER_REVIEW_SCHEMA,
@@ -255,7 +255,10 @@ def _plan_state(
     config = agent.get("config") if isinstance(agent.get("config"), dict) else {}
     allowed_workflows = _texts(config.get("workflow_keys"))
     allowed_skills = _texts(config.get("skill_keys"))
-    roles = ["detail", "both"] if is_follow_up else ["baseline", "both"]
+    roles = (
+        ["baseline", "detail", "both"] if is_follow_up
+        else ["baseline", "both"]
+    )
     workflows = service._repository.enabled_workflows_by_keys(
         allowed_workflows, roles
     )
@@ -282,8 +285,13 @@ def _plan_state(
         )
     except AgentError:
         plan = {}
-    workflow_keys = _allowed(
-        plan.get("workflow_keys"), [item["workflow_key"] for item in workflows]
+    explicit = routing.explicit_workflow(question, workflows)
+    workflow_keys = (
+        [explicit["workflow_key"]] if explicit else
+        _allowed(
+            plan.get("workflow_keys"),
+            [item["workflow_key"] for item in workflows],
+        )
     )
     skill_keys = _allowed(
         plan.get("skill_keys"), [item["content_key"] for item in skill_options]
