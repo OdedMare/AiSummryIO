@@ -117,7 +117,7 @@
 /* One continuous answer, not a stack of panels. No card, no border, no fill:
    the measure and the rhythm carry it, so a reader follows a single thread. */
 .answer-body {
-  max-width: 68ch;
+  max-width: 66ch;
   margin-bottom: 22px;
 }
 
@@ -678,7 +678,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 7px 13px;
   color: var(--text);
   text-align: start;
@@ -731,6 +731,7 @@
   line-height: 1.65;
   white-space: pre-line;
   background: var(--surface-3);
+  border: 1px solid var(--border);
   border-radius: 14px;
   border-start-end-radius: 4px;
 }

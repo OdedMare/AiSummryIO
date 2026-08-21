@@ -81,9 +81,9 @@ contrast tool before changing any of these values.
 
 | Token | Value (light) | Usage |
 |-------|---------------|-------|
-| `--shadow-soft` | `0 2px 8px rgba(31,30,29,0.05)` | Cards, section surfaces |
-| `--shadow` | `0 12px 32px rgba(31,30,29,0.09)` | Modals, dropdowns, popovers |
-| `--brand-glow` | `0 6px 18px rgba(217,119,87,0.22)` | Primary action only |
+| `--shadow-soft` | `0 1px 3px rgba(31,30,29,0.06)` | Cards, section surfaces |
+| `--shadow` | `0 18px 48px rgba(31,30,29,0.10)` | Modals, dropdowns, popovers |
+| `--brand-glow` | `0 1px 2px rgba(31,30,29,0.10)` | Primary action only |
 
 Shadows are deliberately quiet. Prefer a `1px solid var(--border)` to a
 shadow when separating two surfaces.

@@ -2067,10 +2067,18 @@
     grid-template-columns: 1fr;
   }
 
+  .app-shell.has-map {
+    display: grid;
+    grid-template-rows: minmax(620px, 100dvh) minmax(420px, 70dvh);
+    height: 100dvh;
+    overflow-y: auto;
+  }
+
   /* No room for a side column: the panel becomes a bounded block under the
      conversation instead of a full-height rail. */
   .map-panel {
-    height: auto;
+    min-height: 420px;
+    height: 70dvh;
     border-inline-end: 0;
     border-block-start: 1px solid var(--border);
   }
@@ -2084,7 +2092,7 @@
     inset: 0 0 0 auto;
     width: min(320px, 88vw);
     transform: translateX(105%);
-    transition: transform 220ms ease;
+    transition: transform 220ms ease-out;
   }
 
   .sidebar.open {
@@ -2185,7 +2193,8 @@
 
   .end-conversation {
     justify-content: center;
-    width: 36px;
+    width: 44px;
+    min-height: 44px;
     padding: 7px;
   }
 
@@ -2210,7 +2219,7 @@
   .composer {
     grid-template-columns: 1fr;
     width: calc(100% - 16px);
-    margin-bottom: 8px;
+    margin-bottom: max(8px, env(safe-area-inset-bottom));
     border-radius: 14px;
   }
 
