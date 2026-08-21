@@ -12,20 +12,20 @@ from app.dal.repository.base import new_id
 class ProjectRepository:
     def list_projects(self, session_id: str) -> List[dict]:
         self._ensure_system_project(session_id)
-        return self._all("""
+        return self._with_capabilities(self._all("""
             SELECT * FROM projects
             WHERE session_id=%s
             ORDER BY is_system DESC, updated_at DESC, created_at DESC
-        """, (session_id,))
+        """, (session_id,)))
 
     def system_project(self, session_id: str) -> dict:
         """The compatibility workspace that owns the pre-project catalog."""
         self._ensure_system_project(session_id)
-        return self._all("""
+        return self._with_capabilities(self._all("""
             SELECT * FROM projects
             WHERE session_id=%s AND is_system IS TRUE
             LIMIT 1
-        """, (session_id,))[0]
+        """, (session_id,)))[0]
 
     def get_project(self, project_id: str, session_id: str) -> dict:
         rows = self._all("""
@@ -33,7 +33,7 @@ class ProjectRepository:
         """, (project_id, session_id))
         if not rows:
             raise NotFoundError("הפרויקט לא נמצא")
-        return rows[0]
+        return self._with_capabilities(rows)[0]
 
     def create_project(self, session_id: str, data: dict) -> dict:
         self._validate_capabilities(data)
@@ -94,7 +94,49 @@ class ProjectRepository:
                   AND conversation.session_id=%s
                   AND conversation.project_id IS NULL
             """, (session_id, session_id))
+            project = connection.execute("""
+                SELECT id FROM projects
+                WHERE session_id=%s AND is_system IS TRUE LIMIT 1
+            """, (session_id,)).fetchone()
+            if project:
+                for table in (
+                    "summary_packages", "summary_workflows", "agent_content"
+                ):
+                    connection.execute(
+                        "UPDATE %s SET project_id=%%s WHERE project_id IS NULL"
+                        % table,
+                        (project["id"],),
+                    )
             connection.commit()
+
+    def _with_capabilities(self, rows: List[dict]) -> List[dict]:
+        """Project keys are a projection of rows it owns, never shared state."""
+        for row in rows:
+            project_id = row["id"]
+            row["tool_keys"] = self._keys_for(
+                "summary_packages", "package_key", project_id
+            )
+            row["workflow_keys"] = self._keys_for(
+                "summary_workflows", "workflow_key", project_id
+            )
+            row["skill_keys"] = self._content_keys(project_id, "skill")
+            row["agent_keys"] = self._content_keys(project_id, "agent")
+        return rows
+
+    def _keys_for(self, table: str, column: str, project_id: str) -> List[str]:
+        rows = self._all(
+            "SELECT %s AS key FROM %s WHERE project_id=%%s ORDER BY name"
+            % (column, table),
+            (project_id,),
+        )
+        return [item["key"] for item in rows]
+
+    def _content_keys(self, project_id: str, kind: str) -> List[str]:
+        rows = self._all("""
+            SELECT content_key AS key FROM agent_content
+            WHERE project_id=%s AND kind=%s ORDER BY name
+        """, (project_id, kind))
+        return [item["key"] for item in rows]
 
     def _validate_capabilities(self, data: dict) -> None:
         checks = (

@@ -151,6 +151,22 @@ ALTER TABLE projects
 
 COMMIT;
 
+-- Capabilities are owned by one project. Existing catalog rows are claimed by
+-- the first session's compatibility workspace in `_ensure_system_project`.
+-- Nullable is required for that startup migration and for built-in prompts
+-- that are used outside a user project.
+ALTER TABLE summary_packages
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id)
+        ON DELETE CASCADE;
+ALTER TABLE summary_workflows
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id)
+        ON DELETE CASCADE;
+ALTER TABLE agent_content
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id)
+        ON DELETE CASCADE;
+
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -546,6 +562,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_content_key_idx
     ON agent_content(content_key);
 CREATE INDEX IF NOT EXISTS summary_workflows_agent_idx
     ON summary_workflows(agent_id);
+CREATE INDEX IF NOT EXISTS summary_packages_project_idx
+    ON summary_packages(project_id, name);
+CREATE INDEX IF NOT EXISTS summary_workflows_project_idx
+    ON summary_workflows(project_id, name);
+CREATE INDEX IF NOT EXISTS agent_content_project_idx
+    ON agent_content(project_id, name);
 CREATE INDEX IF NOT EXISTS projects_session_idx
     ON projects(session_id, updated_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS projects_one_system_idx
