@@ -48,7 +48,7 @@ from app.dal.repository.validation import step_levels
 from app.api.validation_errors import format_validation_error
 from app.bl.workflow_engine import _SECTION_SCHEMA, SummaryService
 from app.bl.workflow_engine_pkg import (
-    citation_context, citations, history, routing, specialists,
+    citation_context, citations, history, quality, routing, specialists,
 )
 from app.bl.workflow_engine_pkg.execution import chunk_facts, fact_chunks
 from app.bl.workflow_engine_pkg.schemas import (
@@ -4458,3 +4458,81 @@ def _route_handler(router, path):
         if route.path == path:
             return route.endpoint
     raise AssertionError("route not registered: " + path)
+
+
+def test_quality_gate_reports_real_coverage_without_inventing_token_usage():
+    class Repository:
+        def run_evidence(self, _run_id):
+            return [{"records": [{"id": "1"}, {"id": "2"}]}]
+
+    class Store:
+        def get(self):
+            return type("Settings", (), {"llm_model": "local-model"})()
+
+    service = type(
+        "Service", (), {"_repository": Repository(), "_store": Store()}
+    )()
+    result = quality.finalize(service, {"id": "run-1"}, {
+        "sections": [{"workflow_id": "wf-1", "status": "completed"}],
+        "claims": [{"text": "עובדה", "citation_ids": ["c1"]}],
+        "missing_data": [], "partial": False,
+    }, 1.25)
+
+    assert result["quality"]["score"] == 1.0
+    assert result["quality"]["passed"] is True
+    assert result["telemetry"] == {
+        "model": "local-model", "duration_ms": 1250, "tool_calls": 1,
+        "evidence_rows": 2, "workflow_count": 1,
+        "specialist_count": 0, "rounds_used": 0, "degraded": False,
+        "token_usage_available": False,
+    }
+
+
+def test_structured_memory_learns_only_observable_preferences_and_routes():
+    memory = history.learned_memory(
+        {"route_counts": {"overview": 1}},
+        "תן תשובה בקצרה",
+        {"sections": [{"workflow_key": "overview"}]},
+    )
+
+    assert memory == {
+        "preferred_language": "he",
+        "response_style": "brief",
+        "route_counts": {"overview": 2},
+    }
+    assert "ADD COLUMN IF NOT EXISTS memory JSONB" in SCHEMA
+
+
+def test_dynamic_tool_round_runs_only_an_allowlisted_unseen_workflow(monkeypatch):
+    first = {"id": "wf-1", "workflow_key": "first"}
+    second = {"id": "wf-2", "workflow_key": "second"}
+    state = {
+        "agent": {"content_key": "agent-1"},
+        "available_workflows": [first, second],
+        "workflows": [first], "sections": [],
+    }
+    calls = []
+
+    def execute_sections(_service, _run, _root, workflows, progress, _bounds):
+        calls.extend(item["workflow_key"] for item in workflows)
+        sections = [{
+            "workflow_id": item["id"], "workflow_key": item["workflow_key"],
+            "status": "completed",
+        } for item in workflows]
+        progress(len(sections), len(sections), sections)
+        return sections
+
+    monkeypatch.setattr(specialists.execution, "execute_sections", execute_sections)
+    added = specialists._execute_requested_workflows(
+        object(), {"id": "run-1"}, {"root_id": "1", "boundaries": None},
+        lambda *_args: None, [state], [
+            {"agent_key": "agent-1", "question": "?", "workflow_key": "first"},
+            {"agent_key": "agent-1", "question": "?", "workflow_key": "second"},
+        ], [{"workflow_key": "first"}], 2, 1,
+    )
+
+    assert calls == ["second"]
+    assert [item["workflow_key"] for item in added] == ["second"]
+    assert LEADER_REVIEW_SCHEMA["properties"]["questions"]["items"][
+        "properties"
+    ]["workflow_key"]

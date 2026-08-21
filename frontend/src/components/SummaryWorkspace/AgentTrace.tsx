@@ -43,7 +43,7 @@ export default function AgentTrace({ run }: { run: SummaryRun }) {
           <Specialist key={specialist.agent_id} specialist={specialist} />
         ))}
       </ol>}
-      {!!trace.missing_data?.length &&
+      {!!trace?.missing_data?.length &&
         <div className="agent-trace-gaps" role="status">
           <AlertTriangle size={15} aria-hidden="true" />
           <span>{trace.missing_data.join(" · ")}</span>
